@@ -1,0 +1,398 @@
+# Protocol Modernization Task Breakdown
+# Breaking down Task 3 from tasks.yaml into manageable sub-tasks
+
+metadata:
+  parent_task: "task-3"
+  title: "Python SDK Protocol Modernization (v1.1.1)"
+  methodology: "Red/Green TDD with WASM integration tests"
+  test_modules:
+    - bsatn-test: "/Users/punk1290/git/workspace20250517/SpacetimeDB/target/wasm32-wasip1/release/bsatn_test.wasm"
+    - sdk-test-connect-disconnect: "/Users/punk1290/git/workspace20250517/SpacetimeDB/target/wasm32-unknown-unknown/release/spacetime_module.wasm"
+    - sdk-test: "/Users/punk1290/git/workspace20250517/SpacetimeDB/target/wasm32-unknown-unknown/release/sdk_test.wasm"
+
+protocol_tasks:
+
+  - id: proto-1
+    name: "QueryId System Implementation"
+    status: todo
+    priority: high
+    estimated_hours: 8-12
+    description: "Implement QueryId for subscription management"
+    test_strategy:
+      red_test: "test_query_id_basic_operations_fail.py"
+      green_implementation: "Add QueryId class and basic operations"
+      refactor: "Optimize QueryId generation and validation"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/query_id.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/__init__.py" 
+        - "src/spacetimedb_sdk/protocol.py"
+    subtasks:
+      - Create QueryId class with u32 id field
+      - Add QueryId generation (incremental counter)
+      - Add QueryId validation and comparison
+      - Add BSATN serialization support for QueryId
+      - Add proper __hash__ and __eq__ for dict/set usage
+    tests:
+      - "QueryId creation and uniqueness"
+      - "QueryId serialization/deserialization" 
+      - "QueryId validation edge cases"
+    verification: "QueryId can be created, serialized, and used for subscription tracking"
+
+  - id: proto-2  
+    name: "Modern Message Types - Subscribe Family"
+    status: todo
+    priority: high
+    estimated_hours: 12-16
+    description: "Implement SubscribeSingle, SubscribeMulti, UnsubscribeMulti message types"
+    dependencies: ["proto-1"]
+    test_strategy:
+      red_test: "test_modern_subscribe_messages_fail.py" 
+      green_implementation: "Add message classes with proper serialization"
+      refactor: "Optimize message encoding/decoding performance"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/messages/subscribe.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/modern_client.py"
+    subtasks:
+      - Create SubscribeSingle message class
+      - Create SubscribeMulti message class  
+      - Create UnsubscribeMulti message class
+      - Add BSATN serialization for all message types
+      - Add JSON fallback serialization
+      - Integrate with existing ClientMessage enum
+    tests:
+      - "SubscribeSingle message creation and serialization"
+      - "SubscribeMulti message creation and serialization"
+      - "UnsubscribeMulti message handling"
+      - "Message type validation and error handling"
+    verification: "New subscribe message types work with bsatn-test WASM module"
+
+  - id: proto-3
+    name: "OneOffQuery Implementation" 
+    status: todo
+    priority: high
+    estimated_hours: 10-14
+    description: "Implement OneOffQuery and OneOffQueryResponse for single queries"
+    dependencies: ["proto-1"]
+    test_strategy:
+      red_test: "test_oneoff_query_fail.py"
+      green_implementation: "Add OneOffQuery message and response handling"
+      refactor: "Add query validation and error handling"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/messages/oneoff.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/modern_client.py"
+    subtasks:
+      - Create OneOffQuery message class with message_id
+      - Create OneOffQueryResponse handling
+      - Add proper message_id generation (UUID or incremental)
+      - Add query string validation
+      - Add response parsing for multiple tables
+      - Add timeout handling for one-off queries
+    tests:
+      - "OneOffQuery message creation with unique IDs"
+      - "OneOffQuery response parsing"
+      - "Query timeout handling" 
+      - "Multiple table response handling"
+      - "Error response handling"
+    verification: "Can send OneOffQuery and receive OneOffQueryResponse from test module"
+
+  - id: proto-4
+    name: "CallReducerFlags and Request Tracking"
+    status: todo  
+    priority: high
+    estimated_hours: 8-12
+    description: "Implement CallReducerFlags and comprehensive request_id tracking"
+    dependencies: ["proto-2"]
+    test_strategy:
+      red_test: "test_call_reducer_flags_fail.py"
+      green_implementation: "Add CallReducerFlags enum and request tracking"
+      refactor: "Optimize request tracking performance"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/call_reducer_flags.py"
+        - "src/spacetimedb_sdk/request_tracker.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/modern_client.py"
+    subtasks:
+      - Create CallReducerFlags enum (FullUpdate, NoSuccessNotify)
+      - Add request_id generation and tracking system
+      - Update CallReducer message to include flags
+      - Add request-response correlation
+      - Add request timeout handling
+      - Add proper BSATN serialization for flags
+    tests:
+      - "CallReducerFlags creation and serialization"
+      - "Request ID generation and uniqueness"
+      - "Request-response correlation"
+      - "Request timeout handling"
+      - "Flag behavior with test reducers"
+    verification: "Can call reducers with different flags using sdk-test module"
+
+  - id: proto-5
+    name: "Modern Server Message Types"
+    status: todo
+    priority: high  
+    estimated_hours: 12-18
+    description: "Implement new ServerMessage variants for protocol v1.1.1"
+    dependencies: ["proto-2", "proto-3", "proto-4"]
+    test_strategy:
+      red_test: "test_server_messages_fail.py"
+      green_implementation: "Add new ServerMessage types with parsing"
+      refactor: "Optimize message parsing performance"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/messages/server.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/websocket_client.py"
+    subtasks:
+      - Create SubscribeApplied message type
+      - Create UnsubscribeApplied message type  
+      - Create SubscriptionError message type
+      - Create SubscribeMultiApplied message type
+      - Create UnsubscribeMultiApplied message type
+      - Create TransactionUpdateLight message type
+      - Update IdentityToken to include ConnectionId
+      - Add proper BSATN parsing for all types
+    tests:
+      - "SubscribeApplied message parsing"
+      - "SubscriptionError handling"
+      - "TransactionUpdateLight processing"
+      - "IdentityToken with ConnectionId"
+      - "Message parsing error handling"
+    verification: "Can receive and parse all modern server message types"
+
+  - id: proto-6
+    name: "ConnectionId and Identity Management"
+    status: todo
+    priority: medium
+    estimated_hours: 10-14
+    description: "Implement modern ConnectionId tracking and Identity management"  
+    dependencies: ["proto-5"]
+    test_strategy:
+      red_test: "test_connection_identity_fail.py"
+      green_implementation: "Add ConnectionId class and identity tracking"
+      refactor: "Optimize connection state management"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/connection_id.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/modern_client.py"
+    subtasks:
+      - Create ConnectionId class ([2]uint64 format)
+      - Update Identity class to match current format
+      - Add connection state tracking
+      - Add proper ConnectionId serialization
+      - Update IdentityToken handling
+      - Add connection lifecycle management
+    tests:
+      - "ConnectionId creation and serialization"
+      - "Identity token processing"
+      - "Connection state tracking"
+      - "Connection lifecycle events"
+    verification: "Can track connection state using sdk-test-connect-disconnect module"
+
+  - id: proto-7
+    name: "EnergyQuanta Tracking System"
+    status: todo
+    priority: medium
+    estimated_hours: 8-12  
+    description: "Implement energy quota tracking and management"
+    dependencies: ["proto-6"]
+    test_strategy:
+      red_test: "test_energy_tracking_fail.py"
+      green_implementation: "Add EnergyQuanta class and tracking"
+      refactor: "Add energy-aware reducer calling"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/energy.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/modern_client.py"
+    subtasks:
+      - Create EnergyQuanta class
+      - Add energy tracking in TransactionUpdate
+      - Add OutOfEnergy error handling
+      - Add energy quota monitoring
+      - Add energy-aware reducer calling
+      - Add energy budget management
+    tests:
+      - "EnergyQuanta creation and tracking"
+      - "OutOfEnergy error handling"
+      - "Energy budget enforcement"
+      - "Energy quota monitoring"
+    verification: "Can track energy usage and handle OutOfEnergy errors"
+
+  - id: proto-8
+    name: "BIN_PROTOCOL Integration"
+    status: todo
+    priority: high
+    estimated_hours: 12-16
+    description: "Integrate BSATN with WebSocket client for binary protocol support"
+    dependencies: ["proto-5"] # BSATN already complete from task-4
+    test_strategy:
+      red_test: "test_bin_protocol_fail.py"
+      green_implementation: "Add BIN_PROTOCOL support to WebSocket client" 
+      refactor: "Optimize binary message handling"
+    implementation:
+      files_to_modify:
+        - "src/spacetimedb_sdk/websocket_client.py"
+        - "src/spacetimedb_sdk/protocol.py"
+        - "src/spacetimedb_sdk/modern_client.py"
+    subtasks:
+      - Add BIN_PROTOCOL constant and detection
+      - Integrate BSATN encoder/decoder with WebSocket
+      - Add protocol negotiation (TEXT_PROTOCOL vs BIN_PROTOCOL)
+      - Update message serialization to use BSATN
+      - Add format selection based on connection
+      - Add fallback to JSON when BSATN fails
+    tests:
+      - "BIN_PROTOCOL connection establishment"
+      - "BSATN message encoding/decoding" 
+      - "Protocol negotiation"
+      - "Binary vs JSON format selection"
+      - "Format fallback handling"
+    verification: "Can connect using BIN_PROTOCOL and exchange BSATN messages"
+
+  - id: proto-9
+    name: "Message Compression Support"
+    status: todo
+    priority: medium
+    estimated_hours: 10-14
+    description: "Add Brotli and Gzip compression support for large messages"
+    dependencies: ["proto-8"]
+    test_strategy:
+      red_test: "test_compression_fail.py"
+      green_implementation: "Add compression/decompression support"
+      refactor: "Optimize compression threshold logic"
+    implementation:
+      files_to_create:
+        - "src/spacetimedb_sdk/compression.py"
+      files_to_modify:
+        - "src/spacetimedb_sdk/websocket_client.py"
+        - "src/spacetimedb_sdk/protocol.py"
+    subtasks:
+      - Add Brotli compression support (pip install brotli)
+      - Add Gzip compression support (built-in)
+      - Add compression threshold logic (1KB default)
+      - Add decompression support for incoming messages
+      - Add compression format detection
+      - Add compression preference negotiation
+    tests:
+      - "Brotli compression/decompression"
+      - "Gzip compression/decompression"  
+      - "Compression threshold behavior"
+      - "Large message handling"
+      - "Compression format detection"
+    verification: "Can compress/decompress large messages efficiently"
+
+  - id: proto-10
+    name: "Protocol Version Negotiation"
+    status: todo
+    priority: medium
+    estimated_hours: 6-10
+    description: "Add protocol version compatibility and negotiation"
+    dependencies: ["proto-8", "proto-9"]
+    test_strategy:
+      red_test: "test_version_negotiation_fail.py"
+      green_implementation: "Add version detection and compatibility"
+      refactor: "Add graceful degradation for older servers"
+    implementation:
+      files_to_modify:
+        - "src/spacetimedb_sdk/websocket_client.py"
+        - "src/spacetimedb_sdk/protocol.py"
+    subtasks:
+      - Add protocol version detection
+      - Add compatibility matrix for different versions
+      - Add graceful degradation for missing features  
+      - Add version-specific message handling
+      - Add backward compatibility warnings
+      - Add future version handling
+    tests:
+      - "Protocol version detection"
+      - "Backward compatibility handling"
+      - "Feature availability detection"
+      - "Version mismatch warnings"
+    verification: "Can negotiate protocol version and handle compatibility"
+
+# Integration Tests using WASM modules
+integration_tests:
+  - name: "BSATN Protocol Compatibility"
+    module: "bsatn-test"
+    tests:
+      - "Echo u8 values through reducer calls"
+      - "Echo i32 arrays through reducer calls"
+      - "Complex struct serialization"
+      - "Round-trip BSATN compatibility"
+
+  - name: "Connection Lifecycle"
+    module: "sdk-test-connect-disconnect"  
+    tests:
+      - "Connection establishment with ConnectionId"
+      - "Disconnection event handling"
+      - "Connection state management"
+      - "Multiple concurrent connections"
+
+  - name: "Modern Subscription Management"
+    module: "sdk-test"
+    tests:
+      - "SubscribeSingle with QueryId"
+      - "SubscribeMulti functionality"
+      - "Subscription error handling"
+      - "Query result parsing"
+
+# TDD Development Approach
+development_methodology:
+  red_phase: 
+    - "Write failing tests for each protocol task"
+    - "Use WASM modules as integration targets"
+    - "Define expected behavior before implementation"
+    
+  green_phase:
+    - "Implement minimal code to make tests pass"
+    - "Focus on correctness over optimization"
+    - "Ensure WASM integration tests pass"
+    
+  refactor_phase:
+    - "Optimize performance and memory usage"
+    - "Improve error handling and edge cases"
+    - "Add comprehensive documentation"
+
+# Success Criteria  
+success_criteria:
+  - "All protocol tasks pass their tests"
+  - "WASM integration tests pass"
+  - "Backward compatibility maintained"
+  - "Performance comparable to TypeScript SDK"
+  - "Complete protocol v1.1.1 feature parity"
+
+# Dependencies and External Requirements
+dependencies:
+  python_packages:
+    - "brotli>=1.0.9"  # For Brotli compression
+    - "websocket-client>=1.0.0"  # Already installed
+  
+  environment_variables:
+    - "SPACETIMEDB_DIR: /Users/punk1290/git/workspace20250517/SpacetimeDB"
+    
+  wasm_modules:
+    - "bsatn_test.wasm must be built and available"
+    - "spacetime_module.wasm must be built and available"
+    - "sdk_test.wasm must be built and available"
+
+# Next Steps
+immediate_next_steps:
+  1. "Start with proto-1 (QueryId System) - foundational"
+  2. "Create failing tests for QueryId operations" 
+  3. "Implement QueryId class to make tests pass"
+  4. "Add BSATN serialization for QueryId"
+  5. "Move to proto-2 (Modern Subscribe Messages)" 

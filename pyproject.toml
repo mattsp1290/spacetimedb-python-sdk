@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "websocket-client",
     "configparser",
+    "brotli",
 ]
 version = "0.7.0"
 readme = "README.md"
@@ -20,3 +21,21 @@ readme = "README.md"
 [project.urls]
 homepage = "https://spacetimedb.com"
 repository = "https://github.com/clockworklabs/spacetimedb-python-sdk"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.7.0",
+    "isort>=5.12.0",
+    "mypy>=1.4.0",
+    "flake8>=6.0.0",
+    "pytest-cov>=4.1.0",
+]
+compression = [
+    "brotli>=1.0.9",
+]
+json-api = [
+    "requests>=2.31.0",      # Sync HTTP client (simplest)
+    "aiohttp>=3.8.0",        # Async HTTP client (recommended)
+]

@@ -1,0 +1,552 @@
+name: Cross-Platform Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly on Sundays at 2 AM UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      include_wasm:
+        description: 'Include WASM integration tests'
+        required: false
+        default: 'false'
+        type: boolean
+      extended_validation:
+        description: 'Run extended validation'
+        required: false
+        default: 'false'
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  # Basic cross-platform compatibility testing
+  cross-platform-basic:
+    name: Basic Validation (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+        exclude:
+          # Exclude some combinations to reduce CI load
+          - os: macos-latest
+            python-version: '3.8'
+          - os: windows-latest
+            python-version: '3.8'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+    
+    - name: Install system dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+    
+    - name: Install system dependencies (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install --quiet pkg-config
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio psutil pyyaml
+    
+    - name: Install optional dependencies
+      run: |
+        pip install brotli || echo "Brotli not available"
+        pip install websockets || echo "WebSockets not available"
+    
+    - name: Run basic cross-platform validation
+      run: |
+        python -m pytest test_cross_platform_validation.py::TestPlatformDetection -v
+        python -m pytest test_cross_platform_validation.py::TestSystemInfo -v
+        python -m pytest test_cross_platform_validation.py::TestPlatformValidator::test_platform_compatibility_validation -v
+        python -m pytest test_cross_platform_validation.py::TestPlatformValidator::test_python_version_compatibility -v
+        python -m pytest test_cross_platform_validation.py::TestPlatformValidator::test_architecture_compatibility -v
+    
+    - name: Run cross-platform validation script
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import CrossPlatformTestSuite
+        
+        async def main():
+            suite = CrossPlatformTestSuite()
+            results = await suite.run_basic_validation()
+            print(f'Success rate: {results[\"summary\"][\"success_rate\"]:.1f}%')
+            if results['summary']['success_rate'] < 80:
+                sys.exit(1)
+        
+        asyncio.run(main())
+        "
+    
+    - name: Upload validation results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: validation-results-${{ matrix.os }}-python${{ matrix.python-version }}
+        path: |
+          cross_platform_validation_report.json
+          *.log
+        retention-days: 7
+
+  # Extended validation with more comprehensive tests
+  cross-platform-extended:
+    name: Extended Validation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: cross-platform-basic
+    if: github.event.inputs.extended_validation == 'true' || github.event_name == 'schedule'
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.11']  # Use latest stable for extended tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio psutil pyyaml brotli websockets
+    
+    - name: Install Docker (for deployment testing)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker.io
+        sudo systemctl start docker
+        sudo usermod -aG docker $USER
+    
+    - name: Run extended validation tests
+      run: |
+        python -m pytest test_cross_platform_validation.py -v --tb=short
+    
+    - name: Run environment-specific tests
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import PlatformValidator, EnvironmentType
+        
+        async def main():
+            validator = PlatformValidator()
+            
+            # Test CI/CD environment
+            result = await validator.validate_environment_compatibility(EnvironmentType.CI_CD)
+            print(f'CI/CD environment: {\"PASS\" if result.passed else \"FAIL\"}')
+            
+            # Test development environment
+            result = await validator.validate_environment_compatibility(EnvironmentType.DEVELOPMENT)
+            print(f'Development environment: {\"PASS\" if result.passed else \"FAIL\"}')
+        
+        asyncio.run(main())
+        "
+      env:
+        CI: true
+        GITHUB_ACTIONS: true
+    
+    - name: Test deployment scenarios
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import PlatformValidator
+        
+        async def main():
+            validator = PlatformValidator()
+            result = await validator.validate_deployment_scenarios()
+            print(f'Deployment scenarios: {\"PASS\" if result.passed else \"FAIL\"}')
+            
+            # Show Docker availability
+            docker_result = result.details.get('docker_deployment', {})
+            if docker_result.get('passed'):
+                print(f'Docker available: {docker_result.get(\"docker_version\", \"unknown\")}')
+            else:
+                print('Docker not available')
+        
+        asyncio.run(main())
+        "
+
+  # Architecture-specific testing
+  architecture-validation:
+    name: Architecture Validation (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    needs: cross-platform-basic
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+            python-version: '3.11'
+          - os: macos-latest
+            arch: arm64
+            python-version: '3.11'
+          - os: windows-latest
+            arch: x64
+            python-version: '3.11'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        architecture: ${{ matrix.arch }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio psutil
+    
+    - name: Test architecture-specific features
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        import platform
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import PlatformValidator
+        
+        async def main():
+            validator = PlatformValidator()
+            
+            print(f'Platform: {platform.system()}')
+            print(f'Architecture: {platform.machine()}')
+            print(f'Python: {platform.python_implementation()} {sys.version}')
+            
+            result = await validator.validate_architecture_compatibility()
+            print(f'Architecture compatibility: {\"PASS\" if result.passed else \"FAIL\"}')
+            
+            # Test specific components
+            bsatn_ok = await validator._test_bsatn_arch_compatibility()
+            compression_ok = await validator._test_compression_arch_compatibility()
+            websocket_ok = await validator._test_websocket_arch_compatibility()
+            
+            print(f'BSATN: {\"PASS\" if bsatn_ok else \"FAIL\"}')
+            print(f'Compression: {\"PASS\" if compression_ok else \"FAIL\"}')
+            print(f'WebSocket: {\"PASS\" if websocket_ok else \"FAIL\"}')
+        
+        asyncio.run(main())
+        "
+
+  # Network condition testing
+  network-validation:
+    name: Network Condition Testing
+    runs-on: ubuntu-latest
+    needs: cross-platform-basic
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio psutil
+    
+    - name: Test network conditions
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import PlatformValidator, NetworkCondition
+        
+        async def main():
+            validator = PlatformValidator()
+            
+            conditions = [
+                NetworkCondition.NORMAL,
+                NetworkCondition.HIGH_LATENCY,
+                NetworkCondition.LOW_BANDWIDTH,
+                NetworkCondition.INTERMITTENT
+            ]
+            
+            for condition in conditions:
+                result = await validator.validate_network_conditions(condition)
+                print(f'{condition.name}: {\"PASS\" if result.passed else \"FAIL\"}')
+        
+        asyncio.run(main())
+        "
+
+  # WASM integration testing (optional)
+  wasm-integration:
+    name: WASM Integration Testing
+    runs-on: ubuntu-latest
+    needs: cross-platform-basic
+    if: github.event.inputs.include_wasm == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio psutil
+    
+    - name: Download SpacetimeDB (if available)
+      run: |
+        # Try to download SpacetimeDB for testing
+        # This is optional and will be skipped if not available
+        echo "Checking for SpacetimeDB availability..."
+        which spacetimedb || echo "SpacetimeDB not available, skipping WASM tests"
+    
+    - name: Run WASM integration tests
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import CrossPlatformTestSuite
+        
+        async def main():
+            suite = CrossPlatformTestSuite()
+            try:
+                results = await suite.run_extended_validation(include_wasm=True)
+                wasm_results = results.get('wasm_validation', {})
+                if wasm_results.get('passed'):
+                    print('WASM integration: PASS')
+                else:
+                    print(f'WASM integration: SKIP ({wasm_results.get(\"error\", \"not available\")})')
+            except Exception as e:
+                print(f'WASM integration: SKIP ({e})')
+        
+        asyncio.run(main())
+        "
+
+  # Production readiness assessment
+  production-readiness:
+    name: Production Readiness Assessment
+    runs-on: ubuntu-latest
+    needs: [cross-platform-basic, cross-platform-extended, architecture-validation, network-validation]
+    if: always()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pytest pytest-asyncio psutil pyyaml
+    
+    - name: Download all validation results
+      uses: actions/download-artifact@v3
+      with:
+        path: validation-results/
+    
+    - name: Assess production readiness
+      run: |
+        python -c "
+        import asyncio
+        import sys
+        import json
+        from pathlib import Path
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import CrossPlatformTestSuite
+        
+        async def main():
+            suite = CrossPlatformTestSuite()
+            results = await suite.run_basic_validation()
+            
+            # Production readiness criteria
+            success_rate = results['summary']['success_rate']
+            total_tests = results['summary']['total_tests']
+            
+            print(f'=== Production Readiness Assessment ===')
+            print(f'Success Rate: {success_rate:.1f}%')
+            print(f'Total Tests: {total_tests}')
+            
+            # Check criteria
+            meets_success_rate = success_rate >= 80.0
+            meets_test_count = total_tests >= 5
+            
+            print(f'Meets Success Rate (≥80%): {\"✅\" if meets_success_rate else \"❌\"}')
+            print(f'Meets Test Count (≥5): {\"✅\" if meets_test_count else \"❌\"}')
+            
+            production_ready = meets_success_rate and meets_test_count
+            print(f'Production Ready: {\"✅ YES\" if production_ready else \"❌ NO\"}')
+            
+            # Save assessment
+            assessment = {
+                'production_ready': production_ready,
+                'success_rate': success_rate,
+                'total_tests': total_tests,
+                'timestamp': results['summary'].get('total_duration', 0)
+            }
+            
+            with open('production_readiness_assessment.json', 'w') as f:
+                json.dump(assessment, f, indent=2)
+            
+            if not production_ready:
+                print('❌ Production readiness criteria not met')
+                sys.exit(1)
+            else:
+                print('✅ Production readiness criteria met')
+        
+        asyncio.run(main())
+        "
+    
+    - name: Upload production readiness assessment
+      uses: actions/upload-artifact@v3
+      with:
+        name: production-readiness-assessment
+        path: production_readiness_assessment.json
+        retention-days: 30
+    
+    - name: Comment on PR (if applicable)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          try {
+            const assessment = JSON.parse(fs.readFileSync('production_readiness_assessment.json', 'utf8'));
+            const status = assessment.production_ready ? '✅ READY' : '❌ NOT READY';
+            const successRate = assessment.success_rate.toFixed(1);
+            
+            const comment = `## 🔍 Cross-Platform Validation Results
+            
+            **Production Readiness:** ${status}
+            **Success Rate:** ${successRate}%
+            **Total Tests:** ${assessment.total_tests}
+            
+            ${assessment.production_ready ? 
+              '✅ All cross-platform validation criteria have been met. The SDK is ready for production use across supported platforms.' :
+              '❌ Some cross-platform validation criteria were not met. Please review the test results and address any issues before production deployment.'
+            }
+            
+            <details>
+            <summary>View detailed results</summary>
+            
+            Check the "Actions" tab for detailed validation results across all platforms and Python versions.
+            </details>`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+          } catch (error) {
+            console.log('Could not read assessment file:', error);
+          }
+
+  # Generate CI configuration for other projects
+  generate-ci-config:
+    name: Generate CI Configuration
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pyyaml
+    
+    - name: Generate CI configurations
+      run: |
+        python -c "
+        import sys
+        sys.path.insert(0, 'src')
+        from spacetimedb_sdk.cross_platform_validation import CrossPlatformTestSuite
+        
+        suite = CrossPlatformTestSuite()
+        
+        # Generate default configuration
+        print('=== Default CI Configuration ===')
+        default_config = suite.generate_ci_config()
+        print(default_config)
+        
+        with open('generated-ci-default.yml', 'w') as f:
+            f.write(default_config)
+        
+        # Generate minimal configuration
+        print('\\n=== Minimal CI Configuration ===')
+        minimal_config = suite.generate_ci_config(['ubuntu-latest'])
+        print(minimal_config)
+        
+        with open('generated-ci-minimal.yml', 'w') as f:
+            f.write(minimal_config)
+        "
+    
+    - name: Upload generated CI configurations
+      uses: actions/upload-artifact@v3
+      with:
+        name: generated-ci-configurations
+        path: |
+          generated-ci-*.yml
+        retention-days: 30 

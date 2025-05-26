@@ -1,0 +1,790 @@
+# SpacetimeDB Python Server Modules via Pyodide - Implementation Tasks
+# Complete roadmap for enabling Python as a first-class SpacetimeDB server language
+# Using Pyodide runtime as-is without modifications
+
+metadata:
+  project_name: "SpacetimeDB Python Server Modules"
+  implementation_approach: "Pyodide-as-Runtime"
+  estimated_duration: "3-4 months"
+  complexity: "High"
+  target_bundle_size: "6.5MB (Pyodide standard)"
+  target_startup_time: "<500ms"
+  python_compatibility: "3.11+"
+  
+architecture:
+  overview: |
+    ┌─────────────────────────────────────┐
+    │ SpacetimeDB WASM Host               │
+    ├─────────────────────────────────────┤
+    │ SpacetimeDB-Python Bridge (Rust)    │  ← New: Our Rust/WASM bridge
+    ├─────────────────────────────────────┤
+    │ Standard Pyodide Runtime (6.5MB)    │  ← Existing: Use as-is
+    ├─────────────────────────────────────┤
+    │ Python Server Code + Bindings       │  ← New: Python package
+    └─────────────────────────────────────┘
+  
+  components:
+    bridge_module: "spacetimedb-python-bridge (Rust/WASM)"
+    python_bindings: "spacetimedb-server (Python package)"
+    cli_integration: "spacetime CLI Python server support"
+    build_pipeline: "Python-to-WASM bundling system"
+
+project_structure:
+  spacetimedb_repo_additions: |
+    SpacetimeDB/
+    ├── crates/
+    │   ├── python-bridge/              # New Rust crate
+    │   │   ├── Cargo.toml
+    │   │   ├── src/
+    │   │   │   ├── lib.rs             # Main bridge implementation
+    │   │   │   ├── pyodide_runtime.rs # Pyodide integration
+    │   │   │   ├── bsatn_bridge.rs    # BSATN serialization bridge
+    │   │   │   ├── reducer_bridge.rs  # Reducer call handling
+    │   │   │   └── table_bridge.rs    # Table operation bridge
+    │   │   └── build.rs               # Build script for Pyodide integration
+    │   └── cli/
+    │       └── src/
+    │           ├── subcommands/
+    │           │   ├── publish_python.rs  # Python module publishing
+    │           │   └── generate_python_server.rs # Python server codegen
+    │           └── tasks/
+    │               └── python_server.rs   # Python server build tasks
+    └── python/
+        └── spacetimedb-server/         # New Python package
+            ├── pyproject.toml
+            ├── src/
+            │   └── spacetimedb_server/
+            │       ├── __init__.py     # Main API exports
+            │       ├── decorators.py   # @table, @reducer decorators
+            │       ├── context.py      # ReducerContext implementation
+            │       ├── types.py        # SpacetimeDB type mappings
+            │       ├── bsatn.py        # BSATN integration
+            │       └── runtime.py      # Runtime integration with bridge
+            ├── tests/
+            └── examples/
+                └── simple_game/        # Basic example server module
+
+tasks:
+  # === PHASE 1: CORE BRIDGE INFRASTRUCTURE ===
+  - id: pyodide-1
+    name: Pyodide Bridge Foundation
+    phase: 1
+    estimated_effort: "1-2 weeks"
+    priority: critical
+    status: todo
+    
+    description: |
+      Create the foundational Rust bridge that embeds Pyodide and implements
+      the SpacetimeDB WASM module interface.
+    
+    technical_requirements:
+      - Embed Pyodide WASM runtime in Rust
+      - Implement SpacetimeDB WASM ABI
+      - Handle module lifecycle (init, call_reducer, etc.)
+      - Basic error handling and logging
+    
+    implementation_guide:
+      rust_dependencies: |
+        # Add to Cargo.toml
+        [dependencies]
+        spacetimedb-lib = { path = "../lib" }
+        spacetimedb-bindings-sys = { path = "../bindings-sys" }
+        wasm-bindgen = "0.2"
+        js-sys = "0.3"
+        web-sys = "0.3"
+        serde = { version = "1.0", features = ["derive"] }
+        serde_json = "1.0"
+        anyhow = "1.0"
+        
+        [dependencies.pyodide]
+        git = "https://github.com/pyodide/pyodide"
+        features = ["wasm"]
+      
+      main_bridge_structure: |
+        // src/lib.rs - Main bridge implementation
+        use spacetimedb_lib::*;
+        use wasm_bindgen::prelude::*;
+        
+        #[wasm_bindgen]
+        pub struct PythonModule {
+            pyodide: PyodideRuntime,
+            python_code: String,
+            initialized: bool,
+        }
+        
+        #[wasm_bindgen]
+        impl PythonModule {
+            #[wasm_bindgen(constructor)]
+            pub fn new() -> Result<PythonModule, JsValue> {
+                // Initialize Pyodide runtime
+                // Load spacetimedb-server Python package
+                // Return initialized module
+            }
+            
+            pub fn load_python_code(&mut self, code: &str) -> Result<(), JsValue> {
+                // Load and execute Python module code
+                // Validate Python decorators and structure
+                // Register tables and reducers with bridge
+            }
+            
+            pub fn call_reducer(&mut self, name: &str, args: &[u8]) -> Result<Vec<u8>, JsValue> {
+                // Deserialize BSATN args to Python objects
+                // Call Python reducer function
+                // Serialize Python return value to BSATN
+            }
+        }
+        
+        // SpacetimeDB WASM ABI implementation
+        #[no_mangle]
+        pub extern "C" fn __spacetimedb_module_init() {
+            // Initialize module and register tables/reducers
+        }
+        
+        #[no_mangle] 
+        pub extern "C" fn __spacetimedb_call_reducer(
+            id: u32,
+            args_ptr: *const u8,
+            args_len: usize,
+        ) -> *mut u8 {
+            // Bridge reducer calls to Python
+        }
+      
+      pyodide_integration: |
+        // src/pyodide_runtime.rs
+        use wasm_bindgen::prelude::*;
+        use js_sys::{Object, Reflect, Function};
+        
+        pub struct PyodideRuntime {
+            pyodide: Object,
+            python_globals: Object,
+        }
+        
+        impl PyodideRuntime {
+            pub async fn new() -> Result<Self, JsValue> {
+                // Load Pyodide
+                let pyodide = js_sys::eval("await loadPyodide()")?;
+                
+                // Install spacetimedb-server package
+                let install_cmd = "import micropip; await micropip.install('spacetimedb-server')";
+                pyodide.call_method1("runPython", &install_cmd.into())?;
+                
+                Ok(Self {
+                    pyodide: pyodide.into(),
+                    python_globals: js_sys::eval("pyodide.globals")?.into(),
+                })
+            }
+            
+            pub fn run_python(&self, code: &str) -> Result<JsValue, JsValue> {
+                self.pyodide.call_method1("runPython", &code.into())
+            }
+            
+            pub fn call_python_function(&self, func_name: &str, args: &JsValue) -> Result<JsValue, JsValue> {
+                let func = Reflect::get(&self.python_globals, &func_name.into())?;
+                let func: Function = func.into();
+                func.call1(&JsValue::undefined(), args)
+            }
+        }
+    
+    success_criteria:
+      - Pyodide runtime initializes successfully in WASM
+      - Can load and execute basic Python code
+      - Basic bridge between Rust and Python established
+      - Module responds to SpacetimeDB lifecycle calls
+      - Logging and error handling functional
+    
+    testing_approach:
+      - Unit tests for bridge initialization
+      - Simple Python code execution tests  
+      - WASM module loading verification
+      - Error condition handling tests
+    
+    blockers_and_risks:
+      - Pyodide WASM loading complexity
+      - SpacetimeDB WASM ABI compatibility  
+      - Memory management between Rust/JS/Python
+      - Async initialization challenges
+
+  - id: pyodide-2
+    name: BSATN Serialization Bridge
+    phase: 1
+    estimated_effort: "1-2 weeks"
+    priority: critical
+    status: todo
+    depends_on: [pyodide-1]
+    
+    description: |
+      Implement bidirectional BSATN serialization between Rust and Python,
+      enabling data exchange for reducer calls and table operations.
+    
+    technical_requirements:
+      - Rust BSATN → Python object conversion
+      - Python object → Rust BSATN conversion  
+      - Support all SpacetimeDB algebraic types
+      - Handle complex nested structures
+      - Efficient serialization performance
+    
+    implementation_guide:
+      bsatn_bridge_structure: |
+        // src/bsatn_bridge.rs
+        use spacetimedb_lib::AlgebraicValue;
+        use serde_json::Value as JsonValue;
+        
+        pub struct BsatnBridge {
+            pyodide: PyodideRuntime,
+        }
+        
+        impl BsatnBridge {
+            pub fn bsatn_to_python(&self, value: &AlgebraicValue) -> Result<JsValue, JsValue> {
+                match value {
+                    AlgebraicValue::Bool(b) => Ok((*b).into()),
+                    AlgebraicValue::I8(i) => Ok((*i).into()),
+                    AlgebraicValue::U8(u) => Ok((*u).into()),
+                    AlgebraicValue::String(s) => Ok(s.clone().into()),
+                    AlgebraicValue::Product(fields) => {
+                        // Convert to Python dict/object
+                        let py_dict = js_sys::Object::new();
+                        for (i, field) in fields.iter().enumerate() {
+                            let py_value = self.bsatn_to_python(field)?;
+                            js_sys::Reflect::set(&py_dict, &i.into(), &py_value)?;
+                        }
+                        Ok(py_dict.into())
+                    },
+                    AlgebraicValue::Sum(variant) => {
+                        // Convert to Python Union type representation
+                        self.sum_to_python(variant)
+                    },
+                    // ... handle all other types
+                }
+            }
+            
+            pub fn python_to_bsatn(&self, py_value: &JsValue) -> Result<AlgebraicValue, JsValue> {
+                // Reverse conversion from Python to BSATN
+                if py_value.is_string() {
+                    Ok(AlgebraicValue::String(py_value.as_string().unwrap()))
+                } else if py_value.as_bool().is_some() {
+                    Ok(AlgebraicValue::Bool(py_value.as_bool().unwrap()))
+                } else if py_value.as_f64().is_some() {
+                    // Determine appropriate numeric type
+                    self.number_to_bsatn(py_value.as_f64().unwrap())
+                } else if js_sys::Array::is_array(py_value) {
+                    // Handle arrays/lists
+                    self.array_to_bsatn(py_value)
+                } else if py_value.is_object() {
+                    // Handle dicts/objects
+                    self.object_to_bsatn(py_value)
+                } else {
+                    Err("Unsupported Python type for BSATN conversion".into())
+                }
+            }
+        }
+      
+      python_type_integration: |
+        # Python side type integration
+        # src/spacetimedb_server/types.py
+        from typing import Any, Dict, List, Union
+        import js
+        
+        class SpacetimeType:
+            """Base class for SpacetimeDB types with BSATN integration"""
+            
+            def to_bsatn(self) -> Any:
+                """Convert to BSATN-compatible representation"""
+                raise NotImplementedError
+            
+            @classmethod
+            def from_bsatn(cls, bsatn_value: Any):
+                """Create instance from BSATN value"""
+                raise NotImplementedError
+        
+        class Identity(SpacetimeType):
+            def __init__(self, value: str):
+                self.value = value
+            
+            def to_bsatn(self):
+                return {"Identity": self.value}
+                
+            @classmethod
+            def from_bsatn(cls, bsatn_value):
+                return cls(bsatn_value["Identity"])
+        
+        class Vector2(SpacetimeType):
+            def __init__(self, x: float, y: float):
+                self.x = x
+                self.y = y
+            
+            def to_bsatn(self):
+                return {"Product": [self.x, self.y]}
+    
+    success_criteria:
+      - All SpacetimeDB types convert correctly Python ↔ BSATN
+      - Complex nested structures handle properly
+      - Performance acceptable for game workloads
+      - Type safety maintained across boundaries
+      - Error messages clear for type mismatches
+    
+    testing_approach:
+      - Comprehensive type conversion test suite
+      - Round-trip conversion validation  
+      - Performance benchmarks for large objects
+      - Edge case handling (None, empty collections, etc.)
+
+  - id: pyodide-3  
+    name: Basic Python Bindings Package
+    phase: 1
+    estimated_effort: "2-3 weeks"
+    priority: critical
+    status: todo
+    depends_on: [pyodide-2]
+    
+    description: |
+      Create the core Python package that provides SpacetimeDB decorators,
+      context objects, and table/reducer registration functionality.
+    
+    technical_requirements:
+      - @table decorator for table definitions
+      - @reducer decorator for reducer functions
+      - ReducerContext implementation
+      - Table operation methods (insert, delete, update, scan)
+      - Integration with BSATN bridge
+      - Python type hints and IDE support
+    
+    implementation_guide:
+      package_structure: |
+        # spacetimedb-server package structure
+        src/spacetimedb_server/
+        ├── __init__.py          # Main exports
+        ├── decorators.py        # @table, @reducer decorators  
+        ├── context.py           # ReducerContext implementation
+        ├── database.py          # Database operations interface
+        ├── tables.py            # Table handle implementations
+        ├── types.py             # SpacetimeDB type mappings
+        ├── bsatn.py             # BSATN integration utilities
+        ├── runtime.py           # Runtime integration with bridge
+        └── exceptions.py        # SpacetimeDB-specific exceptions
+      
+      core_decorators: |
+        # src/spacetimedb_server/decorators.py
+        from typing import Type, Dict, Any, Callable
+        from functools import wraps
+        import inspect
+        
+        # Global registries for bridge integration
+        _registered_tables: Dict[str, Type] = {}
+        _registered_reducers: Dict[str, Callable] = {}
+        
+        def table(cls: Type) -> Type:
+            """Decorator to register a class as a SpacetimeDB table"""
+            # Validate table class structure
+            if not hasattr(cls, '__annotations__'):
+                raise ValueError(f"Table {cls.__name__} must have type annotations")
+            
+            # Extract field information
+            fields = {}
+            for field_name, field_type in cls.__annotations__.items():
+                fields[field_name] = _analyze_field_type(field_type)
+            
+            # Add table metadata
+            cls._spacetimedb_table = True
+            cls._spacetimedb_fields = fields
+            cls._spacetimedb_name = cls.__name__
+            
+            # Register with global registry
+            _registered_tables[cls.__name__] = cls
+            
+            # Add table operation methods
+            cls.insert = classmethod(_create_insert_method(cls))
+            cls.delete = classmethod(_create_delete_method(cls))
+            cls.scan = classmethod(_create_scan_method(cls))
+            
+            return cls
+        
+        def reducer(func: Callable) -> Callable:
+            """Decorator to register a function as a SpacetimeDB reducer"""
+            
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                # This wrapper will be called by the bridge
+                return func(*args, **kwargs)
+            
+            # Add reducer metadata
+            wrapper._spacetimedb_reducer = True
+            wrapper._spacetimedb_name = func.__name__
+            wrapper._spacetimedb_signature = inspect.signature(func)
+            
+            # Register with global registry
+            _registered_reducers[func.__name__] = wrapper
+            
+            return wrapper
+        
+        def get_registered_tables() -> Dict[str, Type]:
+            """Get all registered table classes (called by bridge)"""
+            return _registered_tables.copy()
+        
+        def get_registered_reducers() -> Dict[str, Callable]:
+            """Get all registered reducer functions (called by bridge)"""
+            return _registered_reducers.copy()
+      
+      reducer_context: |
+        # src/spacetimedb_server/context.py
+        from typing import Any, Dict
+        import js
+        from .database import Database
+        from .types import Identity
+        
+        class ReducerContext:
+            """Context object provided to reducer functions"""
+            
+            def __init__(self, sender: Identity, timestamp: int):
+                self.sender = sender
+                self.timestamp = timestamp
+                self.db = Database()
+                self._bridge_context = None  # Set by bridge
+            
+            def log(self, message: str, level: str = "info"):
+                """Log a message via the bridge"""
+                if self._bridge_context:
+                    js.console.log(f"[{level.upper()}] {message}")
+            
+            def schedule_reducer(self, reducer_name: str, delay_ms: int, args: Any = None):
+                """Schedule a reducer to run after a delay"""
+                if self._bridge_context:
+                    self._bridge_context.schedule_reducer(reducer_name, delay_ms, args)
+      
+      database_interface: |
+        # src/spacetimedb_server/database.py
+        from typing import Type, List, Any, Optional
+        import js
+        from .types import SpacetimeType
+        
+        class TableHandle:
+            """Handle for performing operations on a specific table"""
+            
+            def __init__(self, table_class: Type, bridge_context: Any):
+                self.table_class = table_class
+                self.table_name = table_class.__name__
+                self._bridge = bridge_context
+            
+            def insert(self, row: Any) -> Any:
+                """Insert a row into the table"""
+                # Convert Python object to BSATN
+                bsatn_data = row.to_bsatn() if hasattr(row, 'to_bsatn') else row
+                
+                # Call bridge insert method
+                result = self._bridge.table_insert(self.table_name, bsatn_data)
+                
+                # Convert result back to Python object
+                return self.table_class.from_bsatn(result)
+            
+            def delete(self, **filters) -> int:
+                """Delete rows matching filters"""
+                return self._bridge.table_delete(self.table_name, filters)
+            
+            def scan(self, **filters) -> List[Any]:
+                """Scan table and return matching rows"""
+                bsatn_results = self._bridge.table_scan(self.table_name, filters)
+                return [self.table_class.from_bsatn(row) for row in bsatn_results]
+            
+            def find_by_primary_key(self, key: Any) -> Optional[Any]:
+                """Find row by primary key"""
+                result = self._bridge.table_find_pk(self.table_name, key)
+                return self.table_class.from_bsatn(result) if result else None
+        
+        class Database:
+            """Database interface providing access to all tables"""
+            
+            def __init__(self):
+                self._bridge_context = None  # Set by bridge
+                self._table_handles = {}
+            
+            def get_table(self, table_class: Type) -> TableHandle:
+                """Get a handle for the specified table class"""
+                table_name = table_class.__name__
+                if table_name not in self._table_handles:
+                    self._table_handles[table_name] = TableHandle(table_class, self._bridge_context)
+                return self._table_handles[table_name]
+      
+      example_usage: |
+        # Example Python server module usage
+        from spacetimedb_server import table, reducer, ReducerContext
+        from typing import Optional
+        
+        @table
+        class Player:
+            identity: str           # Primary key
+            name: str
+            score: int = 0         # Default value
+            active: bool = True
+        
+        @table  
+        class GameState:
+            id: int                # Primary key, auto-increment
+            round_number: int
+            active_players: int
+        
+        @reducer
+        def join_game(ctx: ReducerContext, player_name: str):
+            """Reducer for players joining the game"""
+            
+            # Create new player
+            player = Player(
+                identity=str(ctx.sender),
+                name=player_name,
+                score=0,
+                active=True
+            )
+            
+            # Insert into database
+            ctx.db.get_table(Player).insert(player)
+            
+            # Update game state
+            game_state = ctx.db.get_table(GameState).find_by_primary_key(1)
+            if game_state:
+                game_state.active_players += 1
+                ctx.db.get_table(GameState).insert(game_state)  # Update
+            
+            ctx.log(f"Player {player_name} joined the game")
+        
+        @reducer
+        def update_score(ctx: ReducerContext, points: int):
+            """Reducer to update player score"""
+            
+            # Find player by identity
+            player = ctx.db.get_table(Player).find_by_primary_key(str(ctx.sender))
+            if player:
+                player.score += points
+                ctx.db.get_table(Player).insert(player)  # Update
+                ctx.log(f"Updated {player.name} score to {player.score}")
+    
+    success_criteria:
+      - Decorators register tables and reducers correctly
+      - ReducerContext provides full functionality
+      - Database operations work end-to-end  
+      - Type hints work properly in IDEs
+      - Error handling provides clear messages
+      - Example server module runs successfully
+    
+    testing_approach:
+      - Unit tests for all decorators and classes
+      - Integration tests with mock bridge
+      - Example server module validation
+      - Type checking with mypy
+      - Documentation and API usability testing
+
+  # === PHASE 2: ADVANCED FEATURES ===
+  - id: pyodide-4
+    name: Table Operations and Queries
+    phase: 2
+    estimated_effort: "2-3 weeks"
+    priority: high
+    status: todo
+    depends_on: [pyodide-3]
+    
+    description: |
+      Implement comprehensive table operations including indexing, filtering,
+      complex queries, and primary key management.
+    
+    technical_requirements:
+      - Primary key and auto-increment support
+      - Index-based queries (btree, hash)
+      - Complex filtering and WHERE clauses
+      - Table iteration and scanning
+      - Batch operations
+      - Transaction-like semantics
+    
+    implementation_guide:
+      advanced_table_operations: |
+        # Enhanced table operations
+        class AdvancedTableHandle(TableHandle):
+            
+            def find_by_index(self, index_name: str, value: Any) -> List[Any]:
+                """Find rows using indexed field"""
+                result = self._bridge.table_find_by_index(
+                    self.table_name, 
+                    index_name, 
+                    value
+                )
+                return [self.table_class.from_bsatn(row) for row in result]
+            
+            def filter(self, **conditions) -> List[Any]:
+                """Filter rows with complex conditions"""
+                # Support for operators: eq, ne, lt, gt, le, ge, in, not_in
+                filter_expr = self._build_filter_expression(conditions)
+                result = self._bridge.table_filter(self.table_name, filter_expr)
+                return [self.table_class.from_bsatn(row) for row in result]
+            
+            def count(self, **conditions) -> int:
+                """Count rows matching conditions"""
+                filter_expr = self._build_filter_expression(conditions)
+                return self._bridge.table_count(self.table_name, filter_expr)
+            
+            def batch_insert(self, rows: List[Any]) -> List[Any]:
+                """Insert multiple rows efficiently"""
+                bsatn_rows = [row.to_bsatn() for row in rows]
+                results = self._bridge.table_batch_insert(self.table_name, bsatn_rows)
+                return [self.table_class.from_bsatn(row) for row in results]
+      
+      index_decorators: |
+        # Enhanced table decorator with index support
+        from typing import List
+        
+        def table(
+            name: Optional[str] = None,
+            primary_key: Optional[str] = None,
+            indexes: Optional[List[str]] = None
+        ):
+            def decorator(cls: Type) -> Type:
+                cls._spacetimedb_table = True
+                cls._spacetimedb_name = name or cls.__name__
+                cls._spacetimedb_primary_key = primary_key
+                cls._spacetimedb_indexes = indexes or []
+                
+                # Add index-based query methods
+                if indexes:
+                    for index in indexes:
+                        setattr(cls, f'find_by_{index}', 
+                               classmethod(_create_index_method(cls, index)))
+                
+                return cls
+            return decorator
+        
+        # Usage example:
+        @table(indexes=['player_id', 'score'])
+        class GameScore:
+            id: int               # Auto-increment primary key
+            player_id: str        # Indexed
+            score: int            # Indexed  
+            timestamp: int
+        
+        # Generated methods:
+        # GameScore.find_by_player_id(player_id) -> List[GameScore]
+        # GameScore.find_by_score(score) -> List[GameScore]
+    
+    success_criteria:
+      - All table operations perform correctly
+      - Index-based queries work efficiently
+      - Complex filtering expressions supported
+      - Batch operations handle large datasets
+      - Performance acceptable for game workloads
+
+  - id: pyodide-5
+    name: Scheduled Reducers and Events
+    phase: 2
+    estimated_effort: "2-3 weeks"
+    priority: high
+    status: todo
+    depends_on: [pyodide-4]
+    
+    description: |
+      Implement scheduled reducers, event handling, and timer-based operations
+      that are essential for game servers.
+    
+    technical_requirements:
+      - @scheduled decorator for periodic reducers
+      - One-time and repeating timer support
+      - Event subscription and handling
+      - Timer cancellation and management
+      - Integration with SpacetimeDB scheduling system
+    
+    implementation_guide:
+      scheduled_decorators: |
+        # src/spacetimedb_server/scheduling.py
+        from typing import Optional, Callable
+        import time
+        
+        def scheduled(
+            interval_ms: Optional[int] = None,
+            delay_ms: Optional[int] = None,
+            repeating: bool = True
+        ):
+            """Decorator for scheduled reducer functions"""
+            
+            def decorator(func: Callable) -> Callable:
+                @wraps(func)
+                def wrapper(*args, **kwargs):
+                    return func(*args, **kwargs)
+                
+                wrapper._spacetimedb_scheduled = True
+                wrapper._spacetimedb_interval = interval_ms
+                wrapper._spacetimedb_delay = delay_ms  
+                wrapper._spacetimedb_repeating = repeating
+                wrapper._spacetimedb_name = func.__name__
+                
+                # Register with scheduler
+                _registered_scheduled[func.__name__] = wrapper
+                
+                return wrapper
+            return decorator
+        
+        # Usage examples:
+        @scheduled(interval_ms=1000)  # Every second
+        def game_tick(ctx: ReducerContext):
+            """Main game loop"""
+            # Update game state
+            pass
+        
+        @scheduled(delay_ms=5000, repeating=False)  # One-time delay
+        def round_start(ctx: ReducerContext):
+            """Start a new game round"""
+            pass
+      
+      event_system: |
+        # src/spacetimedb_server/events.py
+        from typing import Dict, List, Callable, Any
+        
+        class EventSystem:
+            """Event subscription and handling system"""
+            
+            def __init__(self):
+                self._subscribers: Dict[str, List[Callable]] = {}
+            
+            def subscribe(self, event_type: str, handler: Callable):
+                """Subscribe to an event type"""
+                if event_type not in self._subscribers:
+                    self._subscribers[event_type] = []
+                self._subscribers[event_type].append(handler)
+            
+            def emit(self, event_type: str, data: Any):
+                """Emit an event to all subscribers"""
+                if event_type in self._subscribers:
+                    for handler in self._subscribers[event_type]:
+                        try:
+                            handler(data)
+                        except Exception as e:
+                            # Log error but continue with other handlers
+                            print(f"Event handler error: {e}")
+        
+        # Global event system instance
+        events = EventSystem()
+        
+        # Usage in reducers:
+        @reducer
+        def player_died(ctx: ReducerContext, player_id: str):
+            # Handle player death
+            events.emit('player_death', {'player_id': player_id, 'timestamp': ctx.timestamp})
+        
+        def on_player_death(data):
+            print(f"Player {data['player_id']} died at {data['timestamp']}")
+        
+        events.subscribe('player_death', on_player_death)
+    
+    success_criteria:
+      - Scheduled reducers execute at correct intervals
+      - One-time and repeating timers work properly
+      - Event system handles subscriptions correctly
+      - Timer cancellation prevents execution
+      - Performance suitable for high-frequency operations
+
+  - id: pyodide-6
+    name: CLI Integration and Build Pipeline
+    phase: 2
+    estimated_effort: "3-4 weeks"
+    priority: high
+    status: todo
+    depends_on: [pyodide-5]
+    
+    description: |
+      Integrate Python server module support into SpacetimeDB CLI with
+      seamless publish, build, and deployment workflows.
+    
+    technical_requirements:
+      - `

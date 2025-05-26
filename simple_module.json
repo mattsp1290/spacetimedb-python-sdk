@@ -1,0 +1,92 @@
+{
+  "V9": {
+    "types": [
+    {
+      "name": "User",
+      "ty": {
+        "Product": {
+          "elements": [
+            {
+              "name": "identity",
+              "algebraic_type": "U64"
+            },
+            {
+              "name": "name", 
+              "algebraic_type": {
+                "Option": "String"
+              }
+            },
+            {
+              "name": "online",
+              "algebraic_type": "Bool"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Message",
+      "ty": {
+        "Product": {
+          "elements": [
+            {
+              "name": "sender",
+              "algebraic_type": "U64"
+            },
+            {
+              "name": "sent",
+              "algebraic_type": "U64"
+            },
+            {
+              "name": "text",
+              "algebraic_type": "String"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "tables": [
+    {
+      "name": "User",
+      "product_type_ref": 0,
+      "primary_key": [0],
+      "indexes": [],
+      "constraints": [],
+      "table_type": "User",
+      "table_access": "Public"
+    },
+    {
+      "name": "Message", 
+      "product_type_ref": 1,
+      "primary_key": null,
+      "indexes": [],
+      "constraints": [],
+      "table_type": "User",
+      "table_access": "Public"
+    }
+  ],
+  "reducers": [
+    {
+      "name": "set_name",
+      "params": [
+        {
+          "name": "name",
+          "algebraic_type": "String"
+        }
+      ],
+      "lifecycle": null
+    },
+    {
+      "name": "send_message",
+      "params": [
+        {
+          "name": "text", 
+          "algebraic_type": "String"
+        }
+      ],
+      "lifecycle": null
+    }
+  ]
+  }
+}

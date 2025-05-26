@@ -28,6 +28,11 @@ from .db_context import DbContext, DbView, Reducers, SetReducerFlags
 
 from .protocol import CallReducerFlags, TEXT_PROTOCOL, BIN_PROTOCOL
 
+# Import connection pool types
+from .connection_pool import (
+    ConnectionPool, LoadBalancedConnectionManager, RetryPolicy
+)
+
 if TYPE_CHECKING:
     from .modern_client import ModernSpacetimeDBClient
     from .protocol import Identity
@@ -88,6 +93,14 @@ class SpacetimeDBConnectionBuilder:
         
         # JSON API configuration
         self._json_api_base_url: Optional[str] = None
+        
+        # Connection pooling configuration
+        self._use_connection_pool: bool = False
+        self._pool_min_connections: int = 2
+        self._pool_max_connections: int = 10
+        self._pool_health_check_interval: float = 30.0
+        self._pool_retry_policy: Optional[RetryPolicy] = None
+        self._pool_load_balancing_strategy: str = "round_robin"
     
     def with_uri(self, uri: str) -> 'SpacetimeDBConnectionBuilder':
         """
@@ -506,6 +519,80 @@ class SpacetimeDBConnectionBuilder:
         self._max_concurrent_executions = max_concurrent_executions
         return self
     
+    def with_connection_pool(
+        self,
+        min_connections: int = 2,
+        max_connections: int = 10,
+        health_check_interval: float = 30.0,
+        load_balancing_strategy: str = "round_robin"
+    ) -> 'SpacetimeDBConnectionBuilder':
+        """
+        Enable connection pooling with specified configuration.
+        
+        Args:
+            min_connections: Minimum number of connections in the pool
+            max_connections: Maximum number of connections in the pool
+            health_check_interval: Interval for health checks in seconds
+            load_balancing_strategy: Strategy for load balancing ("round_robin", "least_latency", "random")
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            pool = (ModernSpacetimeDBClient.builder()
+                    .with_uri("ws://localhost:3000")
+                    .with_module_name("my_module")
+                    .with_connection_pool(
+                        min_connections=5,
+                        max_connections=20,
+                        load_balancing_strategy="least_latency"
+                    )
+                    .build_pool())
+        """
+        self._use_connection_pool = True
+        self._pool_min_connections = min_connections
+        self._pool_max_connections = max_connections
+        self._pool_health_check_interval = health_check_interval
+        self._pool_load_balancing_strategy = load_balancing_strategy
+        return self
+    
+    def with_retry_policy(
+        self,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 60.0,
+        exponential_base: float = 2.0,
+        jitter: bool = True
+    ) -> 'SpacetimeDBConnectionBuilder':
+        """
+        Configure retry policy for connection pool operations.
+        
+        Args:
+            max_retries: Maximum number of retry attempts
+            base_delay: Base delay between retries in seconds
+            max_delay: Maximum delay between retries in seconds
+            exponential_base: Base for exponential backoff
+            jitter: Whether to add random jitter to retry delays
+            
+        Returns:
+            Self for method chaining
+            
+        Example:
+            builder.with_retry_policy(
+                max_retries=5,
+                base_delay=0.5,
+                max_delay=30.0
+            )
+        """
+        self._pool_retry_policy = RetryPolicy(
+            max_retries=max_retries,
+            base_delay=base_delay,
+            max_delay=max_delay,
+            exponential_base=exponential_base,
+            jitter=jitter
+        )
+        return self
+    
     def build(self) -> 'ModernSpacetimeDBClient':
         """
         Build and return the configured SpacetimeDB client.
@@ -717,6 +804,77 @@ class SpacetimeDBConnectionBuilder:
         
         return client, ctx
     
+    def build_pool(self) -> ConnectionPool:
+        """
+        Build a connection pool instead of a single client.
+        
+        Returns:
+            Configured ConnectionPool instance
+            
+        Raises:
+            ValueError: If required parameters are missing or invalid
+            
+        Example:
+            ```python
+            pool = (ModernSpacetimeDBClient.builder()
+                    .with_uri("ws://localhost:3000")
+                    .with_module_name("my_module")
+                    .with_token("auth_token")
+                    .with_connection_pool(min_connections=5, max_connections=20)
+                    .with_retry_policy(max_retries=5)
+                    .build_pool())
+            
+            # Use the pool
+            def my_operation(client):
+                return client.call_reducer("my_reducer", {"arg": "value"})
+                
+            result = pool.execute_with_retry(my_operation, "my_operation")
+            
+            # Get pool metrics
+            metrics = pool.get_pool_metrics()
+            print(f"Healthy connections: {metrics['healthy_connections']}")
+            ```
+        """
+        if not self._use_connection_pool:
+            raise ValueError("Connection pooling not enabled. Use with_connection_pool() first.")
+        
+        # Validate required parameters
+        if not self._uri:
+            raise ValueError("URI is required. Use with_uri() to set it.")
+        
+        if not self._module_name:
+            raise ValueError("Module name is required. Use with_module_name() to set it.")
+        
+        # Build connection configuration
+        connection_config = {
+            'uri': self._uri,
+            'host': self._host,
+            'module_name': self._module_name,
+            'database_address': self._database_address,
+            'auth_token': self._auth_token,
+            'ssl_enabled': self._ssl_enabled,
+            'protocol': self._protocol,
+            'auto_reconnect': self._auto_reconnect,
+            'max_reconnect_attempts': self._max_reconnect_attempts,
+            'initial_energy': self._initial_energy,
+            'max_energy': self._max_energy,
+            'energy_budget': self._energy_budget,
+            'compression_config': self._compression_config,
+            'autogen_package': self._autogen_package
+        }
+        
+        # Create the connection pool
+        pool = ConnectionPool(
+            min_connections=self._pool_min_connections,
+            max_connections=self._pool_max_connections,
+            connection_config=connection_config,
+            health_check_interval=self._pool_health_check_interval,
+            retry_policy=self._pool_retry_policy,
+            load_balancing_strategy=self._pool_load_balancing_strategy
+        )
+        
+        return pool
+    
     def connect_with_context(self) -> tuple['ModernSpacetimeDBClient', DbContext]:
         """
         Build the client and context, then immediately connect to SpacetimeDB.
@@ -752,4 +910,4 @@ class SpacetimeDBConnectionBuilder:
             on_error=self._on_error
         )
         
-        return client, ctx 
+        return client, ctx

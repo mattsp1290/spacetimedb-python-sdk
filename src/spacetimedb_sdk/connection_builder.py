@@ -28,14 +28,13 @@ from .db_context import DbContext, DbView, Reducers, SetReducerFlags
 
 from .protocol import CallReducerFlags, TEXT_PROTOCOL, BIN_PROTOCOL
 
-# Import connection pool types
-from .connection_pool import (
-    ConnectionPool, LoadBalancedConnectionManager, RetryPolicy
-)
+# Import shared types
+from .shared_types import RetryPolicy
 
 if TYPE_CHECKING:
     from .modern_client import ModernSpacetimeDBClient
     from .protocol import Identity
+    from .connection_pool import ConnectionPool, LoadBalancedConnectionManager
 
 from .time_utils import EnhancedTimestamp, EnhancedTimeDuration, ScheduleAt
 
@@ -101,6 +100,9 @@ class SpacetimeDBConnectionBuilder:
         self._pool_health_check_interval: float = 30.0
         self._pool_retry_policy: Optional[RetryPolicy] = None
         self._pool_load_balancing_strategy: str = "round_robin"
+        
+        # Test mode configuration
+        self._test_mode: bool = False
     
     def with_uri(self, uri: str) -> 'SpacetimeDBConnectionBuilder':
         """
@@ -452,6 +454,26 @@ class SpacetimeDBConnectionBuilder:
         self._start_message_processing = enabled
         return self
     
+    def with_test_mode(self, enabled: bool = True) -> 'SpacetimeDBConnectionBuilder':
+        """
+        Enable test mode to prevent real WebSocket connections.
+        
+        Args:
+            enabled: Whether to enable test mode
+        
+        Returns:
+            Self for method chaining
+        
+        Example:
+            client = (ModernSpacetimeDBClient.builder()
+                      .with_uri("ws://localhost:3000")
+                      .with_module_name("test_module")
+                      .with_test_mode()
+                      .build())
+        """
+        self._test_mode = enabled
+        return self
+    
     def with_context(
         self,
         build_context: bool = True,
@@ -631,7 +653,8 @@ class SpacetimeDBConnectionBuilder:
             initial_energy=self._initial_energy,
             max_energy=self._max_energy,
             energy_budget=self._energy_budget,
-            compression_config=self._compression_config
+            compression_config=self._compression_config,
+            test_mode=self._test_mode
         )
         
         # Register all callbacks
@@ -745,13 +768,13 @@ class SpacetimeDBConnectionBuilder:
         if not self._host:
             issues.append("Host could not be parsed from URI")
         
-        if self._energy_budget < 0:
+        if self._energy_budget is not None and self._energy_budget < 0:
             issues.append("Energy budget must be non-negative")
         
-        if self._initial_energy < 0:
+        if self._initial_energy is not None and self._initial_energy < 0:
             issues.append("Initial energy must be non-negative")
         
-        if self._max_energy < 0:
+        if self._max_energy is not None and self._max_energy < 0:
             issues.append("Max energy must be non-negative")
         
         return {
@@ -804,7 +827,7 @@ class SpacetimeDBConnectionBuilder:
         
         return client, ctx
     
-    def build_pool(self) -> ConnectionPool:
+    def build_pool(self) -> 'ConnectionPool':
         """
         Build a connection pool instead of a single client.
         
@@ -862,6 +885,9 @@ class SpacetimeDBConnectionBuilder:
             'compression_config': self._compression_config,
             'autogen_package': self._autogen_package
         }
+        
+        # Lazy import to avoid circular dependency
+        from .connection_pool import ConnectionPool
         
         # Create the connection pool
         pool = ConnectionPool(

@@ -28,7 +28,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 # Import only what we need to avoid circular imports
-from spacetimedb_sdk.algebraic_value import AlgebraicValue, ProductValue
+from spacetimedb_sdk.algebraic_value import AlgebraicValue
 from spacetimedb_sdk.bsatn.reader import BsatnReader
 from spacetimedb_sdk.bsatn.writer import BsatnWriter
 
@@ -169,7 +169,7 @@ class BsatnSerializationBenchmark(PerformanceBenchmark):
     
     def _create_test_data(self):
         """Create test data for serialization"""
-        return ProductValue([
+        return AlgebraicValue.product([
             AlgebraicValue.U32(42),
             AlgebraicValue.String("Hello, SpacetimeDB!"),
             AlgebraicValue.Array([
@@ -194,7 +194,7 @@ class BsatnDeserializationBenchmark(PerformanceBenchmark):
     def __init__(self):
         super().__init__("BSATN Deserialization", "Serialization")
         # Pre-serialize data
-        test_data = ProductValue([
+        test_data = AlgebraicValue.product([
             AlgebraicValue.U32(42),
             AlgebraicValue.String("Hello, SpacetimeDB!"),
             AlgebraicValue.Array([
@@ -207,7 +207,7 @@ class BsatnDeserializationBenchmark(PerformanceBenchmark):
     
     def operation(self):
         reader = BsatnReader(self.serialized_data)
-        return ProductValue.decode_bsatn(reader)
+        return AlgebraicValue.decode_bsatn(reader)
 
 
 class TableOperationBenchmark(PerformanceBenchmark):

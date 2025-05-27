@@ -50,7 +50,7 @@ def overall_timeout_handler():
     print(f"⏰ OVERALL TEST TIMEOUT of {TEST_TIMEOUT_SECONDS} seconds reached! Attempting to force exit.")
     timeout_event.set()
     # Force exit - this is aggressive but helps break hangs in CI/testing
-    # os._exit(1) #  Commented out for now to see if tests can self-terminate
+    os._exit(1)  # Force exit on timeout
 
 # --- Test Functions (with added logging) ---
 
@@ -291,8 +291,8 @@ def test_enhanced_identity_token():
     assert identity_token.validate_signature() == True
     
     # Test refresh checking
-    assert identity_token.refresh_if_needed(threshold=24*60*60) == False  # Not near expiry
-    assert identity_token.refresh_if_needed(threshold=1) == True  # Very low threshold
+    assert identity_token.refresh_if_needed(threshold=23*60*60) == False  # 23h threshold, 24h expiry - no refresh needed
+    assert identity_token.refresh_if_needed(threshold=25*60*60) == True  # 25h threshold, 24h expiry - refresh needed
     
     print("✅ Enhanced IdentityToken works correctly")
 
@@ -380,8 +380,8 @@ def test_modern_client_integration():
     from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
     from spacetimedb_sdk.connection_id import ConnectionEventType, ConnectionState
     
-    print("[DEBUG] test_modern_client_integration: Creating ModernSpacetimeDBClient(start_message_processing=False)")
-    client = ModernSpacetimeDBClient(start_message_processing=False)
+    print("[DEBUG] test_modern_client_integration: Creating ModernSpacetimeDBClient(start_message_processing=False, test_mode=True)")
+    client = ModernSpacetimeDBClient(start_message_processing=False, test_mode=True)
     print("[DEBUG] test_modern_client_integration: Client created.")
     
     try:
@@ -580,4 +580,4 @@ if __name__ == "__main__":
         sys.exit(1) # Exit with error code on timeout
     else:
         print("❌ Some tests failed. Need to investigate and fix issues.") 
-        sys.exit(1) # Exit with error code on failure 
+        sys.exit(1) # Exit with error code on failure

@@ -205,29 +205,11 @@ from .algebraic_value import (
 )
 
 # Testing infrastructure
-from .testing import (
-    MockSpacetimeDBConnection,
-    MockWebSocketAdapter,
-    TestDataGenerator,
-    ProtocolComplianceTester,
-    PerformanceBenchmark,
-    MockMessage,
-    MessageType,
-    spacetimedb_test,
-    integration_test,
-    performance_test,
-    stress_test
-)
+# Import from .testing module directly when needed for tests
+# This avoids circular imports and keeps test utilities separate from main package
 
-from .test_fixtures import (
-    TestDatabase,
-    TestIsolation,
-    CoverageTracker,
-    TestResultAggregator,
-    is_ci_environment,
-    get_test_database_url,
-    get_test_module_name
-)
+# Test fixtures should not be imported in main package - import directly when needed
+# from spacetimedb_sdk.testing import (...) when writing tests
 
 # Logger integration
 from .logger import (
@@ -260,8 +242,10 @@ from .wasm_integration import (
     require_sdk_test_module
 )
 
-# Connection builder
+# Connection builder and pooling
 from .connection_builder import SpacetimeDBConnectionBuilder
+from .connection_pool import ConnectionPool, LoadBalancedConnectionManager
+from .shared_types import RetryPolicy
 
 # DbContext
 from .db_context import (
@@ -308,7 +292,7 @@ from .subscription_builder import (
     SubscriptionState,
     SubscriptionError,
     SubscriptionMetrics,
-    RetryPolicy
+    RetryPolicy as SubscriptionRetryPolicy  # Aliased to avoid conflict with shared_types.RetryPolicy
 )
 
 # BSATN serialization
@@ -594,25 +578,9 @@ __all__ = [
     "string_value",
     "bytes_value",
     
-    # Testing infrastructure
-    "MockSpacetimeDBConnection",
-    "MockWebSocketAdapter",
-    "TestDataGenerator",
-    "ProtocolComplianceTester",
-    "PerformanceBenchmark",
-    "MockMessage",
-    "MessageType",
-    "spacetimedb_test",
-    "integration_test",
-    "performance_test",
-    "stress_test",
-    "TestDatabase",
-    "TestIsolation",
-    "CoverageTracker",
-    "TestResultAggregator",
-    "is_ci_environment",
-    "get_test_database_url",
-    "get_test_module_name",
+    # Testing infrastructure removed - import directly when needed:
+    # from spacetimedb_sdk.testing import MockSpacetimeDBConnection, etc.
+    # from spacetimedb_sdk.testing import TestDatabase, TestIsolation, etc.
     
     # Logger integration
     "LogLevel",
@@ -641,8 +609,10 @@ __all__ = [
     "require_spacetimedb",
     "require_sdk_test_module",
     
-    # Connection builder
+    # Connection builder and pooling
     "SpacetimeDBConnectionBuilder",
+    "ConnectionPool",
+    "LoadBalancedConnectionManager",
     
     # DbContext
     "DbContext",

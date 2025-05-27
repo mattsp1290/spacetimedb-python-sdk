@@ -24,7 +24,9 @@ import uuid
 
 from .modern_client import ModernSpacetimeDBClient
 from .logger import get_logger, LogLevel
-from .testing import MockSpacetimeDBConnection
+# Import from the testing module, not the testing package
+from . import testing
+MockSpacetimeDBConnection = testing.MockSpacetimeDBConnection
 
 
 logger = get_logger()
@@ -433,4 +435,4 @@ async def wasm_harness(spacetimedb_server):
 @pytest_fixture
 def sdk_test_module():
     """Pytest fixture providing sdk_test_module.wasm."""
-    return WASMModule.from_file(require_sdk_test_module(), "sdk_test") 
+    return WASMModule.from_file(require_sdk_test_module(), "sdk_test")

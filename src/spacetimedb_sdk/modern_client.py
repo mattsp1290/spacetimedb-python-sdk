@@ -248,11 +248,13 @@ class ModernSpacetimeDBClient:
         initial_energy: int = 1000,  # Initial energy quota
         max_energy: int = 1000,  # Maximum energy capacity
         energy_budget: int = 5000,  # Energy budget per hour
-        compression_config: Optional[CompressionConfig] = None
+        compression_config: Optional[CompressionConfig] = None,
+        test_mode: bool = False  # New parameter to prevent real connections
     ):
         # Client state
         self.autogen_package = autogen_package
         self.protocol = protocol
+        self.test_mode = test_mode
         
         # Compression configuration
         self.compression_config = compression_config or CompressionConfig()
@@ -482,6 +484,13 @@ class ModernSpacetimeDBClient:
                 self._on_identity.append(on_identity)
             if on_error:
                 self._on_error.append(on_error)
+            
+            # In test mode, skip actual connection
+            if self.test_mode:
+                self.logger.info("Test mode: Simulating connection without WebSocket")
+                # Simulate successful connection
+                self._simulate_test_connection()
+                return
             
             # Create WebSocket client
             self.ws_client = ModernWebSocketClient(
@@ -1348,9 +1357,46 @@ class ModernSpacetimeDBClient:
                 )
                 self._event_emitter.emit(event)
     
+    def _simulate_test_connection(self) -> None:
+        """Simulate a successful connection in test mode."""
+        # Generate test identity and connection ID
+        self.identity = Identity.from_hex("0" * 32)
+        self.connection_id = ConnectionId.from_hex("0" * 16)
+        
+        # Create enhanced versions
+        self.enhanced_identity = EnhancedIdentity.from_hex("0" * 48)
+        self.enhanced_connection_id = EnhancedConnectionId.from_hex("0" * 16)
+        
+        # Create test token
+        self.enhanced_identity_token = EnhancedIdentityToken(
+            identity=self.enhanced_identity,
+            token="test_token",
+            connection_id=self.enhanced_connection_id
+        )
+        
+        # Update connection state
+        self.connection_state_tracker.connection_established(self.enhanced_connection_id)
+        self.connection_lifecycle_manager.on_connection_established(
+            self.enhanced_connection_id, self.enhanced_identity
+        )
+        self.connection_metrics.record_connection(self.enhanced_connection_id)
+        
+        # Call connect callbacks
+        self._handle_connect()
+        
+        # Simulate identity token message
+        for callback in self._on_identity:
+            try:
+                callback("test_token", self.identity, self.connection_id)
+            except Exception as e:
+                self.logger.error(f"Error in identity callback: {e}")
+    
     @property
     def is_connected(self) -> bool:
         """Check if currently connected."""
+        if self.test_mode:
+            # In test mode, consider connected if we have identity
+            return self.enhanced_connection_id is not None
         return self.ws_client is not None and self.ws_client.is_connected
     
     def get_connection_info(self) -> Dict[str, Any]:

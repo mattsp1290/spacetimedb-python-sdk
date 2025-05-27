@@ -18,15 +18,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Generator, Set
 from contextlib import contextmanager
 
-from .testing import (
+# Import from the main testing module, not the testing package
+from ..testing import (
     MockSpacetimeDBConnection,
     MockWebSocketAdapter,
     TestDataGenerator,
     ProtocolComplianceTester,
     PerformanceBenchmark
 )
-from .modern_client import ModernSpacetimeDBClient
-from .connection_builder import SpacetimeDBConnectionBuilder
+from ..modern_client import ModernSpacetimeDBClient
+from ..connection_builder import SpacetimeDBConnectionBuilder
 
 
 # Environment configuration
@@ -419,7 +420,7 @@ Usage:
 """
 
 import pytest
-from spacetimedb_sdk.test_fixtures import *
+from spacetimedb_sdk.test_fixtures.fixtures import *
 
 # Add any custom fixtures here
 
@@ -442,4 +443,4 @@ def pytest_runtest_makereport(item, call):
                 passed=call.result.passed,
                 duration=call.duration
             )
-''' 
+'''

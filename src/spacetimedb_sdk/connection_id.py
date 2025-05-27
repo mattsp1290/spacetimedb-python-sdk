@@ -364,7 +364,7 @@ class ConnectionStateTracker:
     def __init__(self):
         self._states: Dict[EnhancedConnectionId, ConnectionState] = {}
         self._connection_times: Dict[EnhancedConnectionId, float] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # Use reentrant lock to prevent deadlocks
     
     def track_connection(self, connection_id: EnhancedConnectionId, 
                         state: ConnectionState = ConnectionState.CONNECTED) -> None:
@@ -447,7 +447,7 @@ class ConnectionLifecycleManager:
         self._listeners: Dict[str, List[ConnectionEventListener]] = defaultdict(list)
         self._connection_history: List[ConnectionEvent] = []
         self._state_tracker = ConnectionStateTracker()
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # Use reentrant lock to prevent deadlocks
     
     def register_listener(self, event_type: str, listener: ConnectionEventListener) -> None:
         """
@@ -532,7 +532,7 @@ class ConnectionMetrics:
         self._total_connections = 0
         self._connection_durations: List[float] = []
         self._active_connections: Dict[EnhancedConnectionId, float] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()  # Use reentrant lock to prevent deadlocks
     
     def record_connection(self, connection_id: EnhancedConnectionId) -> None:
         """Record a new connection."""
@@ -589,4 +589,4 @@ __all__ = [
     'ConnectionLifecycleManager',
     'ConnectionMetrics',
     'ConnectionEventListener'
-] 
+]

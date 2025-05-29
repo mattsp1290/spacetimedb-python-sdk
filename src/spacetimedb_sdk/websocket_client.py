@@ -179,7 +179,7 @@ class ModernWebSocketClient:
             
             # Build WebSocket URL
             protocol_scheme = "wss" if self.ssl_enabled else "ws"
-            url = f"{protocol_scheme}://{self.host}/database/subscribe/{self.database_address}"
+            url = f"{protocol_scheme}://{self.host}/ws"
             
             self.logger.debug(f"_do_connect: Set state to CONNECTING. URL: {url}")
             
@@ -462,6 +462,14 @@ class ModernWebSocketClient:
             # but we can still track what we negotiated for application-level compression
             
         self.logger.info("Connected to SpacetimeDB (WebSocket open). Calling _on_connect callback if any.")
+        # Send subscription message for v1.1.2
+        subscription_msg = {'type': 'subscribe', 'database': 'PLACEHOLDER'}
+        if subscription_msg:
+            subscription_msg = json.dumps(subscription_msg).replace("PLACEHOLDER", self.database_address)
+            subscription_msg = json.loads(subscription_msg)
+            self.send_message(subscription_msg)
+            self.logger.debug(f"Sent subscription message: {subscription_msg}")
+
         if self._on_connect:
             try:
                 self._on_connect()

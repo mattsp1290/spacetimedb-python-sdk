@@ -587,7 +587,7 @@ class SpacetimeDBJsonAPI:
         Returns:
             ApiResponse containing list of DatabaseInfo
         """
-        response = await self._async_request(HttpMethod.GET, "/databases")
+        response = await self._async_request(HttpMethod.GET, "/v1/databases")
         
         if response.success and response.data:
             databases = []
@@ -609,7 +609,7 @@ class SpacetimeDBJsonAPI:
         """
         response = await self._async_request(
             HttpMethod.GET,
-            f"/databases/{database_name}"
+            f"/v1/database/{database_name}"
         )
         
         if response.success and response.data:
@@ -624,7 +624,7 @@ class SpacetimeDBJsonAPI:
         Returns:
             ApiResponse containing identity data
         """
-        return await self._async_request(HttpMethod.GET, "/identity")
+        return await self._async_request(HttpMethod.GET, "/v1/identity")
     
     async def call_reducer_http(
         self,
@@ -655,7 +655,7 @@ class SpacetimeDBJsonAPI:
         start_time = time.time()
         response = await self._async_request(
             HttpMethod.POST,
-            f"/databases/{database_name}/reducers/{reducer_name}/call",
+            f"/v1/database/{database_name}/call/{reducer_name}",
             data=data
         )
         execution_time = (time.time() - start_time) * 1000
@@ -684,7 +684,7 @@ class SpacetimeDBJsonAPI:
         """
         response = await self._async_request(
             HttpMethod.GET,
-            f"/databases/{database_name}/module"
+            f"/v1/database/{database_name}/schema"
         )
         
         if response.success and response.data:
@@ -711,7 +711,7 @@ class SpacetimeDBJsonAPI:
         
         return await self._async_request(
             HttpMethod.POST,
-            f"/databases/{database_name}/sql",
+            f"/v1/database/{database_name}/sql",
             data=data
         )
     
@@ -727,7 +727,7 @@ class SpacetimeDBJsonAPI:
             finally:
                 loop.close()
         else:
-            response = self._sync_request(HttpMethod.GET, "/databases")
+            response = self._sync_request(HttpMethod.GET, "/v1/databases")
             
             if response.success and response.data:
                 databases = []
@@ -749,7 +749,7 @@ class SpacetimeDBJsonAPI:
         else:
             response = self._sync_request(
                 HttpMethod.GET,
-                f"/databases/{database_name}"
+                f"/v1/database/{database_name}"
             )
             
             if response.success and response.data:
@@ -786,7 +786,7 @@ class SpacetimeDBJsonAPI:
             start_time = time.time()
             response = self._sync_request(
                 HttpMethod.POST,
-                f"/databases/{database_name}/reducers/{reducer_name}/call",
+                f"/v1/database/{database_name}/call/{reducer_name}",
                 data=data
             )
             execution_time = (time.time() - start_time) * 1000
@@ -884,4 +884,4 @@ class SpacetimeDBJsonAPI:
     
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
-        await self.close() 
+        await self.close()

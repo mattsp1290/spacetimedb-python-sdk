@@ -19,14 +19,21 @@ class WebSocketClient:
         self.is_connected = False
         self.client_address = client_address
 
-    def connect(self, auth, host, name_or_address, ssl_enabled):
+    def connect(self, auth, host, name_or_address, ssl_enabled, db_identity=None):
         protocol = "wss" if ssl_enabled else "ws"
-        url = f"{protocol}://{host}/database/subscribe/{name_or_address}"
+        # Use db_identity if provided, otherwise try to resolve name_or_address
+        if db_identity:
+            url = f"{protocol}://{host}/v1/database/{db_identity}/subscribe"
+        else:
+            # For v1.1.2 compatibility, we need the database identity
+            # If not provided, we'll use name_or_address as identity
+            url = f"{protocol}://{host}/v1/database/{name_or_address}/subscribe"
 
         if self.client_address is not None:
             url += f"?client_address={self.client_address}"
 
         self.host = host
+        self.db_identity = db_identity
         self.name_or_address = name_or_address
 
         ws_header = None

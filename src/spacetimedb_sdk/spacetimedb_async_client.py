@@ -15,7 +15,7 @@ from datetime import timedelta
 from datetime import datetime
 import traceback
 
-from spacetimedb_sdk.spacetimedb_client import SpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 
 class SpacetimeDBException(Exception):
@@ -218,11 +218,11 @@ class SpacetimeDBAsyncClient:
             self.client.subscribe(subscription_queries)
             self.event_queue.put_nowait(("connected", (auth_token, identity)))
 
-        self.client.connect(
+        self.client._connect_internal(
             auth_token,
             host,
-            address_or_name,
-            ssl_enabled,
+            database_address=address_or_name,
+            ssl_enabled=ssl_enabled,
             on_connect=None,
             on_error=on_error,
             on_disconnect=on_disconnect,
@@ -258,7 +258,7 @@ class SpacetimeDBAsyncClient:
 
         timeout_task = asyncio.create_task(self._timeout_task(self.request_timeout))
 
-        self.client._reducer_call(reducer_name, *reducer_args)
+        self.client.call_reducer(reducer_name, *reducer_args)
 
         while True:
             event, payload = await self._event()
@@ -279,7 +279,7 @@ class SpacetimeDBAsyncClient:
 
         timeout_task = asyncio.create_task(self._timeout_task(self.request_timeout))
 
-        self.client.close()
+        self.client.disconnect()
 
         while True:
             event, payload = await self._event()

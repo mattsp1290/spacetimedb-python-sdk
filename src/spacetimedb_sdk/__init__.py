@@ -102,15 +102,8 @@ from .websocket_client import (
     ConnectionState
 )
 
-# Legacy client (for backward compatibility)
-from .spacetimedb_client import (
-    SpacetimeDBClient as LegacySpacetimeDBClient,
-    Identity as LegacyIdentity,
-    Address,
-    DbEvent as LegacyDbEvent,
-    ReducerEvent as LegacyReducerEvent,
-    TransactionUpdateMessage
-)
+# Address type (still needed from other modules)
+from .protocol import Identity
 
 # Async client
 from .spacetimedb_async_client import SpacetimeDBAsyncClient
@@ -474,13 +467,7 @@ __all__ = [
     "ModernWebSocketClient",
     "ConnectionState",
     
-    # Legacy (for backward compatibility)
-    "LegacySpacetimeDBClient",
-    "LegacyIdentity",
-    "Address",
-    "LegacyDbEvent",
-    "LegacyReducerEvent",
-    "TransactionUpdateMessage",
+
     
     # Async
     "SpacetimeDBAsyncClient",

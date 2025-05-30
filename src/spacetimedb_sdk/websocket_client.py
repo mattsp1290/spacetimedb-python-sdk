@@ -15,6 +15,7 @@ import threading
 import time
 import base64
 import logging
+import json
 from typing import Optional, Callable, Dict, List, Any
 from enum import Enum
 import uuid
@@ -155,7 +156,8 @@ class ModernWebSocketClient:
         auth_token: Optional[str],
         host: str,
         database_address: str,
-        ssl_enabled: bool = True
+        ssl_enabled: bool = True,
+        db_identity: Optional[str] = None
     ) -> None:
         """Connect to SpacetimeDB."""
         with self._lock:
@@ -166,6 +168,7 @@ class ModernWebSocketClient:
             self.auth_token = auth_token
             self.host = host
             self.database_address = database_address
+            self.db_identity = db_identity
             self.ssl_enabled = ssl_enabled
             self.reconnect_attempts = 0
             
@@ -177,9 +180,11 @@ class ModernWebSocketClient:
         try:
             self.state = ConnectionState.CONNECTING
             
-            # Build WebSocket URL
+            # Build WebSocket URL for v1.1.2 compatibility
             protocol_scheme = "wss" if self.ssl_enabled else "ws"
-            url = f"{protocol_scheme}://{self.host}/ws"
+            # Use db_identity if provided, otherwise use database_address
+            identity = self.db_identity or self.database_address
+            url = f"{protocol_scheme}://{self.host}/v1/database/{identity}/subscribe"
             
             self.logger.debug(f"_do_connect: Set state to CONNECTING. URL: {url}")
             
@@ -462,14 +467,7 @@ class ModernWebSocketClient:
             # but we can still track what we negotiated for application-level compression
             
         self.logger.info("Connected to SpacetimeDB (WebSocket open). Calling _on_connect callback if any.")
-        # Send subscription message for v1.1.2
-        subscription_msg = {'type': 'subscribe', 'database': 'PLACEHOLDER'}
-        if subscription_msg:
-            subscription_msg = json.dumps(subscription_msg).replace("PLACEHOLDER", self.database_address)
-            subscription_msg = json.loads(subscription_msg)
-            self.send_message(subscription_msg)
-            self.logger.debug(f"Sent subscription message: {subscription_msg}")
-
+        
         if self._on_connect:
             try:
                 self._on_connect()
@@ -572,7 +570,6 @@ class ModernWebSocketClient:
             return
         
         self.state = ConnectionState.RECONNECTING # Set state before scheduling timer
-        self.logger.debug(f"_schedule_reconnect: State set to RECONNECTING. Scheduling timer for {delay:.1f}s.")
         delay = min(
             self.initial_reconnect_delay * (2 ** self.reconnect_attempts),
             self.max_reconnect_delay

@@ -39,7 +39,7 @@ except ImportError:
     HAS_REQUESTS = False
 
 from .protocol import Identity, EnergyQuanta
-from .spacetimedb_client import Address
+from .bsatn import SpacetimeDBAddress as Address
 
 logger = logging.getLogger(__name__)
 

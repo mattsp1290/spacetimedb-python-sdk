@@ -732,15 +732,12 @@ class SpacetimeDBConnectionBuilder:
             client.set_json_api_base_url(self._json_api_base_url)
         
         # Connect to SpacetimeDB
-        client.connect(
+        # Note: Callbacks are already registered on the client during build()
+        client._connect_internal(
             auth_token=self._auth_token,
             host=self._host,
             database_address=self._database_address,
-            ssl_enabled=self._ssl_enabled,
-            on_connect=self._on_connect,
-            on_disconnect=self._on_disconnect,
-            on_identity=self._on_identity,
-            on_error=self._on_error
+            ssl_enabled=self._ssl_enabled
         )
         
         return client
@@ -925,15 +922,12 @@ class SpacetimeDBConnectionBuilder:
         client, ctx = self.build_with_context()
         
         # Connect to SpacetimeDB
-        client.connect(
+        # Note: Callbacks are already registered on the client during build()
+        client._connect_internal(
             auth_token=self._auth_token,
             host=self._host,
             database_address=self._database_address,
-            ssl_enabled=self._ssl_enabled,
-            on_connect=self._on_connect,
-            on_disconnect=self._on_disconnect,
-            on_identity=self._on_identity,
-            on_error=self._on_error
+            ssl_enabled=self._ssl_enabled
         )
         
         return client, ctx

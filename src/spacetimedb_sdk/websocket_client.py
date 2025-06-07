@@ -20,6 +20,19 @@ from typing import Optional, Callable, Dict, List, Any
 from enum import Enum
 import uuid
 
+from .exceptions import (
+    WebSocketHandshakeError,
+    DatabaseNotFoundError,
+    DatabaseNotPublishedError,
+    AuthenticationError,
+    ProtocolMismatchError,
+    ConnectionTimeoutError,
+    SpacetimeDBConnectionError,
+    ServerNotAvailableError,
+    RetryableError
+)
+from .connection_diagnostics import ConnectionDiagnostics
+from .retry_policies import RetryPolicy, RetryPolicyPresets
 from .protocol import (
     TEXT_PROTOCOL, BIN_PROTOCOL,
     ClientMessage, ServerMessage,
@@ -83,7 +96,8 @@ class ModernWebSocketClient:
         max_reconnect_attempts: int = 10,
         initial_reconnect_delay: float = 1.0,
         max_reconnect_delay: float = 60.0,
-        compression_config: Optional[CompressionConfig] = None
+        compression_config: Optional[CompressionConfig] = None,
+        retry_policy: Optional[RetryPolicy] = None
     ):
         self.protocol = protocol
         self.use_binary = protocol == BIN_PROTOCOL
@@ -125,6 +139,17 @@ class ModernWebSocketClient:
         self.reconnect_attempts = 0
         self.reconnect_timer: Optional[threading.Timer] = None
         
+        # Connection diagnostics
+        self.diagnostics = ConnectionDiagnostics()
+        self.enable_preflight_checks = True
+        self.retry_on_transient_errors = True
+        
+        # Retry policy
+        self.retry_policy = retry_policy or RetryPolicyPresets.standard()
+        
+        # Store connection URL for error diagnostics
+        self.connection_url: Optional[str] = None
+        
         # Subscription tracking
         self.active_subscriptions: Dict[int, QueryId] = {}  # request_id -> QueryId
         self.subscription_queries: Dict[QueryId, List[str]] = {}  # QueryId -> queries
@@ -157,9 +182,10 @@ class ModernWebSocketClient:
         host: str,
         database_address: str,
         ssl_enabled: bool = True,
-        db_identity: Optional[str] = None
+        db_identity: Optional[str] = None,
+        retry_policy: Optional[RetryPolicy] = None
     ) -> None:
-        """Connect to SpacetimeDB."""
+        """Connect to SpacetimeDB with preflight checks and better error handling."""
         with self._lock:
             if self.state in [ConnectionState.CONNECTED, ConnectionState.CONNECTING]:
                 self.logger.warning("Already connected or connecting")
@@ -172,19 +198,46 @@ class ModernWebSocketClient:
             self.ssl_enabled = ssl_enabled
             self.reconnect_attempts = 0
             
+            # Use provided retry policy or default
+            if retry_policy:
+                self.retry_policy = retry_policy
+            
+            # Run preflight checks if enabled
+            if self.enable_preflight_checks:
+                try:
+                    self.logger.info("Running preflight checks...")
+                    checks = self.diagnostics.run_preflight_checks(
+                        host=host,
+                        database=database_address,
+                        raise_on_failure=True
+                    )
+                    self.logger.info("Preflight checks passed")
+                except Exception as e:
+                    self.logger.error(f"Preflight checks failed: {e}")
+                    if self._on_error:
+                        self._on_error(e)
+                    raise
+            
             self._do_connect()
     
     def _do_connect(self) -> None:
-        """Internal connection logic."""
+        """Internal connection logic with retry support."""
         self.logger.debug(f"_do_connect called. Current state: {self.state.value}. Attempt: {self.reconnect_attempts + 1}")
-        try:
+        
+        def _attempt_connection():
             self.state = ConnectionState.CONNECTING
             
             # Build WebSocket URL for v1.1.2 compatibility
             protocol_scheme = "wss" if self.ssl_enabled else "ws"
-            # Use db_identity if provided, otherwise use database_address
-            identity = self.db_identity or self.database_address
-            url = f"{protocol_scheme}://{self.host}/v1/database/{identity}/subscribe"
+            # Always use database_address in the URL path
+            url = f"{protocol_scheme}://{self.host}/v1/database/{self.database_address}/subscribe"
+            
+            # Add db_identity as query parameter if provided
+            if self.db_identity:
+                url += f"?db_identity={self.db_identity}"
+            
+            # Store URL for error diagnostics
+            self.connection_url = url
             
             self.logger.debug(f"_do_connect: Set state to CONNECTING. URL: {url}")
             
@@ -219,13 +272,27 @@ class ModernWebSocketClient:
             )
             self.connection_thread.start()
             self.logger.debug(f"_do_connect: Connection thread (ID: {self.connection_thread.ident}) started for {url}")
-            
-        except Exception as e:
-            self.logger.error(f"_do_connect: Failed to start connection: {e}", exc_info=True)
-            self.state = ConnectionState.DISCONNECTED
-            if self._on_error:
-                self._on_error(e)
-            self._schedule_reconnect()
+        
+        # Apply retry policy if this is an initial connection attempt
+        if self.reconnect_attempts == 0 and self.retry_on_transient_errors:
+            try:
+                self.retry_policy.execute_with_retry(_attempt_connection)
+            except Exception as e:
+                self.logger.error(f"_do_connect: Failed to start connection after retries: {e}", exc_info=True)
+                self.state = ConnectionState.DISCONNECTED
+                if self._on_error:
+                    self._on_error(e)
+                # Don't schedule reconnect here as retry policy already attempted
+        else:
+            # For reconnection attempts, don't use retry policy (already has backoff)
+            try:
+                _attempt_connection()
+            except Exception as e:
+                self.logger.error(f"_do_connect: Failed to start connection: {e}", exc_info=True)
+                self.state = ConnectionState.DISCONNECTED
+                if self._on_error:
+                    self._on_error(e)
+                self._schedule_reconnect()
     
     def disconnect(self) -> None:
         """Disconnect from SpacetimeDB and ensure the connection thread is stopped."""
@@ -515,8 +582,118 @@ class ModernWebSocketClient:
                 self._on_error(e)
     
     def _on_ws_error(self, ws, error) -> None:
-        """WebSocket error occurred."""
+        """WebSocket error occurred with enhanced error handling."""
         self.logger.error(f"WebSocket error: {error}")
+        
+        # Try to parse handshake errors
+        try:
+            error_str = str(error)
+            
+            # Check for handshake status codes
+            if "Handshake status" in error_str:
+                # Extract status code and message
+                import re
+                status_match = re.search(r"Handshake status (\d+)\s*(.*)?", error_str)
+                if status_match:
+                    status_code = int(status_match.group(1))
+                    status_message = status_match.group(2) or "Unknown"
+                    
+                    # Extract server headers if available
+                    headers = {}
+                    if hasattr(error, 'headers'):
+                        headers = dict(error.headers)
+                    elif "spacetime-identity" in error_str:
+                        # Try to extract headers from error string
+                        identity_match = re.search(r"spacetime-identity:\s*([a-fA-F0-9]+)", error_str)
+                        if identity_match:
+                            headers["spacetime-identity"] = identity_match.group(1)
+                        
+                        token_match = re.search(r"spacetime-identity-token:\s*([\w.-]+)", error_str)
+                        if token_match:
+                            headers["spacetime-identity-token"] = token_match.group(1)
+                    
+                    # Create appropriate exception based on status code
+                    if status_code == 404:
+                        database_name = self.database_address or "unknown"
+                        # Run database check to determine if unpublished
+                        db_check = self.diagnostics.check_database_exists(self.host, database_name)
+                        
+                        if db_check.get("exists") in [True, "likely"] and not db_check.get("published"):
+                            error = DatabaseNotPublishedError(
+                                database_name=database_name,
+                                host=self.host,
+                                diagnostic_info={
+                                    "url": self.connection_url,
+                                    "protocol": self.protocol,
+                                    "headers": headers,
+                                    "database_check": db_check
+                                }
+                            )
+                        else:
+                            error = DatabaseNotFoundError(
+                                database_name=database_name,
+                                status_code=status_code,
+                                server_message=status_message,
+                                diagnostic_info={
+                                    "url": self.connection_url,
+                                    "protocol": self.protocol,
+                                    "headers": headers,
+                                    "database_check": db_check,
+                                    "database_state": db_check.get("database_state", "unknown"),
+                                    "confidence": db_check.get("confidence", "low")
+                                },
+                                is_likely_unpublished=db_check.get("confidence") in ["medium", "high"]
+                            )
+                    elif status_code == 401 or status_code == 403:
+                        error = AuthenticationError(
+                            reason=f"HTTP {status_code}: {status_message}",
+                            auth_method="Basic" if self.auth_token else "None",
+                            status_code=status_code
+                        )
+                    else:
+                        error = WebSocketHandshakeError(
+                            status_code=status_code,
+                            status_message=status_message,
+                            url=self.connection_url or "",
+                            headers=headers,
+                            diagnostic_info={
+                                "protocol": self.protocol,
+                                "database": self.database_address
+                            }
+                        )
+            
+            # Check for protocol mismatch
+            elif "protocol" in error_str.lower() and ("mismatch" in error_str.lower() or "rejected" in error_str.lower()):
+                error = ProtocolMismatchError(
+                    requested_protocol=self.protocol,
+                    server_message=error_str
+                )
+            
+            # Check for timeout
+            elif "timeout" in error_str.lower():
+                error = ConnectionTimeoutError(
+                    operation="WebSocket handshake",
+                    timeout_seconds=10.0,  # Default WebSocket timeout
+                    retry_count=self.reconnect_attempts
+                )
+            
+            # For other errors, use diagnostics
+            else:
+                # Run diagnostics to provide helpful error message
+                try:
+                    error = self.diagnostics.diagnose_connection_error(
+                        error,
+                        self.connection_url or "",
+                        self.database_address
+                    )
+                except Exception as diag_error:
+                    # If diagnostics raise an exception, use that
+                    error = diag_error
+                    
+        except Exception as parse_error:
+            self.logger.debug(f"Failed to parse WebSocket error: {parse_error}")
+            # Keep original error if parsing fails
+        
         if self._on_error:
             self._on_error(error)
     

@@ -2,6 +2,18 @@ import websocket
 import threading
 import base64
 import binascii
+import logging
+import re
+
+from .exceptions import (
+    WebSocketHandshakeError,
+    DatabaseNotFoundError,
+    AuthenticationError,
+    ProtocolMismatchError,
+    ConnectionTimeoutError,
+    SpacetimeDBConnectionError
+)
+from .connection_diagnostics import ConnectionDiagnostics
 
 
 class WebSocketClient:
@@ -18,19 +30,49 @@ class WebSocketClient:
         self.name_or_address = None
         self.is_connected = False
         self.client_address = client_address
+        self.connection_url = None
+        
+        # Connection diagnostics
+        self.diagnostics = ConnectionDiagnostics()
+        self.enable_preflight_checks = True
+        
+        # Logging
+        self.logger = logging.getLogger(f"{__name__}.WebSocketClient_{id(self)}")
 
     def connect(self, auth, host, name_or_address, ssl_enabled, db_identity=None):
+        # Run preflight checks if enabled
+        if self.enable_preflight_checks:
+            try:
+                self.logger.info("Running preflight checks...")
+                checks = self.diagnostics.run_preflight_checks(
+                    host=host,
+                    database=name_or_address,
+                    raise_on_failure=True
+                )
+                self.logger.info("Preflight checks passed")
+            except Exception as e:
+                self.logger.error(f"Preflight checks failed: {e}")
+                if self._on_error:
+                    self._on_error(e)
+                raise
+        
         protocol = "wss" if ssl_enabled else "ws"
-        # Use db_identity if provided, otherwise try to resolve name_or_address
+        # For v1.1.2, always use name_or_address in the URL path
+        url = f"{protocol}://{host}/v1/database/{name_or_address}/subscribe"
+        
+        # Build query parameters
+        query_params = []
         if db_identity:
-            url = f"{protocol}://{host}/v1/database/{db_identity}/subscribe"
-        else:
-            # For v1.1.2 compatibility, we need the database identity
-            # If not provided, we'll use name_or_address as identity
-            url = f"{protocol}://{host}/v1/database/{name_or_address}/subscribe"
-
+            query_params.append(f"db_identity={db_identity}")
         if self.client_address is not None:
-            url += f"?client_address={self.client_address}"
+            query_params.append(f"client_address={self.client_address}")
+        
+        # Add query parameters to URL if any exist
+        if query_params:
+            url += "?" + "&".join(query_params)
+        
+        # Store URL for error diagnostics
+        self.connection_url = url
 
         self.host = host
         self.db_identity = db_identity
@@ -88,6 +130,98 @@ class WebSocketClient:
         pass
 
     def on_error(self, ws, error):
+        """WebSocket error occurred with enhanced error handling."""
+        self.logger.error(f"WebSocket error: {error}")
+        
+        # Try to parse handshake errors
+        try:
+            error_str = str(error)
+            
+            # Check for handshake status codes
+            if "Handshake status" in error_str:
+                # Extract status code and message
+                status_match = re.search(r"Handshake status (\d+)\s*(.*)?", error_str)
+                if status_match:
+                    status_code = int(status_match.group(1))
+                    status_message = status_match.group(2) or "Unknown"
+                    
+                    # Extract server headers if available
+                    headers = {}
+                    if hasattr(error, 'headers'):
+                        headers = dict(error.headers)
+                    elif "spacetime-identity" in error_str:
+                        # Try to extract headers from error string
+                        identity_match = re.search(r"spacetime-identity:\s*([a-fA-F0-9]+)", error_str)
+                        if identity_match:
+                            headers["spacetime-identity"] = identity_match.group(1)
+                        
+                        token_match = re.search(r"spacetime-identity-token:\s*([\w.-]+)", error_str)
+                        if token_match:
+                            headers["spacetime-identity-token"] = token_match.group(1)
+                    
+                    # Create appropriate exception based on status code
+                    if status_code == 404:
+                        database_name = self.name_or_address or "unknown"
+                        error = DatabaseNotFoundError(
+                            database_name=database_name,
+                            status_code=status_code,
+                            server_message=status_message,
+                            diagnostic_info={
+                                "url": self.connection_url,
+                                "protocol": self.protocol,
+                                "headers": headers
+                            }
+                        )
+                    elif status_code == 401 or status_code == 403:
+                        error = AuthenticationError(
+                            reason=f"HTTP {status_code}: {status_message}",
+                            auth_method="Basic" if self.host else "None",
+                            status_code=status_code
+                        )
+                    else:
+                        error = WebSocketHandshakeError(
+                            status_code=status_code,
+                            status_message=status_message,
+                            url=self.connection_url or "",
+                            headers=headers,
+                            diagnostic_info={
+                                "protocol": self.protocol,
+                                "database": self.name_or_address
+                            }
+                        )
+            
+            # Check for protocol mismatch
+            elif "protocol" in error_str.lower() and ("mismatch" in error_str.lower() or "rejected" in error_str.lower()):
+                error = ProtocolMismatchError(
+                    requested_protocol=self.protocol,
+                    server_message=error_str
+                )
+            
+            # Check for timeout
+            elif "timeout" in error_str.lower():
+                error = ConnectionTimeoutError(
+                    operation="WebSocket handshake",
+                    timeout_seconds=10.0,
+                    retry_count=0
+                )
+            
+            # For other errors, use diagnostics
+            else:
+                # Run diagnostics to provide helpful error message
+                try:
+                    self.diagnostics.diagnose_connection_error(
+                        error,
+                        self.connection_url or "",
+                        self.name_or_address
+                    )
+                except Exception as diag_error:
+                    # If diagnostics raise an exception, use that
+                    error = diag_error
+                    
+        except Exception as parse_error:
+            self.logger.debug(f"Failed to parse WebSocket error: {parse_error}")
+            # Keep original error if parsing fails
+        
         if self._on_error:
             self._on_error(error)
 

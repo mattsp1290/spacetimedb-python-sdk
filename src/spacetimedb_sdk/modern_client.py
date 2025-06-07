@@ -22,6 +22,15 @@ import time
 from dataclasses import dataclass
 
 from .websocket_client import ModernWebSocketClient, ConnectionState
+from .exceptions import (
+    SpacetimeDBError,
+    DatabaseNotFoundError,
+    ServerNotAvailableError,
+    AuthenticationError,
+    ConnectionTimeoutError,
+    SpacetimeDBConnectionError
+)
+from .connection_diagnostics import ConnectionDiagnostics
 from .protocol import (
     TEXT_PROTOCOL, BIN_PROTOCOL,
     ServerMessage, Identity, ConnectionId,
@@ -382,6 +391,9 @@ class ModernSpacetimeDBClient:
         
         # Thread safety
         self._lock = threading.RLock()
+        
+        # Connection diagnostics
+        self._diagnostics = ConnectionDiagnostics()
         
         # Database interface for table access
         self._db_interface = DatabaseInterface(self)
@@ -1951,6 +1963,240 @@ class ModernSpacetimeDBClient:
         """Get the current module for this client."""
         return getattr(self, '_module', None)
 
+    @property
+    def diagnostics(self) -> ConnectionDiagnostics:
+        """
+        Get connection diagnostics utility for troubleshooting.
+        
+        Example:
+            # Run preflight checks
+            results = client.diagnostics.run_preflight_checks(
+                host="localhost:3000",
+                database="my_database",
+                raise_on_failure=False
+            )
+            print(client.diagnostics.format_diagnostic_report(results))
+            
+            # Check server availability
+            is_available, info = client.diagnostics.check_server_available("localhost:3000")
+            
+            # Check database exists
+            db_status = client.diagnostics.check_database_exists("localhost:3000", "my_database")
+        """
+        return self._diagnostics
+    
+    def diagnose_connection(self, verbose: bool = True) -> Dict[str, Any]:
+        """
+        Run connection diagnostics and optionally print results.
+        
+        Args:
+            verbose: Whether to print diagnostic report
+            
+        Returns:
+            Diagnostic results dict
+            
+        Example:
+            results = client.diagnose_connection()
+            if not results['all_passed']:
+                print("Connection issues detected")
+        """
+        if not self.ws_client:
+            return {
+                "error": "Client not initialized",
+                "all_passed": False
+            }
+        
+        # Get connection info from WebSocket client
+        host = getattr(self.ws_client, 'host', 'localhost:3000')
+        database = getattr(self.ws_client, 'database_address', 'unknown')
+        
+        results = self._diagnostics.run_preflight_checks(
+            host=host,
+            database=database,
+            raise_on_failure=False
+        )
+        
+        if verbose:
+            print(self._diagnostics.format_diagnostic_report(results))
+        
+        return results
+    
+    def check_database_status(self, database_name: str, host: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Check if a database exists and is published.
+        
+        Args:
+            database_name: Name of the database to check
+            host: Optional host override (uses current connection host if not provided)
+            
+        Returns:
+            Dict containing:
+            - exists: True/False/"likely"/"unknown"
+            - published: True/False
+            - state: "published"/"unpublished"/"non-existent"/"unknown"
+            - confidence: "high"/"medium"/"low"/"none"
+            - evidence: List of diagnostic evidence
+            - suggested_action: Recommended action to take
+            
+        Example:
+            status = client.check_database_status("my_game")
+            print(f"Database exists: {status['exists']}")
+            print(f"Database published: {status['published']}")
+            print(f"Suggested action: {status['suggested_action']}")
+        """
+        # Use provided host or get from WebSocket client
+        if host is None:
+            if self.ws_client:
+                host = getattr(self.ws_client, 'host', 'localhost:3000')
+            else:
+                # Default to localhost if no connection
+                host = 'localhost:3000'
+        
+        # Use diagnostics to check database status
+        db_status = self._diagnostics.check_database_exists(host, database_name)
+        db_state = self._diagnostics.get_database_state(host, database_name)
+        
+        return {
+            'exists': db_status.get('exists', 'unknown'),
+            'published': db_status.get('published', False),
+            'state': db_state,
+            'confidence': db_status.get('confidence', 'low'),
+            'evidence': db_status.get('evidence', []),
+            'suggested_action': db_status.get('suggested_action', 'unknown'),
+            'error': db_status.get('error'),
+            'status_code': db_status.get('status_code')
+        }
+    
+    async def wait_for_database_published(
+        self, 
+        database_name: str, 
+        timeout: float = 30.0,
+        check_interval: float = 2.0,
+        host: Optional[str] = None
+    ) -> bool:
+        """
+        Wait for a database to become published.
+        
+        This is useful after running `spacetime publish` to wait for the 
+        database to become available before connecting.
+        
+        Args:
+            database_name: Name of the database to wait for
+            timeout: Maximum time to wait in seconds (default: 30)
+            check_interval: How often to check in seconds (default: 2)
+            host: Optional host override (uses current connection host if not provided)
+            
+        Returns:
+            True if database became published within timeout, False otherwise
+            
+        Example:
+            # After running spacetime publish my_game
+            if await client.wait_for_database_published("my_game", timeout=60):
+                print("Database is now published!")
+                client.connect(host="localhost:3000", database_address="my_game")
+            else:
+                print("Timeout waiting for database to be published")
+        """
+        import asyncio
+        import time
+        
+        # Use provided host or get from WebSocket client
+        if host is None:
+            if self.ws_client:
+                host = getattr(self.ws_client, 'host', 'localhost:3000')
+            else:
+                host = 'localhost:3000'
+        
+        start_time = time.time()
+        
+        while (time.time() - start_time) < timeout:
+            # Check database status
+            status = self.check_database_status(database_name, host)
+            
+            # Check if published
+            if status['published'] and status['exists'] == True:
+                self.logger.info(f"Database '{database_name}' is now published")
+                # Clear cache to ensure fresh status on next check
+                self._diagnostics.clear_database_cache(host, database_name)
+                return True
+            
+            # Log current state
+            self.logger.debug(
+                f"Database '{database_name}' state: {status['state']} "
+                f"(confidence: {status['confidence']})"
+            )
+            
+            # Wait before next check
+            await asyncio.sleep(check_interval)
+        
+        # Timeout reached
+        self.logger.warning(
+            f"Timeout waiting for database '{database_name}' to be published "
+            f"after {timeout} seconds"
+        )
+        return False
+    
+    def wait_for_database_published_sync(
+        self,
+        database_name: str,
+        timeout: float = 30.0,
+        check_interval: float = 2.0,
+        host: Optional[str] = None
+    ) -> bool:
+        """
+        Synchronous version of wait_for_database_published.
+        
+        Args:
+            database_name: Name of the database to wait for
+            timeout: Maximum time to wait in seconds (default: 30)
+            check_interval: How often to check in seconds (default: 2)
+            host: Optional host override
+            
+        Returns:
+            True if database became published within timeout, False otherwise
+            
+        Example:
+            if client.wait_for_database_published_sync("my_game"):
+                print("Database is now published!")
+        """
+        import time
+        
+        # Use provided host or get from WebSocket client
+        if host is None:
+            if self.ws_client:
+                host = getattr(self.ws_client, 'host', 'localhost:3000')
+            else:
+                host = 'localhost:3000'
+        
+        start_time = time.time()
+        
+        while (time.time() - start_time) < timeout:
+            # Check database status
+            status = self.check_database_status(database_name, host)
+            
+            # Check if published
+            if status['published'] and status['exists'] == True:
+                self.logger.info(f"Database '{database_name}' is now published")
+                # Clear cache to ensure fresh status on next check
+                self._diagnostics.clear_database_cache(host, database_name)
+                return True
+            
+            # Log current state
+            self.logger.debug(
+                f"Database '{database_name}' state: {status['state']} "
+                f"(confidence: {status['confidence']})"
+            )
+            
+            # Wait before next check
+            time.sleep(check_interval)
+        
+        # Timeout reached
+        self.logger.warning(
+            f"Timeout waiting for database '{database_name}' to be published "
+            f"after {timeout} seconds"
+        )
+        return False
+    
     @property
     def scheduler(self) -> 'ReducerScheduler':
         """

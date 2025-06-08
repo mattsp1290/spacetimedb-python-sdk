@@ -613,17 +613,30 @@ class ProtocolEncoder:
                 }
             }
         elif isinstance(message, SubscribeSingleMessage):
+            # Apply same SQL conversion for single subscriptions
+            query = message.query
+            if query and ' ' not in query and not any(keyword in query.lower() for keyword in ['select', 'from', 'where', 'join']):
+                query = f"SELECT * FROM {query}"
+            
             data = {
                 "SubscribeSingle": {
-                    "query": message.query,
+                    "query": query,
                     "request_id": message.request_id,
                     "query_id": {"id": message.query_id.id}
                 }
             }
         elif isinstance(message, SubscribeMultiMessage):
+            # Apply same SQL conversion for multi subscriptions
+            formatted_queries = []
+            for query in message.query_strings:
+                if query and ' ' not in query and not any(keyword in query.lower() for keyword in ['select', 'from', 'where', 'join']):
+                    formatted_queries.append(f"SELECT * FROM {query}")
+                else:
+                    formatted_queries.append(query)
+            
             data = {
                 "SubscribeMulti": {
-                    "query_strings": message.query_strings,
+                    "query_strings": formatted_queries,
                     "request_id": message.request_id,
                     "query_id": {"id": message.query_id.id}
                 }

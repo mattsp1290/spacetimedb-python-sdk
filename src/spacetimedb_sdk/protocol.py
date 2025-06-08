@@ -594,9 +594,21 @@ class ProtocolEncoder:
                 }
             }
         elif isinstance(message, Subscribe):
+            # Enhanced query format for latest SpacetimeDB compatibility
+            # Convert table names to proper SQL queries if they're just table names
+            formatted_queries = []
+            for query in message.query_strings:
+                # Check if this is just a table name (no spaces, no SQL keywords)
+                if query and ' ' not in query and not any(keyword in query.lower() for keyword in ['select', 'from', 'where', 'join']):
+                    # Convert table name to SQL query format
+                    formatted_queries.append(f"SELECT * FROM {query}")
+                else:
+                    # Keep as-is if it's already a proper SQL query
+                    formatted_queries.append(query)
+            
             data = {
                 "Subscribe": {
-                    "query_strings": message.query_strings,
+                    "query_strings": formatted_queries,
                     "request_id": message.request_id
                 }
             }
@@ -790,7 +802,7 @@ class ProtocolDecoder:
             return self._decode_json(data)
     
     def _decode_json(self, data: bytes) -> ServerMessage:
-        """Decode message from JSON."""
+        """Decode message from JSON with enhanced compatibility for latest SpacetimeDB."""
         try:
             message = json.loads(data.decode('utf-8'))
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -798,19 +810,93 @@ class ProtocolDecoder:
         
         if "IdentityToken" in message:
             token_data = message["IdentityToken"]
+            
+            # Enhanced identity/connection_id parsing for latest SpacetimeDB format
+            identity_data = token_data.get("identity")
+            if isinstance(identity_data, dict):
+                # Handle nested identity format: {"identity": {"data": [...]}}
+                if "data" in identity_data:
+                    identity_bytes = bytes(identity_data["data"]) if isinstance(identity_data["data"], list) else identity_data["data"]
+                else:
+                    # Try to extract bytes from dict representation
+                    identity_bytes = str(identity_data).encode('utf-8')
+                identity = Identity(data=identity_bytes)
+            elif isinstance(identity_data, str):
+                # Handle hex string format
+                identity = Identity.from_hex(identity_data)
+            elif isinstance(identity_data, list):
+                # Handle byte array format
+                identity = Identity(data=bytes(identity_data))
+            else:
+                # Fallback for unknown format
+                identity = Identity(data=str(identity_data).encode('utf-8'))
+            
+            connection_id_data = token_data.get("connection_id")
+            if isinstance(connection_id_data, dict):
+                # Handle nested connection_id format: {"connection_id": {"data": [...]}}
+                if "data" in connection_id_data:
+                    conn_id_bytes = bytes(connection_id_data["data"]) if isinstance(connection_id_data["data"], list) else connection_id_data["data"]
+                else:
+                    conn_id_bytes = str(connection_id_data).encode('utf-8')
+                connection_id = ConnectionId(data=conn_id_bytes)
+            elif isinstance(connection_id_data, str):
+                # Handle hex string format
+                connection_id = ConnectionId.from_hex(connection_id_data)
+            elif isinstance(connection_id_data, list):
+                # Handle byte array format
+                connection_id = ConnectionId(data=bytes(connection_id_data))
+            else:
+                # Fallback for unknown format
+                connection_id = ConnectionId(data=str(connection_id_data).encode('utf-8'))
+            
             return IdentityToken(
-                identity=Identity.from_hex(token_data["identity"]),
-                token=token_data["token"],
-                connection_id=ConnectionId.from_hex(token_data["connection_id"])
+                identity=identity,
+                token=token_data.get("token", ""),
+                connection_id=connection_id
             )
+            
         elif "TransactionUpdate" in message:
             tx_data = message["TransactionUpdate"]
-            # Simplified parsing - full implementation would handle all fields
+            
+            # Enhanced status parsing
+            status = tx_data.get("status", "Unknown")
+            if isinstance(status, dict):
+                # Handle structured status like {"Failed": "error message"} or {"Committed": {...}}
+                if "Failed" in status:
+                    status = f"Failed: {status['Failed']}"
+                elif "Committed" in status:
+                    status = "Committed"
+                else:
+                    status = str(status)
+            
+            # Enhanced identity parsing for caller fields
+            caller_identity_data = tx_data.get("caller_identity", "00")
+            if isinstance(caller_identity_data, dict):
+                if "data" in caller_identity_data:
+                    caller_identity = Identity(data=bytes(caller_identity_data["data"]) if isinstance(caller_identity_data["data"], list) else caller_identity_data["data"])
+                else:
+                    caller_identity = Identity(data=str(caller_identity_data).encode('utf-8'))
+            elif isinstance(caller_identity_data, str):
+                caller_identity = Identity.from_hex(caller_identity_data) if caller_identity_data != "00" else Identity(data=b"\x00")
+            else:
+                caller_identity = Identity(data=b"\x00")
+            
+            caller_conn_id_data = tx_data.get("caller_connection_id", "00")
+            if isinstance(caller_conn_id_data, dict):
+                if "data" in caller_conn_id_data:
+                    caller_connection_id = ConnectionId(data=bytes(caller_conn_id_data["data"]) if isinstance(caller_conn_id_data["data"], list) else caller_conn_id_data["data"])
+                else:
+                    caller_connection_id = ConnectionId(data=str(caller_conn_id_data).encode('utf-8'))
+            elif isinstance(caller_conn_id_data, str):
+                caller_connection_id = ConnectionId.from_hex(caller_conn_id_data) if caller_conn_id_data != "00" else ConnectionId(data=b"\x00")
+            else:
+                caller_connection_id = ConnectionId(data=b"\x00")
+            
             return TransactionUpdate(
-                status=tx_data.get("status", "Unknown"),
+                status=status,
                 timestamp=Timestamp(nanos_since_epoch=tx_data.get("timestamp", 0)),
-                caller_identity=Identity.from_hex(tx_data.get("caller_identity", "00")),
-                caller_connection_id=ConnectionId.from_hex(tx_data.get("caller_connection_id", "00")),
+                caller_identity=caller_identity,
+                caller_connection_id=caller_connection_id,
                 reducer_call=ReducerCallInfo(
                     reducer_name=tx_data.get("reducer_name", ""),
                     reducer_id=tx_data.get("reducer_id", 0),
@@ -820,6 +906,45 @@ class ProtocolDecoder:
                 energy_quanta_used=EnergyQuanta(quanta=tx_data.get("energy_quanta_used", 0)),
                 total_host_execution_duration=TimeDuration(nanos=tx_data.get("total_host_execution_duration", 0))
             )
+            
+        elif "InitialSubscription" in message:
+            # Handle InitialSubscription message
+            sub_data = message["InitialSubscription"]
+            return InitialSubscription(
+                database_update=DatabaseUpdate(tables=[]),  # Simplified for now
+                request_id=sub_data.get("request_id", 0),
+                total_host_execution_duration=TimeDuration(nanos=sub_data.get("total_host_execution_duration", 0))
+            )
+            
+        elif "SubscribeApplied" in message:
+            # Handle SubscribeApplied message
+            sub_data = message["SubscribeApplied"]
+            query_id_data = sub_data.get("query_id", {})
+            if isinstance(query_id_data, dict):
+                query_id = QueryId(id=query_id_data.get("id", 0))
+            else:
+                query_id = QueryId(id=query_id_data)
+                
+            return SubscribeApplied(
+                request_id=sub_data.get("request_id", 0),
+                total_host_execution_duration_micros=sub_data.get("total_host_execution_duration_micros", 0),
+                query_id=query_id,
+                table_id=sub_data.get("table_id", 0),
+                table_name=sub_data.get("table_name", ""),
+                table_rows=None  # Simplified for now
+            )
+            
+        elif "SubscriptionError" in message:
+            # Handle SubscriptionError message
+            error_data = message["SubscriptionError"]
+            return SubscriptionError(
+                total_host_execution_duration_micros=error_data.get("total_host_execution_duration_micros", 0),
+                request_id=error_data.get("request_id"),
+                query_id=error_data.get("query_id"),
+                table_id=error_data.get("table_id"),
+                error=error_data.get("error", "Unknown subscription error")
+            )
+            
         # Add more message type parsing as needed
         else:
             raise ValueError(f"Unknown server message format: {list(message.keys())}")

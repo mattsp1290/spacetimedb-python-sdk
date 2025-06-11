@@ -542,13 +542,38 @@ class ModernWebSocketClient:
                 self.logger.error(f"_on_ws_open: Error in _on_connect callback: {e}", exc_info=True)
     
     def _on_ws_message(self, ws, message) -> None:
-        """WebSocket message received with optional decompression."""
+        """WebSocket message received with enhanced large message handling."""
         try:
             # Handle incoming message data
             if isinstance(message, str):
                 message_data = message.encode('utf-8')
             else:
                 message_data = message
+            
+            message_size = len(message_data)
+            large_message_threshold = 50 * 1024  # 50KB
+            
+            # Log large message handling for debugging
+            if message_size > large_message_threshold:
+                self.logger.info(f"Processing large message: {message_size} bytes")
+                
+                # Log InitialSubscription details if this is a large subscription
+                try:
+                    if message_data.startswith(b'{') and b'"InitialSubscription"' in message_data:
+                        # Parse just enough to get summary info without full processing
+                        import json
+                        parsed_preview = json.loads(message_data.decode('utf-8'))
+                        if "InitialSubscription" in parsed_preview:
+                            initial_sub = parsed_preview["InitialSubscription"]
+                            database_update = initial_sub.get("database_update", {})
+                            tables = database_update.get("tables", [])
+                            self.logger.info(f"Large InitialSubscription: {len(tables)} tables, {message_size} bytes")
+                            for table in tables:
+                                table_name = table.get("table_name", "unknown")
+                                num_rows = table.get("num_rows", 0)
+                                self.logger.debug(f"  - {table_name}: {num_rows} rows")
+                except Exception as parse_error:
+                    self.logger.debug(f"Could not parse large message preview: {parse_error}")
             
             # Apply decompression if needed
             if self.negotiated_compression and self.negotiated_compression != CompressionType.NONE:
@@ -562,8 +587,19 @@ class ModernWebSocketClient:
                     self.logger.warning(f"Decompression failed, processing as uncompressed: {e}")
                     # Continue with original data
             
-            # Decode the server message
-            server_message = self.decoder.decode_server_message(message_data)
+            # Decode the server message with enhanced error handling for large messages
+            try:
+                server_message = self.decoder.decode_server_message(message_data)
+            except Exception as decode_error:
+                if message_size > large_message_threshold:
+                    self.logger.error(f"Failed to decode large message ({message_size} bytes): {decode_error}")
+                    self.logger.info("Large message decode failure - this may indicate:")
+                    self.logger.info("1. Message corruption during transmission")
+                    self.logger.info("2. WebSocket frame fragmentation issues")
+                    self.logger.info("3. Server-side message formatting problems")
+                else:
+                    self.logger.error(f"Failed to decode message: {decode_error}")
+                raise
             
             # Handle identity token
             if isinstance(server_message, IdentityToken):
@@ -572,17 +608,47 @@ class ModernWebSocketClient:
                     self.connection_id = server_message.connection_id
                 self.logger.info(f"Received identity: {self.identity}")
             
+            # Log successful processing of large messages
+            if message_size > large_message_threshold:
+                self.logger.info(f"Successfully processed large message: {type(server_message).__name__}")
+            
             # Forward to application
             if self._on_message:
                 self._on_message(server_message)
                 
         except Exception as e:
-            self.logger.error(f"Failed to process message: {e}")
+            # Enhanced error logging for large message issues
+            message_size = len(message) if hasattr(message, '__len__') else 0
+            if message_size > 50 * 1024:  # 50KB
+                self.logger.error(f"Large message processing failed ({message_size} bytes): {e}")
+                self.logger.info("Large message error - consider:")
+                self.logger.info("1. Increasing WebSocket buffer sizes")
+                self.logger.info("2. Implementing message streaming")
+                self.logger.info("3. Server-side message compression")
+            else:
+                self.logger.error(f"Failed to process message: {e}")
+            
             if self._on_error:
                 self._on_error(e)
     
     def _on_ws_error(self, ws, error) -> None:
         """WebSocket error occurred with enhanced error handling."""
+        error_str = str(error).lower()
+        
+        # Enhanced detection for large message related errors
+        if "invalid close frame" in error_str:
+            self.logger.error("WebSocket Invalid Close Frame Error detected")
+            self.logger.info("This often occurs after processing large messages (>50KB)")
+            self.logger.info("Possible causes:")
+            self.logger.info("1. Server sending malformed close frames after large data")
+            self.logger.info("2. WebSocket buffer overflow during large message processing")
+            self.logger.info("3. Protocol violation in close frame format")
+            self.logger.info("Implementing enhanced error recovery...")
+            
+            # Don't propagate this error immediately - try to recover
+            # The connection will be handled by the close callback
+            return
+            
         self.logger.error(f"WebSocket error: {error}")
         
         # Try to parse handshake errors

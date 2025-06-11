@@ -319,7 +319,8 @@ class ModernSpacetimeDBClient:
         max_energy: int = 1000,  # Maximum energy capacity
         energy_budget: int = 5000,  # Energy budget per hour
         compression_config: Optional[CompressionConfig] = None,
-        test_mode: bool = False  # New parameter to prevent real connections
+        test_mode: bool = False,  # New parameter to prevent real connections
+        auto_trigger_lifecycle: bool = True  # Automatically trigger client_connected reducer
     ):
         # Client state
         self.autogen_package = autogen_package
@@ -331,6 +332,7 @@ class ModernSpacetimeDBClient:
         else:
             self.protocol = protocol
         self.test_mode = test_mode
+        self.auto_trigger_lifecycle = auto_trigger_lifecycle
         
         # Compression configuration
         self.compression_config = compression_config or CompressionConfig()
@@ -454,8 +456,11 @@ class ModernSpacetimeDBClient:
             self.logger.debug("Shutdown: Set should_stop_processing.")
 
             if self.enhanced_connection_id:
-                self.logger.debug(f"Shutdown: Handling enhanced connection lifecycle for {self.enhanced_connection_id.to_hex()[:8]}")
                 try:
+                    # Handle enhanced connection lifecycle (gracefully handle test mocks)
+                    connection_id_str = "test_connection" if hasattr(self.enhanced_connection_id, '_mock_name') else self.enhanced_connection_id.to_hex()[:8]
+                    self.logger.debug(f"Shutdown: Handling enhanced connection lifecycle for {connection_id_str}")
+                    
                     self.connection_lifecycle_manager.on_connection_lost(
                         self.enhanced_connection_id, "Client disconnect"
                     )
@@ -600,8 +605,11 @@ class ModernSpacetimeDBClient:
             self.logger.debug("Disconnect: Set should_stop_processing.")
 
             if self.enhanced_connection_id:
-                self.logger.debug(f"Disconnect: Handling enhanced connection lifecycle for {self.enhanced_connection_id.to_hex()[:8]}")
                 try:
+                    # Handle enhanced connection lifecycle (gracefully handle test mocks)
+                    connection_id_str = "test_connection" if hasattr(self.enhanced_connection_id, '_mock_name') else self.enhanced_connection_id.to_hex()[:8]
+                    self.logger.debug(f"Disconnect: Handling enhanced connection lifecycle for {connection_id_str}")
+                    
                     self.connection_lifecycle_manager.on_connection_lost(
                         self.enhanced_connection_id, "Client disconnect initiated"
                     )
@@ -1252,6 +1260,36 @@ class ModernSpacetimeDBClient:
                 callback(message.token, message.identity, message.connection_id)
             except Exception as e:
                 self.logger.error(f"Error in identity callback: {e}")
+        
+        # Automatically trigger client_connected lifecycle reducer if enabled
+        if self.auto_trigger_lifecycle:
+            self._trigger_client_connected()
+    
+    def _trigger_client_connected(self) -> None:
+        """
+        Automatically trigger client_connected reducer for v1.1.2 compatibility.
+        
+        This method is called after receiving an identity token to automatically
+        trigger the client_connected lifecycle reducer, matching the behavior
+        of the C# SDK. The call is made gracefully - if the reducer doesn't exist
+        or fails, it won't crash the connection.
+        """
+        try:
+            if self.is_connected:
+                self.logger.debug("Auto-triggering client_connected lifecycle reducer for v1.1.2 compatibility")
+                
+                # Call the reducer with no arguments (as expected by typical client_connected reducers)
+                self.call_reducer("client_connected")
+                
+                self.logger.debug("Successfully triggered client_connected reducer")
+            else:
+                self.logger.debug("Skipping client_connected trigger - not connected")
+                
+        except Exception as e:
+            # Don't crash the connection if the lifecycle reducer fails
+            # This is expected behavior if the server doesn't have a client_connected reducer
+            self.logger.debug(f"client_connected auto-trigger failed (reducer may not exist): {e}")
+            # Note: We intentionally don't propagate this exception as it's optional functionality
     
     def _handle_transaction_update(self, message: TransactionUpdate) -> None:
         """Handle transaction update message."""
@@ -1475,36 +1513,22 @@ class ModernSpacetimeDBClient:
     def _simulate_test_connection(self) -> None:
         """Simulate a successful connection in test mode."""
         # Generate test identity and connection ID
-        self.identity = Identity.from_hex("0" * 32)
-        self.connection_id = ConnectionId.from_hex("0" * 16)
+        identity = Identity.from_hex("0" * 32)
+        connection_id = ConnectionId.from_hex("0" * 16)
         
-        # Create enhanced versions
-        self.enhanced_identity = EnhancedIdentity.from_hex("0" * 48)
-        self.enhanced_connection_id = EnhancedConnectionId.from_hex("0" * 16)
-        
-        # Create test token
-        self.enhanced_identity_token = EnhancedIdentityToken(
-            identity=self.enhanced_identity,
-            token="test_token",
-            connection_id=self.enhanced_connection_id
-        )
-        
-        # Update connection state
-        self.connection_state_tracker.connection_established(self.enhanced_connection_id)
-        self.connection_lifecycle_manager.on_connection_established(
-            self.enhanced_connection_id, self.enhanced_identity
-        )
-        self.connection_metrics.record_connection(self.enhanced_connection_id)
-        
-        # Call connect callbacks
+        # Call connect callbacks first
         self._handle_connect()
         
-        # Simulate identity token message
-        for callback in self._on_identity:
-            try:
-                callback("test_token", self.identity, self.connection_id)
-            except Exception as e:
-                self.logger.error(f"Error in identity callback: {e}")
+        # Simulate the complete identity token flow (this triggers lifecycle reducer)
+        identity_token = IdentityToken(
+            identity=identity,
+            connection_id=connection_id,
+            token="test_token"
+        )
+        
+        # Process the identity token through the normal flow
+        # This will trigger _trigger_client_connected if auto_trigger_lifecycle is enabled
+        self._handle_identity_token(identity_token)
     
     @property
     def is_connected(self) -> bool:

@@ -383,6 +383,95 @@ from .utils import (
     performance_profiler
 )
 
+# Enhanced Interfaces (extracted from blackholio-python-client patterns)
+from .interfaces import (
+    ConnectionInterface,
+    ConnectionState,
+    AuthInterface,
+    SubscriptionInterface,
+    ReducerInterface,
+    SpacetimeDBClientInterface
+)
+
+# Enhanced Connection Management (extracted from blackholio-python-client patterns)
+from .connection import (
+    PoolState,
+    HealthStatus,
+    ConnectionMetrics,
+    PoolConfiguration,
+    PooledConnection,
+    ServerConfig,
+    ConnectionPool,
+    EnhancedConnectionManager,
+    get_connection_manager,
+    get_connection as get_pooled_connection
+)
+
+# Enhanced Event System (extracted from blackholio-python-client patterns)
+from .events import (
+    # Core event system
+    EventType,
+    EventPriority,
+    Event,
+    EventT,
+    EventFilter,
+    EventMetrics,
+    EventHandler,
+    AsyncEventHandler,
+    SyncEventHandler,
+    EventSubscriber,
+    CallbackEventSubscriber,
+    FilteredEventSubscriber,
+    EnhancedEventManager,
+    get_event_manager,
+    event_context,
+    publish_event,
+    subscribe_to_events,
+    
+    # SpacetimeDB-specific events
+    ConnectionEvent,
+    AuthenticationEvent,
+    SubscriptionEvent,
+    TableUpdateEvent,
+    ReducerCallEvent,
+    TransactionEvent,
+    QueryEvent,
+    SystemEvent,
+    ErrorEvent,
+    DebugEvent,
+    PerformanceEvent,
+    create_connection_event,
+    create_table_update_event,
+    create_reducer_call_event,
+    create_error_event,
+    create_performance_event
+)
+
+# Enhanced Factory Pattern for multi-server language support
+from .factory import (
+    SpacetimeDBClientFactory,
+    SpacetimeDBClientFactoryBase,
+    SpacetimeDBFactoryRegistry,
+    RustOptimizedFactory,
+    PythonOptimizedFactory,
+    CSharpOptimizedFactory,
+    GoOptimizedFactory,
+    create_spacetimedb_client,
+    get_spacetimedb_factory,
+    list_supported_languages,
+    get_language_info,
+    create_optimized_client,
+    # Convenience functions for each language
+    create_rust_client,
+    create_python_client,
+    create_csharp_client,
+    create_go_client,
+    # Additional utilities
+    get_recommended_config,
+    validate_server_compatibility,
+    get_optimization_capabilities
+)
+
 # Data structures
 from .data_structures import (
     OperationsMap, IdentityCollection, ConnectionIdCollection, QueryIdCollection,
@@ -747,7 +836,89 @@ __all__ = [
     "ValidationResult",
     "NetworkSimulator",
     "PlatformValidator",
-    "CrossPlatformTestSuite"
+    "CrossPlatformTestSuite",
+    
+    # Enhanced Interfaces (extracted from blackholio-python-client patterns)
+    "ConnectionInterface",
+    "ConnectionState",
+    "AuthInterface", 
+    "SubscriptionInterface",
+    "ReducerInterface",
+    "SpacetimeDBClientInterface",
+    
+    # Enhanced Connection Management (extracted from blackholio-python-client patterns)
+    "PoolState",
+    "HealthStatus",
+    "ConnectionMetrics",
+    "PoolConfiguration",
+    "PooledConnection",
+    "ServerConfig",
+    "ConnectionPool",
+    "EnhancedConnectionManager",
+    "get_connection_manager",
+    "get_pooled_connection",
+    
+    # Enhanced Event System (extracted from blackholio-python-client patterns)
+    "EventType",
+    "EventPriority",
+    "Event",
+    "EventT",
+    "EventFilter",
+    "EventMetrics",
+    "EventHandler",
+    "AsyncEventHandler",
+    "SyncEventHandler",
+    "EventSubscriber",
+    "CallbackEventSubscriber",
+    "FilteredEventSubscriber",
+    "EnhancedEventManager",
+    "get_event_manager",
+    "event_context",
+    "publish_event",
+    "subscribe_to_events",
+    
+    # SpacetimeDB-specific events
+    "ConnectionEvent",
+    "AuthenticationEvent",
+    "SubscriptionEvent",
+    "TableUpdateEvent",
+    "ReducerCallEvent",
+    "TransactionEvent",
+    "QueryEvent",
+    "SystemEvent",
+    "ErrorEvent",
+    "DebugEvent",
+    "PerformanceEvent",
+    "create_connection_event",
+    "create_table_update_event",
+    "create_reducer_call_event",
+    "create_error_event",
+    "create_performance_event",
+    
+    # Enhanced Factory Pattern for multi-server language support
+    "SpacetimeDBClientFactory",
+    "SpacetimeDBClientFactoryBase",
+    "SpacetimeDBFactoryRegistry",
+    "RustOptimizedFactory",
+    "PythonOptimizedFactory",
+    "CSharpOptimizedFactory",
+    "GoOptimizedFactory",
+    "create_spacetimedb_client",
+    "get_spacetimedb_factory",
+    "list_supported_languages",
+    "get_language_info",
+    "create_optimized_client",
+    
+    # Convenience functions for each language
+    "create_rust_client",
+    "create_python_client",
+    "create_csharp_client",
+    "create_go_client",
+    
+    # Additional factory utilities
+    "get_recommended_config",
+    "validate_server_compatibility",
+    "get_optimization_capabilities"
 ]
 
 # Default to modern client

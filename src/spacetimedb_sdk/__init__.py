@@ -447,6 +447,17 @@ from .events import (
     create_performance_event
 )
 
+# Authentication storage
+from .auth_storage import (
+    AuthCredentials,
+    SpacetimeDBAuthStorage,
+    get_global_auth_storage,
+    store_credentials,
+    get_credentials,
+    remove_credentials,
+    clear_all_credentials
+)
+
 # Enhanced Factory Pattern for multi-server language support
 from .factory import (
     SpacetimeDBClientFactory,
@@ -837,6 +848,15 @@ __all__ = [
     "NetworkSimulator",
     "PlatformValidator",
     "CrossPlatformTestSuite",
+    
+    # Authentication storage
+    "AuthCredentials",
+    "SpacetimeDBAuthStorage", 
+    "get_global_auth_storage",
+    "store_credentials",
+    "get_credentials",
+    "remove_credentials",
+    "clear_all_credentials",
     
     # Enhanced Interfaces (extracted from blackholio-python-client patterns)
     "ConnectionInterface",

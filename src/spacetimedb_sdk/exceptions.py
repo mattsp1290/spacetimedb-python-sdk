@@ -443,6 +443,21 @@ class SpacetimeDBConnectionError(SpacetimeDBError):
         )
 
 
+class SpacetimeDBAuthHandshakeError(Exception):
+    """
+    Raised when SpacetimeDB server returns 400 with identity token.
+    This is part of the normal authentication handshake, not an error.
+    """
+    
+    def __init__(self, identity: str, token: str, response_headers: Dict[str, str]):
+        self.identity = identity
+        self.token = token
+        self.response_headers = response_headers
+        
+        message = f"SpacetimeDB authentication handshake: received identity token"
+        super().__init__(message)
+
+
 class RetryableConnectionError(RetryableError):
     """Marks connection errors that can be safely retried."""
     
@@ -465,6 +480,7 @@ __all__ = [
     'ConnectionTimeoutError',
     'WebSocketHandshakeError',
     'SpacetimeDBConnectionError',
+    'SpacetimeDBAuthHandshakeError',
     'RetryableError',
     'RetryableConnectionError'
 ]

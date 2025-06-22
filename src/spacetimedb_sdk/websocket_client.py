@@ -29,8 +29,10 @@ from .exceptions import (
     ConnectionTimeoutError,
     SpacetimeDBConnectionError,
     ServerNotAvailableError,
-    RetryableError
+    RetryableError,
+    SpacetimeDBAuthHandshakeError
 )
+from .auth_storage import AuthCredentials, get_credentials, store_credentials
 from .connection_diagnostics import ConnectionDiagnostics
 from .retry_policies import RetryPolicy, RetryPolicyPresets
 from .protocol import (
@@ -119,6 +121,12 @@ class ModernWebSocketClient:
         self.database_address: Optional[str] = None
         self.ssl_enabled: bool = True
         
+        # SpacetimeDB JWT Authentication
+        self.spacetimedb_identity: Optional[str] = None
+        self.spacetimedb_token: Optional[str] = None
+        self.auth_handshake_completed: bool = False
+        self.retry_with_auth: bool = False
+        
         # Identity and connection tracking
         self.identity: Optional[Identity] = None
         self.connection_id: Optional[ConnectionId] = None
@@ -185,7 +193,7 @@ class ModernWebSocketClient:
         db_identity: Optional[str] = None,
         retry_policy: Optional[RetryPolicy] = None
     ) -> None:
-        """Connect to SpacetimeDB with preflight checks and better error handling."""
+        """Connect to SpacetimeDB with JWT authentication support and preflight checks."""
         with self._lock:
             if self.state in [ConnectionState.CONNECTED, ConnectionState.CONNECTING]:
                 self.logger.warning("Already connected or connecting")
@@ -197,6 +205,22 @@ class ModernWebSocketClient:
             self.db_identity = db_identity
             self.ssl_enabled = ssl_enabled
             self.reconnect_attempts = 0
+            
+            # Reset authentication state
+            self.auth_handshake_completed = False
+            self.retry_with_auth = False
+            
+            # Check for stored SpacetimeDB credentials
+            stored_credentials = get_credentials(host, database_address)
+            if stored_credentials and not stored_credentials.is_expired():
+                self.logger.info(f"Found stored SpacetimeDB credentials for {host}/{database_address}")
+                self.spacetimedb_identity = stored_credentials.identity
+                self.spacetimedb_token = stored_credentials.token
+                self.auth_handshake_completed = True
+            else:
+                # Clear any expired credentials
+                self.spacetimedb_identity = None
+                self.spacetimedb_token = None
             
             # Use provided retry policy or default
             if retry_policy:
@@ -243,10 +267,19 @@ class ModernWebSocketClient:
             
             # Prepare headers
             headers = {}
-            if self.auth_token:
+            
+            # SpacetimeDB JWT Authentication (takes precedence)
+            if self.spacetimedb_token and self.auth_handshake_completed:
+                self.logger.debug("Using stored SpacetimeDB JWT token for authentication")
+                headers["Authorization"] = f"Bearer {self.spacetimedb_token}"
+            # Legacy token-based auth
+            elif self.auth_token:
+                self.logger.debug("Using legacy token-based authentication")
                 token_bytes = f"token:{self.auth_token}".encode('utf-8')
                 base64_str = base64.b64encode(token_bytes).decode('utf-8')
                 headers["Authorization"] = f"Basic {base64_str}"
+            else:
+                self.logger.debug("Connecting without authentication (will attempt handshake if required)")
             
             # Add compression negotiation headers
             compression_headers = self.compression_manager.create_compression_headers()
@@ -339,6 +372,11 @@ class ModernWebSocketClient:
             self.active_subscriptions.clear()
             self.subscription_queries.clear()
             self.negotiated_compression = None
+            
+            # Clear authentication state (but keep stored credentials for future use)
+            # Note: We don't clear spacetimedb_identity and spacetimedb_token here
+            # as they may be reused for reconnection
+            self.retry_with_auth = False
             self.logger.info("WebSocket client disconnected and cleaned up.")
     
     def send_message(self, message: ClientMessage) -> None:
@@ -678,8 +716,33 @@ class ModernWebSocketClient:
                         if token_match:
                             headers["spacetime-identity-token"] = token_match.group(1)
                     
+                    # Handle SpacetimeDB authentication handshake (400 with identity token)
+                    if status_code == 400 and headers.get("spacetime-identity-token"):
+                        self.logger.info("Detected SpacetimeDB authentication handshake")
+                        identity = headers.get("spacetime-identity")
+                        token = headers.get("spacetime-identity-token")
+                        
+                        if identity and token:
+                            self.logger.info(f"Received identity token, retrying with authentication: {identity[:8]}...")
+                            
+                            # Store the credentials
+                            self.spacetimedb_identity = identity
+                            self.spacetimedb_token = token
+                            self.auth_handshake_completed = True
+                            
+                            # Store credentials for future use
+                            if self.host and self.database_address:
+                                store_credentials(identity, token, self.host, self.database_address)
+                            
+                            # Retry connection with authentication
+                            self.retry_with_auth = True
+                            
+                            # Schedule an immediate reconnect with authentication
+                            threading.Timer(0.1, self._do_connect).start()
+                            return
+                        
                     # Create appropriate exception based on status code
-                    if status_code == 404:
+                    elif status_code == 404:
                         database_name = self.database_address or "unknown"
                         # Run database check to determine if unpublished
                         db_check = self.diagnostics.check_database_exists(self.host, database_name)
@@ -710,6 +773,13 @@ class ModernWebSocketClient:
                                 },
                                 is_likely_unpublished=db_check.get("confidence") in ["medium", "high"]
                             )
+                    elif status_code == 400:
+                        # Handle regular 400 errors (not authentication handshake)
+                        error = AuthenticationError(
+                            reason=f"HTTP {status_code}: {status_message}",
+                            auth_method="Bearer" if self.spacetimedb_token else ("Basic" if self.auth_token else "None"),
+                            status_code=status_code
+                        )
                     elif status_code == 401 or status_code == 403:
                         error = AuthenticationError(
                             reason=f"HTTP {status_code}: {status_message}",

@@ -405,9 +405,16 @@ class ModernWebSocketClient:
                     self.logger.warning(f"Compression failed, sending uncompressed: {e}")
                     # Continue with uncompressed data
             
-            # Send the message
-            self.ws.send(encoded_data)
-            self.logger.debug(f"Sent message: {type(message).__name__} ({len(encoded_data)} bytes)")
+            # Send the message - explicitly specify binary frame for binary protocol
+            if self.use_binary:
+                # Import ABNF for opcode constants
+                from websocket import ABNF
+                self.ws.send(encoded_data, opcode=ABNF.OPCODE_BINARY)
+                self.logger.debug(f"Sent binary message: {type(message).__name__} ({len(encoded_data)} bytes, opcode=BINARY)")
+            else:
+                # For JSON protocol, send as text frame (default behavior)
+                self.ws.send(encoded_data)
+                self.logger.debug(f"Sent text message: {type(message).__name__} ({len(encoded_data)} bytes)")
             
         except Exception as e:
             self.logger.error(f"Failed to send message: {e}")

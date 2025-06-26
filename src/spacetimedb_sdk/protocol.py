@@ -681,8 +681,8 @@ class ProtocolEncoder:
         writer = BsatnWriter()
         
         if isinstance(message, CallReducer):
-            # Encode as enum variant 0 (CallReducer)
-            writer.write_enum_header(0)
+            # Encode as enum variant 0 (CallReducer) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 0))
             writer.write_struct_header(4)  # reducer, args, request_id, flags
             
             writer.write_field_name("reducer")
@@ -698,8 +698,8 @@ class ProtocolEncoder:
             writer.write_u8(message.flags.value)
             
         elif isinstance(message, Subscribe):
-            # Encode as enum variant 1 (Subscribe)
-            writer.write_enum_header(1)
+            # Encode as enum variant 1 (Subscribe) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 1))
             writer.write_struct_header(2)  # query_strings, request_id
             
             writer.write_field_name("query_strings")
@@ -711,8 +711,8 @@ class ProtocolEncoder:
             writer.write_u32(message.request_id)
             
         elif isinstance(message, SubscribeSingleMessage):
-            # Encode as enum variant 2 (SubscribeSingle)
-            writer.write_enum_header(2)
+            # Encode as enum variant 2 (SubscribeSingle) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 2))
             writer.write_struct_header(3)  # query, request_id, query_id
             
             writer.write_field_name("query")
@@ -727,8 +727,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, SubscribeMultiMessage):
-            # Encode as enum variant 3 (SubscribeMulti)
-            writer.write_enum_header(3)
+            # Encode as enum variant 3 (SubscribeMulti) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 3))
             writer.write_struct_header(3)  # query_strings, request_id, query_id
             
             writer.write_field_name("query_strings")
@@ -745,8 +745,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, Unsubscribe):
-            # Encode as enum variant 4 (Unsubscribe)
-            writer.write_enum_header(4)
+            # Encode as enum variant 4 (Unsubscribe) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 4))
             writer.write_struct_header(2)  # request_id, query_id
             
             writer.write_field_name("request_id")
@@ -758,8 +758,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, UnsubscribeMultiMessage):
-            # Encode as enum variant 5 (UnsubscribeMulti)
-            writer.write_enum_header(5)
+            # Encode as enum variant 5 (UnsubscribeMulti) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 5))
             writer.write_struct_header(2)  # request_id, query_id
             
             writer.write_field_name("request_id")
@@ -771,8 +771,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, OneOffQuery):
-            # Encode as enum variant 6 (OneOffQuery)
-            writer.write_enum_header(6)
+            # Encode as enum variant 6 (OneOffQuery) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 6))
             writer.write_struct_header(2)  # message_id, query_string
             
             writer.write_field_name("message_id")
@@ -782,8 +782,8 @@ class ProtocolEncoder:
             writer.write_string(message.query_string)
             
         elif isinstance(message, OneOffQueryMessage):
-            # Encode as enum variant 7 (OneOffQueryMessage)
-            writer.write_enum_header(7)
+            # Encode as enum variant 7 (OneOffQueryMessage) - direct variant encoding
+            writer._write_bytes(struct.pack('<I', 7))
             writer.write_struct_header(2)  # message_id, query_string
             
             writer.write_field_name("message_id")

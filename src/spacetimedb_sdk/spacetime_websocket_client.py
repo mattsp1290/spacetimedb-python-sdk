@@ -109,7 +109,14 @@ class WebSocketClient:
         if not self.is_connected:
             print("[send] Not connected")
 
-        self.ws.send(data)
+        # Check if we're using binary protocol and send with correct opcode
+        if self.protocol == "v1.bsatn.spacetimedb" and isinstance(data, bytes):
+            # Import ABNF for opcode constants
+            from websocket import ABNF
+            self.ws.send(data, opcode=ABNF.OPCODE_BINARY)
+        else:
+            # For text protocol or string data, use default (text frame)
+            self.ws.send(data)
 
     def close(self):
         self.ws.close()

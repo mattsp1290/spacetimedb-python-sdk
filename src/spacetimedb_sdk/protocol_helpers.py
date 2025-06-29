@@ -9,7 +9,7 @@ Fixes the common issue where clients send JSON messages (starting with '{') but 
 expect binary BSATN format, resulting in "unknown tag 0x7b for sum type ClientMessage" errors.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from .protocol import (
     ProtocolEncoder, 
     ProtocolDecoder,
@@ -56,7 +56,31 @@ class SpacetimeDBProtocolHelper:
         """
         return BIN_PROTOCOL if self.use_binary else TEXT_PROTOCOL
     
-    def encode_subscription(self, tables: List[str], request_id: Optional[int] = None) -> bytes:
+    def get_expected_frame_type(self) -> str:
+        """
+        Get the expected WebSocket frame type for this protocol.
+        
+        Returns:
+            "BINARY" for binary protocol, "TEXT" for JSON protocol
+        """
+        return "BINARY" if self.use_binary else "TEXT"
+    
+    def validate_protocol_consistency(self) -> None:
+        """
+        Validate that protocol configuration is consistent.
+        
+        Raises:
+            ValueError: If protocol configuration is inconsistent
+        """
+        subprotocol = self.get_protocol_subprotocol()
+        
+        if self.use_binary and "json" in subprotocol:
+            raise ValueError(f"Protocol mismatch: use_binary=True but subprotocol is {subprotocol}")
+        
+        if not self.use_binary and "bsatn" in subprotocol:
+            raise ValueError(f"Protocol mismatch: use_binary=False but subprotocol is {subprotocol}")
+    
+    def encode_subscription(self, tables: List[str], request_id: Optional[int] = None) -> Union[bytes, str]:
         """
         Encode a subscription message for multiple tables.
         
@@ -83,11 +107,20 @@ class SpacetimeDBProtocolHelper:
             request_id=request_id
         )
         
-        return self.encoder.encode_client_message(subscribe_msg)
+        encoded = self.encoder.encode_client_message(subscribe_msg)
+        
+        # Return appropriate type based on protocol
+        if self.use_binary:
+            return encoded  # bytes for binary protocol
+        else:
+            # Convert bytes to string for JSON protocol
+            if isinstance(encoded, bytes):
+                return encoded.decode('utf-8')
+            return encoded
     
     def encode_single_subscription(self, table_or_query: str, 
                                  query_id: Optional[int] = None,
-                                 request_id: Optional[int] = None) -> bytes:
+                                 request_id: Optional[int] = None) -> Union[bytes, str]:
         """
         Encode a subscription message for a single table or query.
         
@@ -116,12 +149,21 @@ class SpacetimeDBProtocolHelper:
             query_id=QueryId(id=query_id)
         )
         
-        return self.encoder.encode_client_message(subscribe_msg)
+        encoded = self.encoder.encode_client_message(subscribe_msg)
+        
+        # Return appropriate type based on protocol
+        if self.use_binary:
+            return encoded  # bytes for binary protocol
+        else:
+            # Convert bytes to string for JSON protocol
+            if isinstance(encoded, bytes):
+                return encoded.decode('utf-8')
+            return encoded
     
     def encode_reducer_call(self, reducer_name: str, 
                           args: Dict[str, Any], 
                           request_id: Optional[int] = None,
-                          flags: CallReducerFlags = CallReducerFlags.FULL_UPDATE) -> bytes:
+                          flags: CallReducerFlags = CallReducerFlags.FULL_UPDATE) -> Union[bytes, str]:
         """
         Encode a reducer call message.
         
@@ -147,9 +189,18 @@ class SpacetimeDBProtocolHelper:
             flags=flags
         )
         
-        return self.encoder.encode_client_message(call_reducer_msg)
+        encoded = self.encoder.encode_client_message(call_reducer_msg)
+        
+        # Return appropriate type based on protocol
+        if self.use_binary:
+            return encoded  # bytes for binary protocol
+        else:
+            # Convert bytes to string for JSON protocol
+            if isinstance(encoded, bytes):
+                return encoded.decode('utf-8')
+            return encoded
     
-    def encode_one_off_query(self, query: str, message_id: Optional[bytes] = None) -> bytes:
+    def encode_one_off_query(self, query: str, message_id: Optional[bytes] = None) -> Union[bytes, str]:
         """
         Encode a one-off query message.
         
@@ -168,7 +219,16 @@ class SpacetimeDBProtocolHelper:
             query_string=query
         )
         
-        return self.encoder.encode_client_message(query_msg)
+        encoded = self.encoder.encode_client_message(query_msg)
+        
+        # Return appropriate type based on protocol
+        if self.use_binary:
+            return encoded  # bytes for binary protocol
+        else:
+            # Convert bytes to string for JSON protocol
+            if isinstance(encoded, bytes):
+                return encoded.decode('utf-8')
+            return encoded
     
     def decode_server_message(self, data: bytes):
         """
@@ -211,6 +271,24 @@ class SpacetimeDBProtocolHelper:
 
 # Convenience functions for quick use
 
+def get_json_protocol_subprotocol() -> str:
+    """
+    Get the JSON protocol subprotocol string.
+    
+    Returns:
+        The JSON protocol subprotocol string for WebSocket connections
+    """
+    return TEXT_PROTOCOL
+
+def get_binary_protocol_subprotocol() -> str:
+    """
+    Get the binary protocol subprotocol string.
+    
+    Returns:
+        The binary protocol subprotocol string for WebSocket connections
+    """
+    return BIN_PROTOCOL
+
 def create_binary_subscription(tables: List[str]) -> bytes:
     """
     Create a binary-encoded subscription message for multiple tables.
@@ -226,7 +304,9 @@ def create_binary_subscription(tables: List[str]) -> bytes:
         await websocket.send(message)
     """
     helper = SpacetimeDBProtocolHelper(use_binary=True)
-    return helper.encode_subscription(tables)
+    result = helper.encode_subscription(tables)
+    # Ensure we return bytes for binary protocol
+    return result if isinstance(result, bytes) else result.encode('utf-8')
 
 
 def create_binary_reducer_call(reducer_name: str, args: Dict[str, Any]) -> bytes:
@@ -245,10 +325,12 @@ def create_binary_reducer_call(reducer_name: str, args: Dict[str, Any]) -> bytes
         await websocket.send(message)
     """
     helper = SpacetimeDBProtocolHelper(use_binary=True)
-    return helper.encode_reducer_call(reducer_name, args)
+    result = helper.encode_reducer_call(reducer_name, args)
+    # Ensure we return bytes for binary protocol
+    return result if isinstance(result, bytes) else result.encode('utf-8')
 
 
-def create_json_subscription(tables: List[str]) -> bytes:
+def create_json_subscription(tables: List[str]) -> str:
     """
     Create a JSON-encoded subscription message for multiple tables.
     
@@ -256,14 +338,37 @@ def create_json_subscription(tables: List[str]) -> bytes:
         tables: List of table names to subscribe to
         
     Returns:
-        JSON message bytes ready for WebSocket transmission
+        JSON message string ready for WebSocket text frame transmission
         
     Example:
         message = create_json_subscription(["entity", "player"])
-        await websocket.send(message)
+        await websocket.send(message)  # Sends as TEXT frame
     """
     helper = SpacetimeDBProtocolHelper(use_binary=False)
-    return helper.encode_subscription(tables)
+    result = helper.encode_subscription(tables)
+    # Ensure we return string for JSON protocol
+    return result if isinstance(result, str) else result.decode('utf-8')
+
+
+def create_json_reducer_call(reducer_name: str, args: Dict[str, Any]) -> str:
+    """
+    Create a JSON-encoded reducer call message.
+    
+    Args:
+        reducer_name: Name of the reducer to call
+        args: Arguments for the reducer
+        
+    Returns:
+        JSON message string ready for WebSocket text frame transmission
+        
+    Example:
+        message = create_json_reducer_call("enter_game", {"player_name": "Alice"})
+        await websocket.send(message)  # Sends as TEXT frame
+    """
+    helper = SpacetimeDBProtocolHelper(use_binary=False)
+    result = helper.encode_reducer_call(reducer_name, args)
+    # Ensure we return string for JSON protocol
+    return result if isinstance(result, str) else result.decode('utf-8')
 
 
 def get_binary_protocol_subprotocol() -> str:

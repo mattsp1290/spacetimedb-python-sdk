@@ -45,6 +45,10 @@ from .messages.one_off_query import (
 TEXT_PROTOCOL = "v1.json.spacetimedb"
 BIN_PROTOCOL = "v1.bsatn.spacetimedb"
 
+# Supported protocol versions for compatibility checking
+SUPPORTED_PROTOCOL_VERSIONS = ["v1", "v1.1", "v1.1.1", "v1.1.2"]
+CURRENT_PROTOCOL_VERSION = "v1.1.2"
+
 # Compression tags
 SERVER_MSG_COMPRESSION_TAG_NONE = 0
 SERVER_MSG_COMPRESSION_TAG_BROTLI = 1
@@ -960,7 +964,34 @@ class ProtocolDecoder:
             
         # Add more message type parsing as needed
         else:
-            raise ValueError(f"Unknown server message format: {list(message.keys())}")
+            # Provide more detailed error information for unknown message types
+            message_keys = list(message.keys())
+            
+            # Check if this might be a known message type with unexpected format
+            known_types = [
+                "IdentityToken", "InitialSubscription", "TransactionUpdate", 
+                "TransactionUpdateLight", "SubscribeApplied", "UnsubscribeApplied",
+                "SubscriptionError", "SubscribeMultiApplied", "UnsubscribeMultiApplied",
+                "OneOffQueryResponse"
+            ]
+            
+            # Log the unknown message for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Unknown message type in data: {message_keys}")
+            
+            # Provide a helpful error message suggesting possible fixes
+            if any(key in str(message_keys).lower() for key in [name.lower() for name in known_types]):
+                raise ValueError(
+                    f"Unknown server message format: {message_keys}. "
+                    f"This might be a known message type with an unexpected format. "
+                    f"Expected one of: {known_types}"
+                )
+            else:
+                raise ValueError(
+                    f"Unknown server message format: {message_keys}. "
+                    f"This may indicate a protocol version mismatch or unsupported message type."
+                )
     
     def _decode_bsatn(self, data: bytes) -> ServerMessage:
         """Decode message from BSATN."""
@@ -1444,3 +1475,41 @@ class ProtocolDecoder:
 def generate_request_id() -> int:
     """Generate a unique request ID."""
     return uuid.uuid4().int & 0xFFFFFFFF
+
+
+def check_protocol_compatibility(server_protocol: str, client_protocol: str) -> bool:
+    """
+    Check if server and client protocols are compatible.
+    
+    Args:
+        server_protocol: Protocol reported by server
+        client_protocol: Protocol used by client
+        
+    Returns:
+        True if protocols are compatible, False otherwise
+    """
+    # Extract version from protocol strings
+    server_version = server_protocol.split('.')[0] if '.' in server_protocol else server_protocol
+    client_version = client_protocol.split('.')[0] if '.' in client_protocol else client_protocol
+    
+    # For now, require exact major version match
+    return server_version == client_version
+
+
+def validate_protocol_version(protocol: str) -> bool:
+    """
+    Validate that a protocol version is supported.
+    
+    Args:
+        protocol: Protocol string to validate
+        
+    Returns:
+        True if protocol is supported, False otherwise
+    """
+    # Extract version from protocol string (e.g., "v1.json.spacetimedb" -> "v1")
+    if 'json' in protocol or 'bsatn' in protocol:
+        version_part = protocol.split('.')[0]
+    else:
+        version_part = protocol
+    
+    return version_part in SUPPORTED_PROTOCOL_VERSIONS

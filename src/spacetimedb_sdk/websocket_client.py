@@ -589,6 +589,29 @@ class ModernWebSocketClient:
     def _on_ws_message(self, ws, message) -> None:
         """WebSocket message received with enhanced large message handling."""
         try:
+            # Validate frame type against protocol configuration
+            frame_type = "TEXT" if isinstance(message, str) else "BINARY"
+            expected_frame_type = "BINARY" if self.use_binary else "TEXT"
+            
+            if frame_type != expected_frame_type:
+                self.logger.warning(f"Received {frame_type} frame with {self.protocol} protocol - this may indicate protocol mismatch")
+                self.logger.warning(f"Expected {expected_frame_type} frame for protocol {self.protocol}")
+                
+                # Check if this is a JSON message received when binary protocol is expected
+                if frame_type == "TEXT" and self.use_binary:
+                    try:
+                        # Try to parse as JSON to provide better diagnostics
+                        json_data = json.loads(message)
+                        message_types = list(json_data.keys())
+                        self.logger.warning(f"Unknown message type in data: {message_types}")
+                        
+                        # Log specific message types that are commonly mismatched
+                        for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
+                            if msg_type in json_data:
+                                self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
+                    except:
+                        pass  # Continue with normal processing
+            
             # Handle incoming message data
             if isinstance(message, str):
                 message_data = message.encode('utf-8')

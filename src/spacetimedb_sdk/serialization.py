@@ -13,6 +13,154 @@ import json
 logger = logging.getLogger(__name__)
 
 
+def _safe_extract(obj: Any, attr_name: str, default: Any = None) -> Any:
+    """
+    Safely extract attribute from object or dict.
+    
+    This function handles the core issue identified in the bug report where
+    protocol handlers expect dict access but receive objects, causing AttributeError exceptions.
+    
+    Args:
+        obj: Object or dict to extract from
+        attr_name: Name of attribute/key to extract
+        default: Default value if attribute/key not found
+        
+    Returns:
+        Extracted value or default
+    """
+    if obj is None:
+        return default
+    
+    # Try attribute access first (for objects)
+    if hasattr(obj, attr_name):
+        try:
+            return getattr(obj, attr_name)
+        except (AttributeError, TypeError):
+            pass
+    
+    # Fall back to dict access
+    if isinstance(obj, dict):
+        return obj.get(attr_name, default)
+    
+    # Try dictionary-like access (objects with __getitem__)
+    if hasattr(obj, '__getitem__') and hasattr(obj, 'get'):
+        try:
+            return obj.get(attr_name, default)
+        except (AttributeError, TypeError):
+            pass
+    
+    # Last resort: try direct __getitem__ access
+    if hasattr(obj, '__getitem__'):
+        try:
+            return obj[attr_name]
+        except (KeyError, TypeError, AttributeError):
+            pass
+    
+    return default
+
+
+def _get_message_type(data: Any) -> Optional[str]:
+    """
+    Get message type from data handling both objects and dicts.
+    
+    This function addresses the bug report issue where message type detection
+    fails for object-based messages.
+    
+    Args:
+        data: Message data (object or dict)
+        
+    Returns:
+        Message type string or None if not detected
+    """
+    if data is None:
+        return None
+    
+    # Check object class names first
+    if hasattr(data, '__class__'):
+        class_name = data.__class__.__name__
+        # Check for common message types
+        message_types = [
+            'DatabaseUpdate', 'SubscriptionUpdate', 'TransactionCommit',
+            'TransactionUpdate', 'InitialSubscription', 'IdentityToken',
+            'SubscribeApplied', 'SubscriptionError', 'TableUpdate'
+        ]
+        
+        for msg_type in message_types:
+            if msg_type in class_name:
+                return msg_type
+    
+    # Original dict-based detection
+    if isinstance(data, dict):
+        # Check for common message type keys
+        if 'database_update' in data:
+            return 'DatabaseUpdate'
+        elif 'subscription_update' in data:
+            return 'SubscriptionUpdate'
+        elif 'transaction_commit' in data:
+            return 'TransactionCommit'
+        elif 'transaction_update' in data:
+            return 'TransactionUpdate'
+        elif 'initial_subscription' in data:
+            return 'InitialSubscription'
+        elif 'identity_token' in data:
+            return 'IdentityToken'
+        elif 'subscribe_applied' in data:
+            return 'SubscribeApplied'
+        elif 'subscription_error' in data:
+            return 'SubscriptionError'
+        elif 'table_update' in data:
+            return 'TableUpdate'
+    
+    # Try to extract message type using _safe_extract
+    for msg_type in ['DatabaseUpdate', 'SubscriptionUpdate', 'TransactionCommit']:
+        if _safe_extract(data, msg_type.lower()) is not None:
+            return msg_type
+    
+    return None
+
+
+def _handle_database_update(data: Any) -> Dict[str, Any]:
+    """
+    Handle DatabaseUpdate message with object/dict compatibility.
+    
+    Args:
+        data: DatabaseUpdate data (object or dict)
+        
+    Returns:
+        Formatted database update dictionary
+    """
+    tables = _safe_extract(data, 'tables', [])
+    request_id = _safe_extract(data, 'request_id')
+    
+    return {
+        'type': 'DatabaseUpdate',
+        'tables': tables,
+        'request_id': request_id
+    }
+
+
+def _handle_subscription_update(data: Any) -> Dict[str, Any]:
+    """
+    Handle SubscriptionUpdate message with object/dict compatibility.
+    
+    Args:
+        data: SubscriptionUpdate data (object or dict)
+        
+    Returns:
+        Formatted subscription update dictionary
+    """
+    tables = _safe_extract(data, 'tables', [])
+    query_id = _safe_extract(data, 'query_id')
+    request_id = _safe_extract(data, 'request_id')
+    
+    return {
+        'type': 'SubscriptionUpdate',
+        'tables': tables,
+        'query_id': query_id,
+        'request_id': request_id
+    }
+
+
 def serialize_for_client(obj: Any) -> Any:
     """
     Serialize SpacetimeDB objects for client consumption.

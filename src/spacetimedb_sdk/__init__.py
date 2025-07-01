@@ -506,6 +506,36 @@ from .cross_platform_validation import (
     CrossPlatformTestSuite
 )
 
+# Subscription data flow fixes (addressing bug report issues)
+from .subscription_manager import (
+    SubscriptionManager,
+    SubscriptionState,
+    SubscriptionInfo,
+    get_subscription_manager,
+    set_subscription_manager
+)
+
+from .event_manager import (
+    SDKEventManager,
+    EventType as SDKEventType,
+    EventData,
+    get_event_manager as get_sdk_event_manager,
+    set_event_manager as set_sdk_event_manager
+)
+
+from .serialization import (
+    _safe_extract,
+    _get_message_type,
+    _handle_database_update,
+    _handle_subscription_update,
+    serialize_for_client,
+    prepare_message_for_client,
+    ensure_dict_compatible,
+    validate_serialization,
+    ClientCompatibilityWrapper,
+    wrap_for_client_compatibility
+)
+
 __all__ = [
     # Version
     "__version__",
@@ -938,7 +968,29 @@ __all__ = [
     # Additional factory utilities
     "get_recommended_config",
     "validate_server_compatibility",
-    "get_optimization_capabilities"
+    "get_optimization_capabilities",
+    
+    # Subscription data flow fixes (addressing bug report issues)
+    "SubscriptionManager",
+    "SubscriptionState",
+    "SubscriptionInfo", 
+    "get_subscription_manager",
+    "set_subscription_manager",
+    "SDKEventManager",
+    "SDKEventType",
+    "EventData",
+    "get_sdk_event_manager",
+    "set_sdk_event_manager",
+    "_safe_extract",
+    "_get_message_type",
+    "_handle_database_update",
+    "_handle_subscription_update",
+    "serialize_for_client",
+    "prepare_message_for_client",
+    "ensure_dict_compatible",
+    "validate_serialization",
+    "ClientCompatibilityWrapper",
+    "wrap_for_client_compatibility"
 ]
 
 # Default to modern client

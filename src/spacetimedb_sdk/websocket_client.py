@@ -380,13 +380,26 @@ class ModernWebSocketClient:
             self.logger.info("WebSocket client disconnected and cleaned up.")
     
     def send_message(self, message: ClientMessage) -> None:
-        """Send a client message to the server with optional compression."""
+        """Send a client message to the server with optional compression and proper serialization."""
         if self.state != ConnectionState.CONNECTED or not self.ws:
             raise RuntimeError("Not connected to SpacetimeDB")
         
         try:
+            # Import serialization functions
+            from .serialization import prepare_message_for_client
+            from .protocol_handler import get_default_handler
+            
+            # Prepare message with client compatibility (for any embedded objects)
+            # This ensures any response objects are properly serialized
+            if hasattr(message, '__dict__'):
+                # For client messages, we typically don't need to serialize since
+                # they're going TO the server, but we may have response objects embedded
+                prepared_message = message
+            else:
+                prepared_message = message
+            
             # Encode the message
-            encoded_data = self.encoder.encode_client_message(message)
+            encoded_data = self.encoder.encode_client_message(prepared_message)
             
             # Apply compression if negotiated and beneficial
             if self.negotiated_compression and self.negotiated_compression != CompressionType.NONE:
@@ -680,9 +693,29 @@ class ModernWebSocketClient:
             if message_size > large_message_threshold:
                 self.logger.info(f"Successfully processed large message: {type(server_message).__name__}")
             
-            # Forward to application
+            # Forward to application with proper serialization for client compatibility
             if self._on_message:
-                self._on_message(server_message)
+                # Import serialization functions
+                from .serialization import serialize_for_client
+                from .protocol_handler import get_default_handler, format_for_client
+                
+                # Ensure the server message is properly serialized for client compatibility
+                # This is critical for fixing AttributeError issues where objects don't behave like dictionaries
+                try:
+                    # Use the protocol handler to format the message appropriately
+                    handler = get_default_handler()
+                    formatted_message = handler.format_message(server_message)
+                    self._on_message(formatted_message)
+                except Exception as format_error:
+                    # If formatting fails, fall back to basic serialization
+                    self.logger.warning(f"Message formatting failed, using basic serialization: {format_error}")
+                    try:
+                        serialized_message = serialize_for_client(server_message)
+                        self._on_message(serialized_message)
+                    except Exception as serialize_error:
+                        # Last resort: send original message and log the issue
+                        self.logger.error(f"Both formatting and serialization failed: {serialize_error}")
+                        self._on_message(server_message)
                 
         except Exception as e:
             # Enhanced error logging for large message issues

@@ -12,6 +12,9 @@ import json
 import struct
 import uuid
 
+# Import base classes for dictionary-like behavior
+from .base_objects import DictLikeMixin, SpacetimeDBObject
+
 if TYPE_CHECKING:
     from .query_id import QueryId
 
@@ -112,7 +115,7 @@ ClientMessage = Union[
 
 # Legacy Identity and ConnectionId classes for backward compatibility
 @dataclass
-class Identity:
+class Identity(DictLikeMixin):
     """Represents a user identity (legacy class for backward compatibility)."""
     data: bytes
     
@@ -134,7 +137,7 @@ class Identity:
 
 
 @dataclass
-class ConnectionId:
+class ConnectionId(DictLikeMixin):
     """Represents a connection ID (legacy class for backward compatibility)."""
     data: bytes
     
@@ -176,7 +179,7 @@ class ConnectionId:
 
 
 @dataclass
-class QueryId:
+class QueryId(DictLikeMixin):
     """Represents a query ID for subscription management."""
     id: int
     
@@ -222,19 +225,19 @@ def ensure_enhanced_identity(identity: Union[Identity, EnhancedIdentity]) -> Enh
 
 
 @dataclass
-class Timestamp:
+class Timestamp(DictLikeMixin):
     """Represents a timestamp."""
     nanos_since_epoch: int
 
 
 @dataclass
-class TimeDuration:
+class TimeDuration(DictLikeMixin):
     """Represents a time duration."""
     nanos: int
 
 
 @dataclass
-class EnergyQuanta:
+class EnergyQuanta(DictLikeMixin):
     """Represents energy credits consumed by a reducer with enhanced tracking capabilities."""
     quanta: int
     
@@ -423,7 +426,7 @@ class EnergyQuanta:
 
 
 @dataclass
-class IdentityToken:
+class IdentityToken(DictLikeMixin):
     """Server message containing identity information (legacy for backward compatibility)."""
     identity: Identity
     token: str
@@ -439,7 +442,7 @@ class IdentityToken:
 
 
 @dataclass
-class TableUpdate:
+class TableUpdate(DictLikeMixin):
     """Updates to a single table."""
     table_id: int
     table_name: str
@@ -451,13 +454,13 @@ class TableUpdate:
 
 
 @dataclass
-class DatabaseUpdate:
+class DatabaseUpdate(DictLikeMixin):
     """A collection of table updates."""
     tables: List[TableUpdate]
 
 
 @dataclass
-class ReducerCallInfo:
+class ReducerCallInfo(DictLikeMixin):
     """Metadata about a reducer invocation."""
     reducer_name: str
     reducer_id: int

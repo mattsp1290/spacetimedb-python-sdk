@@ -109,14 +109,39 @@ class WebSocketClient:
         if not self.is_connected:
             print("[send] Not connected")
 
-        # Check if we're using binary protocol and send with correct opcode
-        if self.protocol == "v1.bsatn.spacetimedb" and isinstance(data, bytes):
-            # Import ABNF for opcode constants
+        # Determine correct frame type based on protocol
+        use_binary_frame = self._should_use_binary_frame(self.protocol, data)
+        
+        if use_binary_frame:
+            # Binary protocol → BINARY WebSocket frame
             from websocket import ABNF
             self.ws.send(data, opcode=ABNF.OPCODE_BINARY)
         else:
-            # For text protocol or string data, use default (text frame)
+            # JSON protocol → TEXT WebSocket frame (default)
             self.ws.send(data)
+    
+    def _should_use_binary_frame(self, protocol: str, data) -> bool:
+        """
+        Determine if binary WebSocket frame should be used based on protocol and data type.
+        
+        Args:
+            protocol: Protocol name
+            data: Data being sent
+            
+        Returns:
+            True if binary frame should be used
+        """
+        # Check for binary protocols (BSATN)
+        if 'bsatn' in protocol.lower() or protocol == 'binary':
+            return isinstance(data, bytes)
+        
+        # Check for specific v1.bsatn.spacetimedb protocol (legacy check)
+        elif protocol == "v1.bsatn.spacetimedb" and isinstance(data, bytes):
+            return True
+        
+        # Default to text frames
+        else:
+            return False
 
     def close(self):
         self.ws.close()

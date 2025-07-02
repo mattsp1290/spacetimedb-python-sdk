@@ -1,0 +1,355 @@
+"""
+SpacetimeDB Message Validation
+
+Validates that messages conform to the SpacetimeDB protocol specification
+and prevents invalid custom message types from being sent.
+"""
+
+import json
+import time
+from typing import Dict, Any, Set, List, Union, Optional
+from enum import Enum
+import logging
+
+from .protocol import ClientMessage
+from .query_id import QueryId
+
+
+class MessageValidationError(Exception):
+    """Raised when a message fails validation."""
+    pass
+
+
+class SpacetimeDBMessageValidator:
+    """
+    Validates messages conform to SpacetimeDB protocol specification.
+    
+    Prevents protocol violations by blocking invalid message types and formats
+    that could cause server-side parsing failures.
+    """
+    
+    # Valid SpacetimeDB message types as defined in the protocol
+    VALID_MESSAGE_TYPES = {
+        'CallReducer',
+        'Subscribe', 
+        'OneOffQuery',
+        'SubscribeSingle',
+        'SubscribeMulti', 
+        'Unsubscribe',
+        'UnsubscribeMulti'
+    }
+    
+    # Invalid custom message types that clients sometimes try to send
+    INVALID_CUSTOM_TYPES = {
+        'heartbeat',
+        'ping',
+        'pong', 
+        'close',
+        'connect',
+        'disconnect',
+        'keep_alive',
+        'status',
+        'health_check'
+    }
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    @classmethod
+    def validate_message(cls, message: Union[Dict[str, Any], ClientMessage]) -> bool:
+        """
+        Validate message conforms to SpacetimeDB protocol.
+        
+        Args:
+            message: Message to validate (dict or ClientMessage object)
+            
+        Returns:
+            True if message is valid
+            
+        Raises:
+            MessageValidationError: If message is invalid
+        """
+        validator = cls()
+        return validator._validate_message_internal(message)
+    
+    def _validate_message_internal(self, message: Union[Dict[str, Any], ClientMessage]) -> bool:
+        """Internal message validation logic."""
+        
+        # Handle ClientMessage objects
+        if not isinstance(message, dict):
+            if hasattr(message, '__class__'):
+                # Check if it's a valid ClientMessage type
+                class_name = message.__class__.__name__
+                if class_name in ['CallReducer', 'Subscribe', 'SubscribeSingle', 
+                                'SubscribeMulti', 'Unsubscribe', 'UnsubscribeMulti', 
+                                'OneOffQuery', 'OneOffQueryMessage']:
+                    return True
+                else:
+                    raise MessageValidationError(
+                        f"Invalid ClientMessage type: {class_name}. "
+                        f"Valid types: {self.VALID_MESSAGE_TYPES}"
+                    )
+            
+            # Try to convert to dict for validation
+            if hasattr(message, '__dict__'):
+                message = message.__dict__
+            else:
+                raise MessageValidationError(
+                    f"Cannot validate message of type: {type(message)}"
+                )
+        
+        # Validate dictionary-based messages
+        return self._validate_dict_message(message)
+    
+    def _validate_dict_message(self, message: Dict[str, Any]) -> bool:
+        """Validate dictionary-based message format."""
+        
+        # Check for invalid 'type' field usage (common anti-pattern)
+        if 'type' in message:
+            message_type = message['type']
+            
+            # Block known invalid custom types
+            if message_type in self.INVALID_CUSTOM_TYPES:
+                raise MessageValidationError(
+                    f"Invalid custom message type: '{message_type}'. "
+                    f"SpacetimeDB does not support custom message types. "
+                    f"Valid message types: {self.VALID_MESSAGE_TYPES}"
+                )
+            
+            # Block any 'type' field that's not a valid SpacetimeDB message type
+            if message_type not in self.VALID_MESSAGE_TYPES:
+                raise MessageValidationError(
+                    f"Invalid message type: '{message_type}'. "
+                    f"Valid types: {self.VALID_MESSAGE_TYPES}"
+                )
+        
+        # Validate message structure matches expected variants
+        valid_keys = set(message.keys())
+        
+        # Check if message contains any valid SpacetimeDB message type as top-level key
+        has_valid_message_type = bool(valid_keys.intersection(self.VALID_MESSAGE_TYPES))
+        
+        # Also check for enhanced message types that might have different names
+        enhanced_message_types = {
+            'SubscribeSingleMessage', 'SubscribeMultiMessage', 
+            'UnsubscribeMultiMessage', 'OneOffQueryMessage'
+        }
+        has_enhanced_message_type = bool(valid_keys.intersection(enhanced_message_types))
+        
+        if not has_valid_message_type and not has_enhanced_message_type:
+            # Special case: check if this looks like a raw object without message type wrapper
+            if all(key not in self.VALID_MESSAGE_TYPES for key in valid_keys):
+                raise MessageValidationError(
+                    f"Message must contain one of: {self.VALID_MESSAGE_TYPES}. "
+                    f"Got keys: {list(valid_keys)}"
+                )
+        
+        # Validate specific message type requirements
+        self._validate_message_type_requirements(message)
+        
+        return True
+    
+    def _validate_message_type_requirements(self, message: Dict[str, Any]) -> None:
+        """Validate requirements for specific message types."""
+        
+        if 'CallReducer' in message:
+            self._validate_call_reducer(message['CallReducer'])
+        
+        elif 'Subscribe' in message:
+            self._validate_subscribe(message['Subscribe'])
+        
+        elif 'SubscribeSingle' in message:
+            self._validate_subscribe_single(message['SubscribeSingle'])
+        
+        elif 'SubscribeMulti' in message:
+            self._validate_subscribe_multi(message['SubscribeMulti'])
+        
+        elif 'Unsubscribe' in message:
+            self._validate_unsubscribe(message['Unsubscribe'])
+        
+        elif 'UnsubscribeMulti' in message:
+            self._validate_unsubscribe_multi(message['UnsubscribeMulti'])
+        
+        elif 'OneOffQuery' in message:
+            self._validate_one_off_query(message['OneOffQuery'])
+    
+    def _validate_call_reducer(self, call_reducer: Dict[str, Any]) -> None:
+        """Validate CallReducer message format."""
+        required_fields = {'reducer', 'args', 'request_id'}
+        if not required_fields.issubset(call_reducer.keys()):
+            missing = required_fields - set(call_reducer.keys())
+            raise MessageValidationError(
+                f"CallReducer missing required fields: {missing}"
+            )
+    
+    def _validate_subscribe(self, subscribe: Dict[str, Any]) -> None:
+        """Validate Subscribe message format."""
+        required_fields = {'query_strings', 'request_id'}
+        if not required_fields.issubset(subscribe.keys()):
+            missing = required_fields - set(subscribe.keys())
+            raise MessageValidationError(
+                f"Subscribe missing required fields: {missing}"
+            )
+        
+        # Validate query_strings is a list
+        if not isinstance(subscribe['query_strings'], list):
+            raise MessageValidationError(
+                "Subscribe query_strings must be a list"
+            )
+    
+    def _validate_subscribe_single(self, subscribe_single: Dict[str, Any]) -> None:
+        """Validate SubscribeSingle message format."""
+        required_fields = {'query', 'request_id', 'query_id'}
+        if not required_fields.issubset(subscribe_single.keys()):
+            missing = required_fields - set(subscribe_single.keys())
+            raise MessageValidationError(
+                f"SubscribeSingle missing required fields: {missing}"
+            )
+    
+    def _validate_subscribe_multi(self, subscribe_multi: Dict[str, Any]) -> None:
+        """Validate SubscribeMulti message format."""
+        required_fields = {'query_strings', 'request_id', 'query_id'}
+        if not required_fields.issubset(subscribe_multi.keys()):
+            missing = required_fields - set(subscribe_multi.keys())
+            raise MessageValidationError(
+                f"SubscribeMulti missing required fields: {missing}"
+            )
+        
+        # Validate query_strings is a list
+        if not isinstance(subscribe_multi['query_strings'], list):
+            raise MessageValidationError(
+                "SubscribeMulti query_strings must be a list"
+            )
+    
+    def _validate_unsubscribe(self, unsubscribe: Dict[str, Any]) -> None:
+        """Validate Unsubscribe message format."""
+        required_fields = {'request_id', 'query_id'}
+        if not required_fields.issubset(unsubscribe.keys()):
+            missing = required_fields - set(unsubscribe.keys())
+            raise MessageValidationError(
+                f"Unsubscribe missing required fields: {missing}"
+            )
+    
+    def _validate_unsubscribe_multi(self, unsubscribe_multi: Dict[str, Any]) -> None:
+        """Validate UnsubscribeMulti message format."""
+        required_fields = {'request_id', 'query_id'}
+        if not required_fields.issubset(unsubscribe_multi.keys()):
+            missing = required_fields - set(unsubscribe_multi.keys())
+            raise MessageValidationError(
+                f"UnsubscribeMulti missing required fields: {missing}"
+            )
+    
+    def _validate_one_off_query(self, one_off_query: Dict[str, Any]) -> None:
+        """Validate OneOffQuery message format."""
+        required_fields = {'message_id', 'query_string'}
+        if not required_fields.issubset(one_off_query.keys()):
+            missing = required_fields - set(one_off_query.keys())
+            raise MessageValidationError(
+                f"OneOffQuery missing required fields: {missing}"
+            )
+
+
+class SpacetimeDBHeartbeatManager:
+    """
+    Provides proper SpacetimeDB-compatible heartbeat/keep-alive functionality.
+    
+    Instead of sending invalid custom messages, uses valid OneOffQuery messages
+    as heartbeats to maintain connection health.
+    """
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    def create_heartbeat_message(self) -> Dict[str, Any]:
+        """
+        Create a valid SpacetimeDB heartbeat using OneOffQuery.
+        
+        Returns:
+            Valid OneOffQuery message that can serve as a heartbeat
+        """
+        import uuid
+        
+        heartbeat_message = {
+            "OneOffQuery": {
+                "message_id": list(uuid.uuid4().bytes),
+                "query": "SELECT 1",  # Simple query as heartbeat
+                "timestamp": int(time.time())
+            }
+        }
+        
+        return heartbeat_message
+    
+    def create_connection_test_message(self) -> Dict[str, Any]:
+        """
+        Create a connection test message using valid SpacetimeDB protocol.
+        
+        Returns:
+            Valid OneOffQuery message for testing connection health
+        """
+        import uuid
+        
+        test_message = {
+            "OneOffQuery": {
+                "message_id": list(uuid.uuid4().bytes),
+                "query": "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+                "purpose": "connection_test"
+            }
+        }
+        
+        return test_message
+
+
+# Convenience functions
+def validate_spacetimedb_message(message: Union[Dict[str, Any], ClientMessage]) -> bool:
+    """
+    Validate a SpacetimeDB message.
+    
+    Args:
+        message: Message to validate
+        
+    Returns:
+        True if valid
+        
+    Raises:
+        MessageValidationError: If message is invalid
+    """
+    return SpacetimeDBMessageValidator.validate_message(message)
+
+
+def create_heartbeat_message() -> Dict[str, Any]:
+    """
+    Create a valid heartbeat message for SpacetimeDB.
+    
+    Returns:
+        Valid OneOffQuery message serving as heartbeat
+    """
+    manager = SpacetimeDBHeartbeatManager()
+    return manager.create_heartbeat_message()
+
+
+def suggest_valid_alternative(invalid_message_type: str) -> str:
+    """
+    Suggest valid alternatives for invalid custom message types.
+    
+    Args:
+        invalid_message_type: The invalid message type
+        
+    Returns:
+        Suggestion for valid alternative
+    """
+    suggestions = {
+        'heartbeat': 'Use create_heartbeat_message() to create a valid OneOffQuery heartbeat',
+        'ping': 'Use create_heartbeat_message() for keep-alive functionality',
+        'pong': 'SpacetimeDB handles connection responses automatically',
+        'close': 'Use websocket.close() method instead of custom close message',
+        'connect': 'Use client.connect() method instead of custom connect message',
+        'disconnect': 'Use websocket.close() method instead of custom disconnect message',
+        'keep_alive': 'Use create_heartbeat_message() for connection keep-alive',
+        'status': 'Query database tables directly using Subscribe or OneOffQuery',
+        'health_check': 'Use create_connection_test_message() for health checks'
+    }
+    
+    return suggestions.get(
+        invalid_message_type.lower(), 
+        f"Use one of the valid SpacetimeDB message types: {SpacetimeDBMessageValidator.VALID_MESSAGE_TYPES}"
+    )

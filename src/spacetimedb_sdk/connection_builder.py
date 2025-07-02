@@ -172,19 +172,55 @@ class SpacetimeDBConnectionBuilder:
         Set the communication protocol.
         
         Args:
-            protocol: Either "text" or "binary" protocol
+            protocol: Protocol name - supports both short names ("text", "binary") 
+                     and full protocol names ("v1.json.spacetimedb", "v1.bsatn.spacetimedb")
         
         Returns:
             Self for method chaining
         
         Example:
             builder.with_protocol("binary")
+            builder.with_protocol("v1.json.spacetimedb")
         """
-        if protocol not in ("text", "binary"):
-            raise ValueError(f"Invalid protocol: {protocol}. Must be 'text' or 'binary'")
-        
-        self._protocol = protocol
+        normalized_protocol = self._validate_and_normalize_protocol(protocol)
+        self._protocol = normalized_protocol
         return self
+    
+    def _validate_and_normalize_protocol(self, protocol: str) -> str:
+        """
+        Validate and normalize protocol values to support both short and full protocol names.
+        
+        Args:
+            protocol: Protocol string to validate and normalize
+            
+        Returns:
+            Normalized protocol string
+            
+        Raises:
+            ValueError: If protocol is invalid
+        """
+        # Map full protocol names to SDK values
+        protocol_mapping = {
+            'v1.json.spacetimedb': 'text',
+            'v1.bsatn.spacetimedb': 'binary',
+            'v1.1.json.spacetimedb': 'text',
+            'v1.1.bsatn.spacetimedb': 'binary', 
+            'v1.1.1.json.spacetimedb': 'text',
+            'v1.1.1.bsatn.spacetimedb': 'binary',
+            'v1.1.2.json.spacetimedb': 'text',
+            'v1.1.2.bsatn.spacetimedb': 'binary',
+            'text': 'text',
+            'binary': 'binary'
+        }
+        
+        normalized = protocol_mapping.get(protocol)
+        if normalized is None:
+            valid_protocols = list(protocol_mapping.keys())
+            raise ValueError(
+                f"Invalid protocol: {protocol}. Must be one of: {valid_protocols}"
+            )
+        
+        return normalized
     
     def with_autogen_package(self, package: ModuleType) -> 'SpacetimeDBConnectionBuilder':
         """

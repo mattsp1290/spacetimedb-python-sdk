@@ -62,6 +62,7 @@ from .compression import (
     CompressionLevel,
     CompressionMetrics
 )
+from .large_message_handler import LargeMessageHandler
 
 
 class ConnectionState(Enum):
@@ -102,7 +103,7 @@ class ModernWebSocketClient:
         retry_policy: Optional[RetryPolicy] = None
     ):
         self.protocol = protocol
-        self.use_binary = protocol == BIN_PROTOCOL
+        self.use_binary = self._determine_frame_type(protocol)
         
         # Callbacks
         self._on_connect = on_connect
@@ -138,6 +139,9 @@ class ModernWebSocketClient:
         # Compression support
         self.compression_manager = CompressionManager(compression_config)
         self.negotiated_compression: Optional[CompressionType] = None
+        
+        # Large message handling
+        self.large_message_handler: Optional[LargeMessageHandler] = None
         
         # Reconnection logic
         self.auto_reconnect = auto_reconnect
@@ -183,6 +187,68 @@ class ModernWebSocketClient:
         self.logger.debug("ModernWebSocketClient initializing...")
         self.logger.info(f"WebSocket client initialized with compression: {self.compression_manager.get_compression_info()['capabilities']['supported_types']}")
         self.logger.debug("ModernWebSocketClient initialized.")
+    
+    def _determine_frame_type(self, protocol: str) -> bool:
+        """
+        Determine the correct WebSocket frame type based on negotiated protocol.
+        
+        This method ensures that:
+        - JSON protocols (v1.json.spacetimedb, text) use TEXT WebSocket frames
+        - Binary protocols (v1.bsatn.spacetimedb, binary) use BINARY WebSocket frames
+        
+        Args:
+            protocol: The negotiated protocol string
+            
+        Returns:
+            True if binary frames should be used, False for text frames
+        """
+        # Check for binary protocols (BSATN)
+        if 'bsatn' in protocol.lower() or protocol == 'binary':
+            return True
+        
+        # Check for text protocols (JSON)
+        elif 'json' in protocol.lower() or protocol == 'text':
+            return False
+        
+        # Fallback check against protocol constants
+        elif protocol == BIN_PROTOCOL:
+            return True
+        elif protocol == TEXT_PROTOCOL:
+            return False
+        
+        # Default to text frames for unknown protocols (safer fallback)
+        else:
+            self.logger.warning(f"Unknown protocol '{protocol}', defaulting to text frames")
+            return False
+    
+    def detect_expected_frame_type(self) -> str:
+        """
+        Detect expected WebSocket frame type from current protocol for debugging.
+        
+        Returns:
+            'BINARY' or 'TEXT' indicating expected frame type
+        """
+        return 'BINARY' if self.use_binary else 'TEXT'
+    
+    def send_heartbeat(self) -> None:
+        """
+        Send a heartbeat message using valid SpacetimeDB protocol.
+        
+        This replaces invalid custom heartbeat messages with a proper OneOffQuery
+        that serves as a connection keep-alive mechanism.
+        """
+        from .message_validator import create_heartbeat_message
+        from .messages.one_off_query import OneOffQueryMessage
+        import uuid
+        
+        # Create valid heartbeat using OneOffQuery
+        heartbeat = OneOffQueryMessage(
+            message_id=uuid.uuid4().bytes,
+            query_string="SELECT 1",
+        )
+        
+        self.logger.debug("Sending heartbeat via OneOffQuery")
+        self.send_message(heartbeat)
     
     def connect(
         self,
@@ -373,6 +439,11 @@ class ModernWebSocketClient:
             self.subscription_queries.clear()
             self.negotiated_compression = None
             
+            # Cleanup large message handler
+            if self.large_message_handler:
+                self.large_message_handler.shutdown()
+                self.large_message_handler = None
+            
             # Clear authentication state (but keep stored credentials for future use)
             # Note: We don't clear spacetimedb_identity and spacetimedb_token here
             # as they may be reused for reconnection
@@ -385,6 +456,14 @@ class ModernWebSocketClient:
             raise RuntimeError("Not connected to SpacetimeDB")
         
         try:
+            # Validate message conforms to SpacetimeDB protocol
+            from .message_validator import SpacetimeDBMessageValidator, MessageValidationError
+            try:
+                SpacetimeDBMessageValidator.validate_message(message)
+            except MessageValidationError as e:
+                self.logger.error(f"Message validation failed: {e}")
+                raise ValueError(f"Invalid SpacetimeDB message: {e}")
+            
             # Import serialization functions
             from .serialization import prepare_message_for_client
             from .protocol_handler import get_default_handler
@@ -418,16 +497,46 @@ class ModernWebSocketClient:
                     self.logger.warning(f"Compression failed, sending uncompressed: {e}")
                     # Continue with uncompressed data
             
-            # Send the message - explicitly specify binary frame for binary protocol
-            if self.use_binary:
-                # Import ABNF for opcode constants
-                from websocket import ABNF
-                self.ws.send(encoded_data, opcode=ABNF.OPCODE_BINARY)
-                self.logger.debug(f"Sent binary message: {type(message).__name__} ({len(encoded_data)} bytes, opcode=BINARY)")
+            # Send the message with large message handling support
+            message_type = type(message).__name__
+            
+            # Use large message handler if available and message is potentially large
+            if self.large_message_handler and len(encoded_data) > 1024:  # 1KB threshold for checking
+                self.large_message_handler.send_large_message(
+                    encoded_data, 
+                    message_type=message_type
+                )
             else:
-                # For JSON protocol, send as text frame (default behavior)
-                self.ws.send(encoded_data)
-                self.logger.debug(f"Sent text message: {type(message).__name__} ({len(encoded_data)} bytes)")
+                # Send normally with correct frame type based on negotiated protocol
+                expected_frame_type = self.detect_expected_frame_type()
+                
+                if self.use_binary:
+                    # Binary protocol → BINARY WebSocket frame
+                    from websocket import ABNF
+                    self.ws.send(encoded_data, opcode=ABNF.OPCODE_BINARY)
+                    self.logger.debug(
+                        f"Sent {message_type} as BINARY frame "
+                        f"(protocol: {self.protocol}, {len(encoded_data)} bytes)"
+                    )
+                else:
+                    # JSON protocol → TEXT WebSocket frame
+                    self.ws.send(encoded_data)  # Default opcode is TEXT
+                    self.logger.debug(
+                        f"Sent {message_type} as TEXT frame "
+                        f"(protocol: {self.protocol}, {len(encoded_data)} bytes)"
+                    )
+                
+                # Log protocol consistency check for debugging
+                if 'bsatn' in self.protocol.lower() and not self.use_binary:
+                    self.logger.warning(
+                        f"Protocol mismatch warning: protocol '{self.protocol}' suggests binary "
+                        f"but sending as {expected_frame_type} frame"
+                    )
+                elif 'json' in self.protocol.lower() and self.use_binary:
+                    self.logger.warning(
+                        f"Protocol mismatch warning: protocol '{self.protocol}' suggests text "
+                        f"but sending as {expected_frame_type} frame"
+                    )
             
         except Exception as e:
             self.logger.error(f"Failed to send message: {e}")
@@ -587,6 +696,20 @@ class ModernWebSocketClient:
             self.state = ConnectionState.CONNECTED
             self.reconnect_attempts = 0
             
+            # Initialize large message handler
+            if not self.large_message_handler:
+                def websocket_send_func(data):
+                    """Wrapper function for large message handler to send data via WebSocket."""
+                    if self.ws:
+                        if isinstance(data, str):
+                            self.ws.send(data)
+                        else:
+                            from websocket import ABNF
+                            self.ws.send(data, opcode=ABNF.OPCODE_BINARY)
+                
+                self.large_message_handler = LargeMessageHandler(websocket_send_func)
+                self.logger.debug("Large message handler initialized")
+            
             # Attempt compression negotiation from server response headers
             # In practice, WebSocket compression is usually handled at the WebSocket layer
             # but we can still track what we negotiated for application-level compression
@@ -625,18 +748,35 @@ class ModernWebSocketClient:
                     except:
                         pass  # Continue with normal processing
             
-            # Handle incoming message data
-            if isinstance(message, str):
-                message_data = message.encode('utf-8')
+            # Handle incoming message data with large message support
+            processed_message_data = None
+            
+            # Try large message handler first if available
+            if self.large_message_handler:
+                processed_message_data = self.large_message_handler.handle_incoming_message(message)
+                
+                # If processed_message_data is None, it means we're waiting for more chunks
+                if processed_message_data is None:
+                    self.logger.debug("Received partial chunked message, waiting for more chunks")
+                    return
+            
+            # Use processed data if available, otherwise use original message
+            if processed_message_data is not None:
+                message_data = processed_message_data
             else:
-                message_data = message
+                if isinstance(message, str):
+                    message_data = message.encode('utf-8')
+                else:
+                    message_data = message
             
             message_size = len(message_data)
             large_message_threshold = 50 * 1024  # 50KB
             
             # Log large message handling for debugging
             if message_size > large_message_threshold:
-                self.logger.info(f"Processing large message: {message_size} bytes")
+                self.logger.info(f"Processing large message: {message_size} bytes (reassembled from chunks)")
+            elif self.large_message_handler and message_size > 1024:
+                self.logger.debug(f"Processing message: {message_size} bytes")
                 
                 # Log InitialSubscription details if this is a large subscription
                 try:

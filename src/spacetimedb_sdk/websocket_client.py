@@ -16,7 +16,7 @@ import time
 import base64
 import logging
 import json
-from typing import Optional, Callable, Dict, List, Any
+from typing import Optional, Callable, Dict, List, Any, Union
 from enum import Enum
 import uuid
 
@@ -63,6 +63,87 @@ from .compression import (
     CompressionMetrics
 )
 from .large_message_handler import LargeMessageHandler
+
+
+class SubscriptionMetrics:
+    """Track subscription health and performance metrics."""
+    
+    def __init__(self):
+        self.subscriptions: Dict[str, Dict[str, Any]] = {}
+        self.logger = logging.getLogger(__name__)
+    
+    def record_subscription_data(self, table_name: str, size: int) -> None:
+        """Record data received for a subscription."""
+        if table_name not in self.subscriptions:
+            self.subscriptions[table_name] = {
+                'message_count': 0,
+                'total_bytes': 0,
+                'last_received': None,
+                'first_received': time.time(),
+                'error_count': 0
+            }
+        
+        stats = self.subscriptions[table_name]
+        stats['message_count'] += 1
+        stats['total_bytes'] += size
+        stats['last_received'] = time.time()
+    
+    def record_subscription_error(self, table_name: str, error: str) -> None:
+        """Record an error for a subscription."""
+        if table_name not in self.subscriptions:
+            self.subscriptions[table_name] = {
+                'message_count': 0,
+                'total_bytes': 0,
+                'last_received': None,
+                'first_received': time.time(),
+                'error_count': 0
+            }
+        
+        self.subscriptions[table_name]['error_count'] += 1
+        self.logger.warning(f"Subscription error for {table_name}: {error}")
+    
+    def get_subscription_health(self, table_name: str) -> Dict[str, Any]:
+        """Get health metrics for a subscription."""
+        if table_name not in self.subscriptions:
+            return {'status': 'no_data'}
+        
+        stats = self.subscriptions[table_name]
+        current_time = time.time()
+        time_since_last = current_time - (stats['last_received'] or current_time)
+        
+        # Determine health status
+        if time_since_last < 30:
+            status = 'healthy'
+        elif time_since_last < 60:
+            status = 'warning'
+        else:
+            status = 'stale'
+        
+        # Consider error rate
+        error_rate = stats['error_count'] / max(stats['message_count'], 1)
+        if error_rate > 0.1:  # More than 10% errors
+            status = 'unhealthy'
+        
+        return {
+            'status': status,
+            'message_count': stats['message_count'],
+            'total_bytes': stats['total_bytes'],
+            'seconds_since_last': time_since_last,
+            'error_count': stats['error_count'],
+            'error_rate': error_rate,
+            'uptime_seconds': current_time - stats['first_received']
+        }
+    
+    def get_all_subscription_health(self) -> Dict[str, Dict[str, Any]]:
+        """Get health metrics for all subscriptions."""
+        return {
+            table_name: self.get_subscription_health(table_name)
+            for table_name in self.subscriptions.keys()
+        }
+    
+    def reset_metrics(self) -> None:
+        """Reset all subscription metrics."""
+        self.subscriptions.clear()
 
 
 class ConnectionState(Enum):
@@ -170,6 +251,12 @@ class ModernWebSocketClient:
         self.pending_requests: Dict[int, threading.Event] = {}
         self.request_responses: Dict[int, Any] = {}
         
+        # Subscription state coordination for client integration
+        self.subscription_state_callbacks: List[Callable[[str, Any], None]] = []
+        
+        # Subscription health monitoring
+        self.subscription_metrics = SubscriptionMetrics()
+        
         # Thread safety
         self._lock = threading.RLock()
         
@@ -249,6 +336,126 @@ class ModernWebSocketClient:
         
         self.logger.debug("Sending heartbeat via OneOffQuery")
         self.send_message(heartbeat)
+    
+    def get_protocol_helper(self):
+        """
+        Get the protocol helper for client-side encoding compatibility.
+        
+        Returns:
+            Protocol encoder/decoder for use by client applications
+        """
+        return {
+            'encoder': self.encoder,
+            'decoder': self.decoder,
+            'protocol': self.protocol,
+            'use_binary': self.use_binary
+        }
+    
+    def should_use_sdk_encoding(self, message: Union[str, bytes, dict]) -> bool:
+        """
+        Determine if SDK should encode the message or pass it through.
+        
+        Args:
+            message: Message to check
+            
+        Returns:
+            True if SDK should handle encoding, False to pass through
+        """
+        # If message is already encoded (string/bytes), pass through
+        if isinstance(message, (str, bytes)):
+            return False
+            
+        # If message has raw binary data, let SDK handle
+        if isinstance(message, dict) and self._contains_binary_data(message):
+            return True
+            
+        # For simple JSON messages, either can handle - default to SDK
+        return True
+    
+    def _contains_binary_data(self, obj: Any) -> bool:
+        """Check if object contains binary data that needs special handling."""
+        if isinstance(obj, bytes):
+            return True
+        elif isinstance(obj, dict):
+            return any(self._contains_binary_data(value) for value in obj.values())
+        elif isinstance(obj, (list, tuple)):
+            return any(self._contains_binary_data(item) for item in obj)
+        return False
+    
+    def _send_client_encoded_message(self, message: Union[str, bytes]) -> None:
+        """
+        Send a pre-encoded message from client directly to WebSocket.
+        
+        Args:
+            message: Pre-encoded message data
+        """
+        self.logger.debug(f"Sending client-encoded message: {len(str(message))} bytes")
+        
+        # Send directly with appropriate frame type
+        if isinstance(message, str):
+            # Text message - send as TEXT frame
+            self.ws.send(message)
+            self.logger.debug("Sent client-encoded message as TEXT frame")
+        elif isinstance(message, bytes):
+            # Binary message - send as BINARY frame  
+            from websocket import ABNF
+            self.ws.send(message, opcode=ABNF.OPCODE_BINARY)
+            self.logger.debug("Sent client-encoded message as BINARY frame")
+        else:
+            raise ValueError(f"Client-encoded message must be str or bytes, got {type(message)}")
+    
+    def add_subscription_state_callback(self, callback: Callable[[str, Any], None]) -> None:
+        """
+        Add callback for subscription state changes.
+        
+        Allows client applications to track subscription lifecycle events.
+        
+        Args:
+            callback: Function to call with (event_type, data) when subscription state changes
+        """
+        if not callable(callback):
+            raise ValueError("Callback must be callable")
+        
+        self.subscription_state_callbacks.append(callback)
+        self.logger.debug(f"Added subscription state callback, total: {len(self.subscription_state_callbacks)}")
+    
+    def remove_subscription_state_callback(self, callback: Callable[[str, Any], None]) -> bool:
+        """
+        Remove a subscription state callback.
+        
+        Args:
+            callback: Callback to remove
+            
+        Returns:
+            True if callback was found and removed
+        """
+        try:
+            self.subscription_state_callbacks.remove(callback)
+            self.logger.debug(f"Removed subscription state callback, remaining: {len(self.subscription_state_callbacks)}")
+            return True
+        except ValueError:
+            return False
+    
+    async def _notify_subscription_state_change(self, event_type: str, data: Any) -> None:
+        """
+        Notify all registered callbacks of subscription state change.
+        
+        Args:
+            event_type: Type of subscription event
+            data: Event data
+        """
+        if not self.subscription_state_callbacks:
+            return
+        
+        for callback in self.subscription_state_callbacks:
+            try:
+                # Support both sync and async callbacks
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(event_type, data)
+                else:
+                    callback(event_type, data)
+            except Exception as e:
+                self.logger.error(f"Error in subscription state callback: {e}")
     
     def connect(
         self,
@@ -450,12 +657,22 @@ class ModernWebSocketClient:
             self.retry_with_auth = False
             self.logger.info("WebSocket client disconnected and cleaned up.")
     
-    def send_message(self, message: ClientMessage) -> None:
-        """Send a client message to the server with optional compression and proper serialization."""
+    def send_message(self, message: ClientMessage, use_client_encoding: bool = False) -> None:
+        """
+        Send a client message to the server with optional compression and proper serialization.
+        
+        Args:
+            message: Message to send
+            use_client_encoding: If True, skip SDK encoding and send message directly
+        """
         if self.state != ConnectionState.CONNECTED or not self.ws:
             raise RuntimeError("Not connected to SpacetimeDB")
         
         try:
+            # Handle client-encoded messages (bypass SDK encoding)
+            if use_client_encoding:
+                return self._send_client_encoded_message(message)
+            
             # Validate message conforms to SpacetimeDB protocol
             from .message_validator import SpacetimeDBMessageValidator, MessageValidationError
             try:
@@ -829,6 +1046,12 @@ class ModernWebSocketClient:
                     self.connection_id = server_message.connection_id
                 self.logger.info(f"Received identity: {self.identity}")
             
+            # Record subscription metrics for applicable message types
+            self._record_subscription_metrics(server_message, message_size)
+            
+            # Notify subscription state callbacks
+            self._notify_subscription_state_callbacks(server_message)
+            
             # Log successful processing of large messages
             if message_size > large_message_threshold:
                 self.logger.info(f"Successfully processed large message: {type(server_message).__name__}")
@@ -1161,4 +1384,111 @@ class ModernWebSocketClient:
                     "space_savings_percent": compression_info["metrics"]["space_savings_percent"]
                 }
             }
+        }
+    
+    def _record_subscription_metrics(self, server_message, message_size: int) -> None:
+        """Record subscription metrics for applicable message types."""
+        try:
+            # Handle different subscription-related message types
+            from .protocol import (
+                InitialSubscription, TransactionUpdate, TransactionUpdateLight,
+                SubscribeApplied, SubscribeMultiApplied
+            )
+            
+            if isinstance(server_message, InitialSubscription):
+                # Record metrics for initial subscription data
+                if hasattr(server_message, 'database_update') and server_message.database_update:
+                    tables = getattr(server_message.database_update, 'tables', [])
+                    for table in tables:
+                        table_name = getattr(table, 'table_name', 'unknown')
+                        self.subscription_metrics.record_subscription_data(table_name, message_size // len(tables))
+                        
+            elif isinstance(server_message, TransactionUpdate):
+                # Record metrics for transaction updates
+                if hasattr(server_message, 'status'):
+                    status = server_message.status
+                    if hasattr(status, 'tables'):
+                        tables = getattr(status, 'tables', [])
+                        for table in tables:
+                            table_name = getattr(table, 'table_name', 'unknown')
+                            self.subscription_metrics.record_subscription_data(table_name, message_size // len(tables))
+                            
+            elif isinstance(server_message, TransactionUpdateLight):
+                # Record metrics for light transaction updates
+                if hasattr(server_message, 'update') and hasattr(server_message.update, 'tables'):
+                    tables = getattr(server_message.update, 'tables', [])
+                    for table in tables:
+                        table_name = getattr(table, 'table_name', 'unknown')
+                        self.subscription_metrics.record_subscription_data(table_name, message_size // len(tables))
+                        
+            elif isinstance(server_message, (SubscribeApplied, SubscribeMultiApplied)):
+                # Record metrics for subscription applied messages
+                if hasattr(server_message, 'table_rows'):
+                    table_update = server_message.table_rows
+                    table_name = getattr(table_update, 'table_name', 'unknown')
+                    self.subscription_metrics.record_subscription_data(table_name, message_size)
+                    
+        except Exception as e:
+            # Don't let metrics recording break message processing
+            self.logger.debug(f"Failed to record subscription metrics: {e}")
+    
+    def _notify_subscription_state_callbacks(self, server_message) -> None:
+        """Notify subscription state callbacks of relevant updates."""
+        try:
+            from .protocol import (
+                InitialSubscription, TransactionUpdate, TransactionUpdateLight,
+                SubscribeApplied, SubscribeMultiApplied, SubscriptionError
+            )
+            
+            if isinstance(server_message, (InitialSubscription, TransactionUpdate, 
+                                         TransactionUpdateLight, SubscribeApplied, 
+                                         SubscribeMultiApplied)):
+                for callback in self.subscription_state_callbacks:
+                    try:
+                        callback('subscription_update', server_message)
+                    except Exception as e:
+                        self.logger.error(f"Subscription state callback error: {e}")
+                        
+            elif isinstance(server_message, SubscriptionError):
+                for callback in self.subscription_state_callbacks:
+                    try:
+                        callback('subscription_error', server_message)
+                    except Exception as e:
+                        self.logger.error(f"Subscription error callback error: {e}")
+                        
+        except Exception as e:
+            self.logger.debug(f"Failed to notify subscription state callbacks: {e}")
+    
+    def get_subscription_health(self, table_name: str) -> Dict[str, Any]:
+        """
+        Get health metrics for a specific subscription.
+        
+        Args:
+            table_name: Name of the table to get health metrics for
+            
+        Returns:
+            Dictionary containing health status, message counts, error rates, etc.
+        """
+        return self.subscription_metrics.get_subscription_health(table_name)
+    
+    def get_all_subscription_health(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get health metrics for all active subscriptions.
+        
+        Returns:
+            Dictionary mapping table names to their health metrics
+        """
+        return self.subscription_metrics.get_all_subscription_health()
+    
+    def reset_subscription_metrics(self) -> None:
+        """Reset all subscription health metrics."""
+        self.subscription_metrics.reset_metrics()
+    
+    def get_protocol_helper(self):
+        """Get the protocol helper for client-side encoding compatibility."""
+        return {
+            'encoder': self.encoder,
+            'decoder': self.decoder,
+            'use_binary': self.use_binary,
+            'protocol': self.protocol
         }

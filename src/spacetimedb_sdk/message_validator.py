@@ -102,9 +102,15 @@ class SpacetimeDBMessageValidator:
         return self._validate_dict_message(message)
     
     def _validate_dict_message(self, message: Dict[str, Any]) -> bool:
-        """Validate dictionary-based message format."""
+        """
+        Validate dictionary-based message format.
         
-        # Check for invalid 'type' field usage (common anti-pattern)
+        Supports both formats for SDK-client compatibility:
+        1. Direct variant format (preferred): {"CallReducer": {...}}
+        2. Legacy format (migration support): {"type": "CallReducer", "CallReducer": {...}}
+        """
+        
+        # Check for legacy 'type' field usage
         if 'type' in message:
             message_type = message['type']
             
@@ -116,14 +122,20 @@ class SpacetimeDBMessageValidator:
                     f"Valid message types: {self.VALID_MESSAGE_TYPES}"
                 )
             
-            # Block any 'type' field that's not a valid SpacetimeDB message type
-            if message_type not in self.VALID_MESSAGE_TYPES:
-                raise MessageValidationError(
-                    f"Invalid message type: '{message_type}'. "
-                    f"Valid types: {self.VALID_MESSAGE_TYPES}"
+            # For valid types in legacy format, log warning but don't fail
+            if message_type in self.VALID_MESSAGE_TYPES:
+                self.logger.warning(
+                    f"Message contains legacy 'type' field: {message_type}. "
+                    f"Consider using direct variant format: {{'{message_type}': {{...}}}}"
+                )
+            else:
+                # Unknown type field - this might be problematic
+                self.logger.warning(
+                    f"Message contains unknown 'type' field: '{message_type}'. "
+                    f"This field is not part of SpacetimeDB protocol specification."
                 )
         
-        # Validate message structure matches expected variants
+        # Validate message structure - check for direct variant format (preferred)
         valid_keys = set(message.keys())
         
         # Check if message contains any valid SpacetimeDB message type as top-level key
@@ -136,16 +148,27 @@ class SpacetimeDBMessageValidator:
         }
         has_enhanced_message_type = bool(valid_keys.intersection(enhanced_message_types))
         
-        if not has_valid_message_type and not has_enhanced_message_type:
-            # Special case: check if this looks like a raw object without message type wrapper
-            if all(key not in self.VALID_MESSAGE_TYPES for key in valid_keys):
-                raise MessageValidationError(
-                    f"Message must contain one of: {self.VALID_MESSAGE_TYPES}. "
-                    f"Got keys: {list(valid_keys)}"
-                )
+        # Accept message if it has valid message type structure
+        if has_valid_message_type or has_enhanced_message_type:
+            # Validate specific message type requirements
+            self._validate_message_type_requirements(message)
+            return True
         
-        # Validate specific message type requirements
-        self._validate_message_type_requirements(message)
+        # If no direct variants found, check if this might be a legacy format issue
+        if 'type' in message and message['type'] in self.VALID_MESSAGE_TYPES:
+            # This looks like a legacy format where type field exists but variant key is missing
+            raise MessageValidationError(
+                f"Message has legacy 'type' field but missing variant key. "
+                f"Expected: {{'{message['type']}': {{...}}}} "
+                f"Got: {list(valid_keys)}"
+            )
+        
+        # Final fallback - message doesn't match expected format
+        raise MessageValidationError(
+            f"Invalid SpacetimeDB message format. Message must contain one of: {self.VALID_MESSAGE_TYPES}. "
+            f"Got keys: {list(valid_keys)}. "
+            f"Use direct variant format: {{'MessageType': {{'field': 'value'}}}}"
+        )
         
         return True
     
@@ -180,6 +203,22 @@ class SpacetimeDBMessageValidator:
             missing = required_fields - set(call_reducer.keys())
             raise MessageValidationError(
                 f"CallReducer missing required fields: {missing}"
+            )
+        
+        # Validate field types
+        if not isinstance(call_reducer['reducer'], str):
+            raise MessageValidationError(
+                f"CallReducer 'reducer' must be a string, got {type(call_reducer['reducer']).__name__}"
+            )
+        
+        if not isinstance(call_reducer['args'], dict):
+            raise MessageValidationError(
+                f"CallReducer 'args' must be a dict, got {type(call_reducer['args']).__name__}"
+            )
+        
+        if not isinstance(call_reducer['request_id'], int):
+            raise MessageValidationError(
+                f"CallReducer 'request_id' must be an int, got {type(call_reducer['request_id']).__name__}"
             )
     
     def _validate_subscribe(self, subscribe: Dict[str, Any]) -> None:
@@ -272,7 +311,7 @@ class SpacetimeDBHeartbeatManager:
         heartbeat_message = {
             "OneOffQuery": {
                 "message_id": list(uuid.uuid4().bytes),
-                "query": "SELECT 1",  # Simple query as heartbeat
+                "query_string": "SELECT 1",  # Simple query as heartbeat
                 "timestamp": int(time.time())
             }
         }
@@ -291,7 +330,7 @@ class SpacetimeDBHeartbeatManager:
         test_message = {
             "OneOffQuery": {
                 "message_id": list(uuid.uuid4().bytes),
-                "query": "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
+                "query_string": "SELECT COUNT(*) FROM sqlite_master WHERE type='table'",
                 "purpose": "connection_test"
             }
         }

@@ -68,13 +68,19 @@ class LargeMessageHandler:
         self._cleanup_timer: Optional[threading.Timer] = None
         self._start_cleanup_timer()
     
-    def send_large_message(self, message_data: Union[str, bytes], message_type: str = "unknown") -> None:
+    def send_large_message(
+        self, 
+        message_data: Union[str, bytes], 
+        message_type: str = "unknown",
+        progress_callback: Optional[Callable[[str, int, int], None]] = None
+    ) -> None:
         """
         Send a potentially large message, chunking if necessary.
         
         Args:
             message_data: Message data to send
             message_type: Type of message for logging
+            progress_callback: Optional callback for progress updates (event, current, total)
         """
         if isinstance(message_data, str):
             data_bytes = message_data.encode('utf-8')
@@ -91,19 +97,35 @@ class LargeMessageHandler:
         if message_size <= self.MAX_FRAME_SIZE:
             # Small message - send normally
             self.logger.debug(f"Sending {message_type} message ({message_size} bytes) normally")
+            
+            if progress_callback:
+                progress_callback('start', message_size, 1)
+            
             self.websocket_send(message_data)
+            
+            if progress_callback:
+                progress_callback('complete', message_size, 1)
         else:
             # Large message - send in chunks
             self.logger.info(f"Sending large {message_type} message ({message_size} bytes) in chunks")
-            self._send_chunked_message(data_bytes, message_type)
+            self._send_chunked_message(data_bytes, message_type, progress_callback)
     
-    def _send_chunked_message(self, data: bytes, message_type: str) -> None:
-        """Send message in multiple chunks."""
+    def _send_chunked_message(
+        self, 
+        data: bytes, 
+        message_type: str, 
+        progress_callback: Optional[Callable[[str, int, int], None]] = None
+    ) -> None:
+        """Send message in multiple chunks with progress tracking."""
         total_size = len(data)
         chunk_count = math.ceil(total_size / self.MAX_FRAME_SIZE)
         chunk_id = str(uuid.uuid4())
         
         self.logger.debug(f"Chunking {message_type} message: {total_size} bytes into {chunk_count} chunks")
+        
+        # Notify start of chunked message
+        if progress_callback:
+            progress_callback('start', total_size, chunk_count)
         
         # Send header with metadata
         header = {
@@ -137,13 +159,26 @@ class LargeMessageHandler:
             chunk_json = json.dumps(chunk_message)
             self.logger.debug(f"Sending chunk {sequence + 1}/{chunk_count}: {len(chunk_data)} bytes")
             self.websocket_send(chunk_json)
+            
+            # Progress update for each chunk
+            if progress_callback:
+                progress_callback('chunk', sequence + 1, chunk_count)
+        
+        # Notify completion
+        if progress_callback:
+            progress_callback('complete', total_size, chunk_count)
     
-    def handle_incoming_message(self, message_data: Union[str, bytes]) -> Optional[bytes]:
+    def handle_incoming_message(
+        self, 
+        message_data: Union[str, bytes], 
+        progress_callback: Optional[Callable[[str, int, int], None]] = None
+    ) -> Optional[bytes]:
         """
         Handle incoming message, reassembling chunks if necessary.
         
         Args:
             message_data: Received message data
+            progress_callback: Optional callback for progress updates
             
         Returns:
             Complete message if ready, None if more chunks needed
@@ -163,17 +198,21 @@ class LargeMessageHandler:
         
         # Check for chunk header
         if "ChunkedMessage" in message:
-            return self._handle_chunk_header(message["ChunkedMessage"])
+            return self._handle_chunk_header(message["ChunkedMessage"], progress_callback)
         
         # Check for chunk data
         elif "MessageChunk" in message:
-            return self._handle_chunk_data(message["MessageChunk"])
+            return self._handle_chunk_data(message["MessageChunk"], progress_callback)
         
         # Regular message, return as-is
         else:
             return message_str.encode('utf-8')
     
-    def _handle_chunk_header(self, header: dict) -> None:
+    def _handle_chunk_header(
+        self, 
+        header: dict, 
+        progress_callback: Optional[Callable[[str, int, int], None]] = None
+    ) -> None:
         """Handle chunked message header."""
         chunk_id = header["chunk_id"]
         total_size = header["total_size"]
@@ -195,9 +234,18 @@ class LargeMessageHandler:
             self._incoming_chunks[chunk_id] = {}
         
         self.logger.debug(f"Started receiving chunked {message_type} message: {total_size} bytes in {chunk_count} chunks")
+        
+        # Notify start of chunked message reception
+        if progress_callback:
+            progress_callback('start', total_size, chunk_count)
+        
         return None
     
-    def _handle_chunk_data(self, chunk_data: dict) -> Optional[bytes]:
+    def _handle_chunk_data(
+        self, 
+        chunk_data: dict, 
+        progress_callback: Optional[Callable[[str, int, int], None]] = None
+    ) -> Optional[bytes]:
         """Handle individual chunk data."""
         chunk_id = chunk_data["chunk_id"]
         sequence = chunk_data["sequence"]
@@ -241,9 +289,19 @@ class LargeMessageHandler:
                 f"({metadata['received_chunks']}/{metadata['chunk_count']})"
             )
             
+            # Progress update for received chunk
+            if progress_callback:
+                progress_callback('chunk', metadata['received_chunks'], metadata['chunk_count'])
+            
             # Check if all chunks received
             if metadata["received_chunks"] == metadata["chunk_count"]:
-                return self._reassemble_message(chunk_id)
+                complete_message = self._reassemble_message(chunk_id)
+                
+                # Notify completion
+                if progress_callback:
+                    progress_callback('complete', metadata['total_size'], metadata['chunk_count'])
+                
+                return complete_message
             
             return None
     

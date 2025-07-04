@@ -183,6 +183,10 @@ class ModernWebSocketClient:
         compression_config: Optional[CompressionConfig] = None,
         retry_policy: Optional[RetryPolicy] = None
     ):
+        # Initialize logger first (needed by _determine_frame_type)
+        self.logger = logging.getLogger(f"{__name__}.ModernWebSocketClient_{id(self)}")
+        self.logger.setLevel(logging.DEBUG)
+        
         self.protocol = protocol
         self.use_binary = self._determine_frame_type(protocol)
         
@@ -260,9 +264,7 @@ class ModernWebSocketClient:
         # Thread safety
         self._lock = threading.RLock()
         
-        # Logging
-        self.logger = logging.getLogger(f"{__name__}.ModernWebSocketClient_{id(self)}")
-        self.logger.setLevel(logging.DEBUG)
+        # Logging setup (logger already initialized above)
         if not self.logger.handlers:
             ch = logging.StreamHandler()
             ch.setLevel(logging.DEBUG)
@@ -526,12 +528,9 @@ class ModernWebSocketClient:
             
             # Build WebSocket URL for v1.1.2 compatibility
             protocol_scheme = "wss" if self.ssl_enabled else "ws"
-            # Always use database_address in the URL path
-            url = f"{protocol_scheme}://{self.host}/v1/database/{self.database_address}/subscribe"
-            
-            # Add db_identity as query parameter if provided
-            if self.db_identity:
-                url += f"?db_identity={self.db_identity}"
+            # Use db_identity in URL path if provided, otherwise use database_address
+            db_identifier = self.db_identity if self.db_identity else self.database_address
+            url = f"{protocol_scheme}://{self.host}/v1/database/{db_identifier}/subscribe"
             
             # Store URL for error diagnostics
             self.connection_url = url
@@ -1056,29 +1055,11 @@ class ModernWebSocketClient:
             if message_size > large_message_threshold:
                 self.logger.info(f"Successfully processed large message: {type(server_message).__name__}")
             
-            # Forward to application with proper serialization for client compatibility
+            # Forward to application
             if self._on_message:
-                # Import serialization functions
-                from .serialization import serialize_for_client
-                from .protocol_handler import get_default_handler, format_for_client
-                
-                # Ensure the server message is properly serialized for client compatibility
-                # This is critical for fixing AttributeError issues where objects don't behave like dictionaries
-                try:
-                    # Use the protocol handler to format the message appropriately
-                    handler = get_default_handler()
-                    formatted_message = handler.format_message(server_message)
-                    self._on_message(formatted_message)
-                except Exception as format_error:
-                    # If formatting fails, fall back to basic serialization
-                    self.logger.warning(f"Message formatting failed, using basic serialization: {format_error}")
-                    try:
-                        serialized_message = serialize_for_client(server_message)
-                        self._on_message(serialized_message)
-                    except Exception as serialize_error:
-                        # Last resort: send original message and log the issue
-                        self.logger.error(f"Both formatting and serialization failed: {serialize_error}")
-                        self._on_message(server_message)
+                # Pass the raw server message object to the handler
+                # The modern client expects protocol objects, not serialized dicts
+                self._on_message(server_message)
                 
         except Exception as e:
             # Enhanced error logging for large message issues

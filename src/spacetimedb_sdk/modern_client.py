@@ -34,7 +34,7 @@ from .connection_diagnostics import ConnectionDiagnostics
 from .protocol import (
     TEXT_PROTOCOL, BIN_PROTOCOL,
     ServerMessage, Identity, ConnectionId,
-    IdentityToken, TransactionUpdate, TransactionUpdateLight,
+    IdentityToken, InitialSubscription, TransactionUpdate, TransactionUpdateLight,
     SubscribeApplied, UnsubscribeApplied, SubscriptionError,
     OneOffQueryResponse, CallReducerFlags,
     generate_request_id,
@@ -156,7 +156,10 @@ class ModernSpacetimeDBClient:
         **kwargs
     ) -> 'ModernSpacetimeDBClient':
         """
-        Simple connection method for easy client initialization.
+        Create and connect a new client instance in one step.
+        
+        Note: This is a class method that creates a NEW instance. If you need to
+        register callbacks before connecting, use the instance method `connect_instance()` instead.
         
         Args:
             host: SpacetimeDB host (e.g., "localhost:3000")
@@ -173,14 +176,20 @@ class ModernSpacetimeDBClient:
             **kwargs: Additional arguments passed to constructor
             
         Returns:
-            Connected SpacetimeDBClient instance
+            New connected SpacetimeDBClient instance
             
         Example:
+            # One-step connection with callbacks as parameters
             client = SpacetimeDBClient.connect(
                 host="localhost:3000",
                 database_address="my_module",
                 on_connect=lambda: print("Connected!")
             )
+            
+            # For registering callbacks before connecting, use:
+            client = ModernSpacetimeDBClient()
+            client.register_on_connect(lambda: print("Connected!"))
+            client.connect_instance("localhost:3000", "my_module")
         """
         # Create client instance with protocol
         client = cls(autogen_package=autogen_package, protocol=protocol, **kwargs)
@@ -540,6 +549,49 @@ class ModernSpacetimeDBClient:
         )
         self.connection_lifecycle_manager.register_listener(
             'identity_changed', self._handle_enhanced_identity_event
+        )
+    
+    def connect_instance(
+        self,
+        host: str,
+        database_address: str,
+        auth_token: Optional[str] = None,
+        ssl_enabled: bool = True,
+        db_identity: Optional[str] = None
+    ) -> None:
+        """
+        Connect this instance to SpacetimeDB, preserving any registered callbacks.
+        
+        This is the recommended method when you need to register callbacks before connecting.
+        Unlike the class method `connect()`, this method does not create a new instance.
+        
+        Args:
+            host: SpacetimeDB host (e.g., "localhost:3000")
+            database_address: Database name or address
+            auth_token: Optional authentication token
+            ssl_enabled: Whether to use SSL/TLS
+            db_identity: Optional database identity (UUID/hash)
+            
+        Example:
+            ```python
+            # Create client and register callbacks
+            client = ModernSpacetimeDBClient()
+            client.register_on_connect(lambda: print("Connected!"))
+            client.register_on_identity(lambda token, id, conn: print(f"Got identity: {id}"))
+            
+            # Connect using the instance method
+            client.connect_instance(
+                host="localhost:3000",
+                database_address="my_module"
+            )
+            ```
+        """
+        self._connect_internal(
+            auth_token=auth_token,
+            host=host,
+            database_address=database_address,
+            ssl_enabled=ssl_enabled,
+            db_identity=db_identity
         )
     
     def _connect_internal(
@@ -1213,6 +1265,8 @@ class ModernSpacetimeDBClient:
         """Handle a specific server message."""
         if isinstance(message, IdentityToken):
             self._handle_identity_token(message)
+        elif isinstance(message, InitialSubscription):
+            self._handle_initial_subscription(message)
         elif isinstance(message, TransactionUpdate):
             self._handle_transaction_update(message)
         elif isinstance(message, TransactionUpdateLight):
@@ -1255,6 +1309,17 @@ class ModernSpacetimeDBClient:
         
         self.logger.info(f"Received identity: {self.identity}")
         
+        # Emit IDENTITY_TOKEN event
+        identity_event = create_event(
+            EventType.IDENTITY_TOKEN,
+            {
+                'identity': message.identity,
+                'token': message.token,
+                'connection_id': message.connection_id
+            }
+        )
+        self._event_emitter.emit(identity_event)
+        
         for callback in self._on_identity:
             try:
                 callback(message.token, message.identity, message.connection_id)
@@ -1290,6 +1355,69 @@ class ModernSpacetimeDBClient:
             # This is expected behavior if the server doesn't have a client_connected reducer
             self.logger.debug(f"client_connected auto-trigger failed (reducer may not exist): {e}")
             # Note: We intentionally don't propagate this exception as it's optional functionality
+    
+    def _handle_initial_subscription(self, message: InitialSubscription) -> None:
+        """Handle initial subscription message containing database state."""
+        self.logger.info(f"Received InitialSubscription with request_id: {message.request_id}")
+        
+        # Emit DATABASE_UPDATE event for the database update
+        database_update_event = create_event(
+            EventType.DATABASE_UPDATE,
+            {
+                'request_id': message.request_id,
+                'database_update': message.database_update,
+                'total_host_execution_duration': message.total_host_execution_duration
+            }
+        )
+        self._event_emitter.emit(database_update_event)
+        
+        # Emit INITIAL_SUBSCRIPTION event
+        initial_sub_event = create_event(
+            EventType.INITIAL_SUBSCRIPTION,
+            {
+                'request_id': message.request_id,
+                'database_update': message.database_update,
+                'total_host_execution_duration': message.total_host_execution_duration
+            }
+        )
+        self._event_emitter.emit(initial_sub_event)
+        
+        # Process the database update to populate table caches
+        if message.database_update:
+            # Create event context for table callbacks
+            event_context = create_event_context(timestamp=time.time())
+            
+            for table_update in message.database_update.tables:
+                # Process through table interface
+                self._table_event_processor.process_table_update(
+                    table_update,
+                    event_context
+                )
+                
+                # Also process through legacy system for backward compatibility
+                self._process_table_update(table_update)
+                
+                # Emit table events for each table in the update
+                for table_row in getattr(table_update, 'inserts', []):
+                    table_event = create_table_event(
+                        table_name=table_update.table_name,
+                        operation='insert',
+                        row_data=table_row
+                    )
+                    self._event_emitter.emit(table_event)
+        
+        # Mark subscription as applied
+        with self._lock:
+            if message.request_id in self.active_subscriptions:
+                query_id = self.active_subscriptions[message.request_id]
+                self.logger.info(f"Initial subscription applied for QueryId: {query_id}")
+        
+        # Trigger subscription applied callbacks
+        for callback in self._on_subscription_applied:
+            try:
+                callback()
+            except Exception as e:
+                self.logger.error(f"Error in subscription applied callback: {e}")
     
     def _handle_transaction_update(self, message: TransactionUpdate) -> None:
         """Handle transaction update message."""

@@ -828,22 +828,60 @@ class ProtocolDecoder:
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"Failed to decode JSON message: {e}")
         
-        if "IdentityToken" in message:
+        # Check for legacy identity format first
+        if "__identity__" in message:
+            # Handle legacy format: {'__identity__': '0x...', '__token__': '...', '__connection_id__': ...}
+            identity_hex = message.get("__identity__", "0x00")
+            if identity_hex.startswith("0x"):
+                identity_hex = identity_hex[2:]
+            
+            token = message.get("__token__", "")
+            
+            # Handle connection_id which might be a number or hex string
+            conn_id_data = message.get("__connection_id__", 0)
+            if isinstance(conn_id_data, int):
+                # Convert integer to 16-byte representation
+                conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
+                connection_id = ConnectionId(data=conn_id_bytes)
+            elif isinstance(conn_id_data, str):
+                if conn_id_data.startswith("0x"):
+                    conn_id_data = conn_id_data[2:]
+                connection_id = ConnectionId.from_hex(conn_id_data)
+            else:
+                connection_id = ConnectionId(data=b"\x00" * 16)
+            
+            return IdentityToken(
+                identity=Identity.from_hex(identity_hex),
+                token=token,
+                connection_id=connection_id
+            )
+        
+        elif "IdentityToken" in message:
             token_data = message["IdentityToken"]
             
             # Enhanced identity/connection_id parsing for latest SpacetimeDB format
             identity_data = token_data.get("identity")
             if isinstance(identity_data, dict):
+                # Check for legacy nested format: {"identity": {"__identity__": "0x..."}}
+                if "__identity__" in identity_data:
+                    identity_hex = identity_data["__identity__"]
+                    if identity_hex.startswith("0x"):
+                        identity_hex = identity_hex[2:]
+                    identity = Identity.from_hex(identity_hex)
                 # Handle nested identity format: {"identity": {"data": [...]}}
-                if "data" in identity_data:
+                elif "data" in identity_data:
                     identity_bytes = bytes(identity_data["data"]) if isinstance(identity_data["data"], list) else identity_data["data"]
+                    identity = Identity(data=identity_bytes)
                 else:
                     # Try to extract bytes from dict representation
                     identity_bytes = str(identity_data).encode('utf-8')
-                identity = Identity(data=identity_bytes)
+                    identity = Identity(data=identity_bytes)
             elif isinstance(identity_data, str):
                 # Handle hex string format
-                identity = Identity.from_hex(identity_data)
+                if identity_data.startswith("0x"):
+                    identity = Identity.from_hex(identity_data[2:])
+                else:
+                    identity = Identity.from_hex(identity_data)
             elif isinstance(identity_data, list):
                 # Handle byte array format
                 identity = Identity(data=bytes(identity_data))
@@ -853,15 +891,31 @@ class ProtocolDecoder:
             
             connection_id_data = token_data.get("connection_id")
             if isinstance(connection_id_data, dict):
+                # Check for legacy nested format: {"connection_id": {"__connection_id__": ...}}
+                if "__connection_id__" in connection_id_data:
+                    conn_id_inner = connection_id_data["__connection_id__"]
+                    if isinstance(conn_id_inner, int):
+                        conn_id_bytes = conn_id_inner.to_bytes(16, byteorder='big')
+                        connection_id = ConnectionId(data=conn_id_bytes)
+                    elif isinstance(conn_id_inner, str):
+                        if conn_id_inner.startswith("0x"):
+                            conn_id_inner = conn_id_inner[2:]
+                        connection_id = ConnectionId.from_hex(conn_id_inner)
+                    else:
+                        connection_id = ConnectionId(data=b"\x00" * 16)
                 # Handle nested connection_id format: {"connection_id": {"data": [...]}}
-                if "data" in connection_id_data:
+                elif "data" in connection_id_data:
                     conn_id_bytes = bytes(connection_id_data["data"]) if isinstance(connection_id_data["data"], list) else connection_id_data["data"]
+                    connection_id = ConnectionId(data=conn_id_bytes)
                 else:
                     conn_id_bytes = str(connection_id_data).encode('utf-8')
-                connection_id = ConnectionId(data=conn_id_bytes)
+                    connection_id = ConnectionId(data=conn_id_bytes)
             elif isinstance(connection_id_data, str):
                 # Handle hex string format
-                connection_id = ConnectionId.from_hex(connection_id_data)
+                if connection_id_data.startswith("0x"):
+                    connection_id = ConnectionId.from_hex(connection_id_data[2:])
+                else:
+                    connection_id = ConnectionId.from_hex(connection_id_data)
             elif isinstance(connection_id_data, list):
                 # Handle byte array format
                 connection_id = ConnectionId(data=bytes(connection_id_data))
@@ -897,6 +951,8 @@ class ProtocolDecoder:
                 else:
                     caller_identity = Identity(data=str(caller_identity_data).encode('utf-8'))
             elif isinstance(caller_identity_data, str):
+                if caller_identity_data.startswith("0x"):
+                    caller_identity_data = caller_identity_data[2:]
                 caller_identity = Identity.from_hex(caller_identity_data) if caller_identity_data != "00" else Identity(data=b"\x00")
             else:
                 caller_identity = Identity(data=b"\x00")
@@ -908,6 +964,8 @@ class ProtocolDecoder:
                 else:
                     caller_connection_id = ConnectionId(data=str(caller_conn_id_data).encode('utf-8'))
             elif isinstance(caller_conn_id_data, str):
+                if caller_conn_id_data.startswith("0x"):
+                    caller_conn_id_data = caller_conn_id_data[2:]
                 caller_connection_id = ConnectionId.from_hex(caller_conn_id_data) if caller_conn_id_data != "00" else ConnectionId(data=b"\x00")
             else:
                 caller_connection_id = ConnectionId(data=b"\x00")
@@ -965,6 +1023,58 @@ class ProtocolDecoder:
                 error=error_data.get("error", "Unknown subscription error")
             )
             
+        # Check for other legacy message formats
+        elif "__initial_subscription__" in message:
+            # Handle legacy initial subscription format
+            sub_data = message.get("__initial_subscription__", {})
+            database_update = DatabaseUpdate(tables=[])
+            
+            # Parse legacy database update if present
+            if "__database_update__" in sub_data:
+                db_update = sub_data["__database_update__"]
+                if isinstance(db_update, dict) and "__tables__" in db_update:
+                    # Parse legacy table format - simplified for now
+                    database_update = DatabaseUpdate(tables=[])
+            
+            return InitialSubscription(
+                database_update=database_update,
+                request_id=sub_data.get("__request_id__", 0),
+                total_host_execution_duration=TimeDuration(nanos=sub_data.get("__duration_nanos__", 0))
+            )
+            
+        elif "__transaction_update__" in message:
+            # Handle legacy transaction update format
+            tx_data = message.get("__transaction_update__", {})
+            
+            # Parse legacy identity format
+            caller_identity_hex = tx_data.get("__caller_identity__", "00")
+            if caller_identity_hex.startswith("0x"):
+                caller_identity_hex = caller_identity_hex[2:]
+            caller_identity = Identity.from_hex(caller_identity_hex)
+            
+            # Parse legacy connection id
+            caller_conn_id = tx_data.get("__caller_connection_id__", 0)
+            if isinstance(caller_conn_id, int):
+                conn_id_bytes = caller_conn_id.to_bytes(16, byteorder='big')
+                caller_connection_id = ConnectionId(data=conn_id_bytes)
+            else:
+                caller_connection_id = ConnectionId(data=b"\x00" * 16)
+            
+            return TransactionUpdate(
+                status=tx_data.get("__status__", "Unknown"),
+                timestamp=Timestamp(nanos_since_epoch=tx_data.get("__timestamp__", 0)),
+                caller_identity=caller_identity,
+                caller_connection_id=caller_connection_id,
+                reducer_call=ReducerCallInfo(
+                    reducer_name=tx_data.get("__reducer_name__", ""),
+                    reducer_id=tx_data.get("__reducer_id__", 0),
+                    args=b"",
+                    request_id=tx_data.get("__request_id__", 0)
+                ),
+                energy_quanta_used=EnergyQuanta(quanta=tx_data.get("__energy_used__", 0)),
+                total_host_execution_duration=TimeDuration(nanos=tx_data.get("__duration_nanos__", 0))
+            )
+            
         # Add more message type parsing as needed
         else:
             # Provide more detailed error information for unknown message types
@@ -978,13 +1088,24 @@ class ProtocolDecoder:
                 "OneOffQueryResponse"
             ]
             
+            # Check for legacy format keys
+            legacy_keys = [
+                "__identity__", "__initial_subscription__", "__transaction_update__",
+                "__subscription_error__", "__subscribe_applied__"
+            ]
+            
             # Log the unknown message for debugging
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Unknown message type in data: {message_keys}")
             
             # Provide a helpful error message suggesting possible fixes
-            if any(key in str(message_keys).lower() for key in [name.lower() for name in known_types]):
+            if any(key in message_keys for key in legacy_keys):
+                raise ValueError(
+                    f"Partially supported legacy message format: {message_keys}. "
+                    f"Please update your SpacetimeDB server to use the standard protocol format."
+                )
+            elif any(key in str(message_keys).lower() for key in [name.lower() for name in known_types]):
                 raise ValueError(
                     f"Unknown server message format: {message_keys}. "
                     f"This might be a known message type with an unexpected format. "

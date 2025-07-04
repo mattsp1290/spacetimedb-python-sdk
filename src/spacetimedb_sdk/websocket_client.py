@@ -198,9 +198,8 @@ class ModernWebSocketClient:
         compression_config: Optional[CompressionConfig] = None,
         retry_policy: Optional[RetryPolicy] = None
     ):
-        # Initialize logger first (needed by _determine_frame_type)
-        self.logger = logging.getLogger(f"{__name__}.ModernWebSocketClient_{id(self)}")
-        self.logger.setLevel(logging.DEBUG)
+        # Use the module-level logger
+        self.logger = logger
         
         self.protocol = protocol
         self.use_binary = self._determine_frame_type(protocol)

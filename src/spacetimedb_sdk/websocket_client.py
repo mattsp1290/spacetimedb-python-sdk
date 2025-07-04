@@ -565,10 +565,17 @@ class ModernWebSocketClient:
             
             # Validate and sanitize host
             try:
-                sanitized_host = sanitize_url(f"{protocol_scheme}://{self.host}", "host")
                 import urllib.parse
-                parsed_host = urllib.parse.urlparse(sanitized_host)
-                validated_host = parsed_host.netloc
+                parsed_host = urllib.parse.urlparse(f"{protocol_scheme}://{self.host}")
+                host = parsed_host.hostname
+                port = parsed_host.port
+                
+                # Validate the extracted host
+                if not host or not get_security_manager().validate_hostname(host):
+                    raise ValidationError(f"Invalid host: {host}")
+                
+                # Reconstruct the validated host with port if available
+                validated_host = f"{host}:{port}" if port else host
             except ValidationError as e:
                 raise WebSocketHandshakeError(f"Invalid host: {e}")
             

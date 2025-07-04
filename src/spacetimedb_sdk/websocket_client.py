@@ -977,17 +977,13 @@ class ModernWebSocketClient:
             raise RuntimeError("Not connected to SpacetimeDB")
         
         # Validate SQL query for security
-        try:
-            # Validate the query for SQL injection and other security issues
-            query_result = validate_sql_query(query, "query_string")
-            if not query_result.is_valid:
-                raise RuntimeError(f"Invalid SQL query: {'; '.join(str(e) for e in query_result.errors)}")
-            
-            # Use sanitized query
-            sanitized_query = query_result.sanitized_value
-            
-        except ValidationError as e:
-            raise RuntimeError(f"SQL query validation failed: {e}")
+        # Validate the query for SQL injection and other security issues
+        query_result = validate_sql_query(query, "query_string")
+        if not query_result.is_valid:
+            raise RuntimeError(f"Invalid SQL query: {'; '.join(str(e) for e in query_result.errors)}")
+        
+        # Use sanitized query
+        sanitized_query = query_result.sanitized_value
         
         # Use legacy OneOffQuery for backward compatibility
         message_id = uuid.uuid4().bytes

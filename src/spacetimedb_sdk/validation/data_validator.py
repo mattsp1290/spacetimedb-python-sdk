@@ -37,7 +37,6 @@ class JSONValidator(Validator):
     def __init__(self, config: Optional[ValidationConfig] = None):
         super().__init__(config)
         self._max_parse_depth = 0
-        self._current_depth = 0
     
     def validate(self, value: Any, field: Optional[str] = None) -> ValidationResult:
         """
@@ -91,15 +90,32 @@ class JSONValidator(Validator):
                 value=json_str
             ))
         
+        # Pre-scan for depth before parsing to prevent memory exhaustion
+        try:
+            pre_scan_depth = self._pre_scan_depth(json_str)
+            if pre_scan_depth > self.config.max_json_depth:
+                errors.append(JSONValidationError(
+                    f"JSON nesting too deep: {pre_scan_depth} > {self.config.max_json_depth}",
+                    field=field,
+                    value=json_str
+                ))
+                return ValidationResult(is_valid=False, errors=errors)
+        except Exception as e:
+            errors.append(JSONValidationError(
+                f"JSON depth pre-scan failed: {e}",
+                field=field,
+                value=json_str
+            ))
+            return ValidationResult(is_valid=False, errors=errors)
+        
         # Try to parse JSON
         try:
-            # Use custom decoder to track depth
+            # Reset depth tracking
             self._max_parse_depth = 0
-            self._current_depth = 0
             
             parsed_data = json.loads(json_str, object_hook=self._depth_hook)
             
-            # Check depth limit
+            # Final depth check (backup validation)
             if self._max_parse_depth > self.config.max_json_depth:
                 errors.append(JSONValidationError(
                     f"JSON nesting too deep: {self._max_parse_depth} > {self.config.max_json_depth}",
@@ -171,15 +187,73 @@ class JSONValidator(Validator):
     
     def _depth_hook(self, obj: Dict[str, Any]) -> Dict[str, Any]:
         """Object hook to track parsing depth."""
-        self._current_depth += 1
-        self._max_parse_depth = max(self._max_parse_depth, self._current_depth)
+        # Calculate depth by inspecting the object structure
+        depth = self._calculate_depth(obj)
+        self._max_parse_depth = max(self._max_parse_depth, depth)
         
         # Check depth limit during parsing
-        if self._current_depth > self.config.max_json_depth:
-            raise JSONValidationError(f"JSON nesting too deep: {self._current_depth}")
+        if depth > self.config.max_json_depth:
+            raise JSONValidationError(f"JSON nesting too deep: {depth}")
         
-        self._current_depth -= 1
         return obj
+    
+    def _calculate_depth(self, obj: Any, current_depth: int = 1) -> int:
+        """Calculate the actual depth of a nested object/array structure."""
+        if not isinstance(obj, (dict, list)):
+            return current_depth
+        
+        max_depth = current_depth
+        
+        if isinstance(obj, dict):
+            for value in obj.values():
+                if isinstance(value, (dict, list)):
+                    depth = self._calculate_depth(value, current_depth + 1)
+                    max_depth = max(max_depth, depth)
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    depth = self._calculate_depth(item, current_depth + 1)
+                    max_depth = max(max_depth, depth)
+        
+        return max_depth
+    
+    def _pre_scan_depth(self, json_str: str) -> int:
+        """
+        Pre-scan JSON string to detect excessive nesting before parsing.
+        This prevents memory exhaustion from deeply nested structures.
+        """
+        max_depth = 0
+        current_depth = 0
+        in_string = False
+        escaped = False
+        
+        for i, char in enumerate(json_str):
+            if escaped:
+                escaped = False
+                continue
+            
+            if char == '\\' and in_string:
+                escaped = True
+                continue
+            
+            if char == '"' and not escaped:
+                in_string = not in_string
+                continue
+            
+            if in_string:
+                continue
+            
+            if char in '{[':
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+                
+                # Fail fast if depth exceeds limit
+                if current_depth > self.config.max_json_depth:
+                    return current_depth
+            elif char in '}]':
+                current_depth = max(0, current_depth - 1)
+        
+        return max_depth
     
     def _validate_data_structure(self, data: Any, field: Optional[str], depth: int = 0):
         """Recursively validate data structure."""

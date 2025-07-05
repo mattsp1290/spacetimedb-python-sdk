@@ -36,7 +36,6 @@ class JSONValidator(Validator):
     
     def __init__(self, config: Optional[ValidationConfig] = None):
         super().__init__(config)
-        self._max_parse_depth = 0
     
     def validate(self, value: Any, field: Optional[str] = None) -> ValidationResult:
         """
@@ -187,6 +186,7 @@ class JSONValidator(Validator):
             warnings=warnings
         )
     
+
     def _depth_hook(self, obj: Dict[str, Any]) -> Dict[str, Any]:
         """Object hook to track parsing depth safely."""
         # Simple counter to track nested object processing
@@ -238,7 +238,8 @@ class JSONValidator(Validator):
                     max_depth = max(max_depth, depth)
         
         return max_depth
-    
+
+      
     def _calculate_depth_safe(self, obj: Any, max_depth: int = 100, current_depth: int = 1) -> int:
         """
         Calculate depth with strict recursion limits to prevent stack overflow.
@@ -265,6 +266,7 @@ class JSONValidator(Validator):
                     calculated_max_depth = max(calculated_max_depth, depth)
         
         return calculated_max_depth
+    
     
     def _pre_scan_depth(self, json_str: str) -> int:
         """

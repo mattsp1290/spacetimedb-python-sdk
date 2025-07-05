@@ -199,7 +199,7 @@ class ModernWebSocketClient:
         retry_policy: Optional[RetryPolicy] = None
     ):
         # Use the module-level logger
-        self.logger = logger
+        self.logger = logging.getLogger(__name__)
         
         self.protocol = protocol
         self.use_binary = self._determine_frame_type(protocol)

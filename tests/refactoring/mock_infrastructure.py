@@ -19,7 +19,7 @@ from unittest.mock import Mock, MagicMock
 from spacetimedb_sdk.protocol import (
     Identity, ConnectionId, QueryId,
     IdentityToken, Subscribe, Unsubscribe, OneOffQuery,
-    TransactionUpdate, SubscriptionError, SubscriptionApplied,
+    TransactionUpdate, SubscriptionError, SubscribeApplied,
     CallReducer, CallReducerFlags
 )
 

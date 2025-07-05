@@ -228,7 +228,17 @@ class ModernWebSocketClient:
         if self.expect_binary_frames:
             self.ws.send(data, websocket.ABNF.OPCODE_BINARY)
         else:
-            self.ws.send(data.decode('utf-8') if isinstance(data, bytes) else data, websocket.ABNF.OPCODE_TEXT)
+            if isinstance(data, bytes):
+                try:
+                    # Try to decode as UTF-8 for text frames
+                    text_data = data.decode('utf-8')
+                    self.ws.send(text_data, websocket.ABNF.OPCODE_TEXT)
+                except UnicodeDecodeError:
+                    # If decoding fails, send as binary even if text frames are expected
+                    self.logger.warning("Cannot decode bytes as UTF-8, sending as binary frame")
+                    self.ws.send(data, websocket.ABNF.OPCODE_BINARY)
+            else:
+                self.ws.send(data, websocket.ABNF.OPCODE_TEXT)
     
     # Subscription operations
     def subscribe_single(self, query):
@@ -240,8 +250,8 @@ class ModernWebSocketClient:
         if not query_result.is_valid:
             raise ValidationError(f"Invalid query: {'; '.join(str(e) for e in query_result.errors)}")
         
-        query_id = self.subscription_manager.subscribe_single(query)
-        self.send_message(Subscribe(queries=[query]))
+        query_id = self.subscription_manager.subscribe_single(query_result.sanitized_value)
+        self.send_message(Subscribe(queries=[query_result.sanitized_value]))
         return query_id
     
     def subscribe_multi(self, queries):
@@ -249,13 +259,15 @@ class ModernWebSocketClient:
         if self.state != ConnectionState.CONNECTED:
             raise SpacetimeDBConnectionError("Not connected")
         
+        sanitized_queries = []
         for q in queries:
             query_result = validate_sql_query(q, "subscription_query")
             if not query_result.is_valid:
                 raise ValidationError(f"Invalid query: {'; '.join(str(e) for e in query_result.errors)}")
+            sanitized_queries.append(query_result.sanitized_value)
         
-        query_id = self.subscription_manager.subscribe_multi(queries)
-        self.send_message(Subscribe(queries=queries))
+        query_id = self.subscription_manager.subscribe_multi(sanitized_queries)
+        self.send_message(Subscribe(queries=sanitized_queries))
         return query_id
     
     def unsubscribe(self, query_id):

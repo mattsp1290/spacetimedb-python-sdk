@@ -12,6 +12,9 @@ dependencies = [
     "websocket-client",
     "configparser",
     "brotli",
+    "keyring>=23.0.0",
+    "cryptography>=3.4.0",
+    "PyJWT>=2.4.0",
 ]
 version = "0.7.0"
 readme = "README.md"
@@ -38,4 +41,9 @@ compression = [
 json-api = [
     "requests>=2.31.0",      # Sync HTTP client (simplest)
     "aiohttp>=3.8.0",        # Async HTTP client (recommended)
+]
+secure-storage = [
+    "keyring>=23.0.0",       # System keyring for secure credential storage
+    "cryptography>=3.4.0",   # Encryption for fallback file storage
+    "PyJWT>=2.4.0",          # JWT token handling and validation
 ]

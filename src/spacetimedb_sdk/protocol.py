@@ -44,6 +44,14 @@ from .messages.one_off_query import (
     OneOffQueryMessage
 )
 
+# Import validation for secure JSON parsing
+try:
+    from .validation import validate_json_data, ValidationError
+except ImportError:
+    # Fallback if validation module is not available
+    validate_json_data = None
+    ValidationError = Exception
+
 # Protocol constants
 TEXT_PROTOCOL = "v1.json.spacetimedb"
 BIN_PROTOCOL = "v1.bsatn.spacetimedb"
@@ -824,7 +832,22 @@ class ProtocolDecoder:
     def _decode_json(self, data: bytes) -> ServerMessage:
         """Decode message from JSON with enhanced compatibility for latest SpacetimeDB."""
         try:
-            message = json.loads(data.decode('utf-8'))
+            # Decode bytes to string
+            json_str = data.decode('utf-8')
+            
+            # Validate JSON for security if validation is available
+            if validate_json_data:
+                try:
+                    json_result = validate_json_data(json_str, "protocol_message")
+                    if not json_result.is_valid:
+                        raise ValueError(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
+                    message = json_result.sanitized_value
+                except ValidationError as e:
+                    raise ValueError(f"JSON validation failed: {e}")
+            else:
+                # Fallback to direct parsing if validation not available
+                message = json.loads(json_str)
+                
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"Failed to decode JSON message: {e}")
         

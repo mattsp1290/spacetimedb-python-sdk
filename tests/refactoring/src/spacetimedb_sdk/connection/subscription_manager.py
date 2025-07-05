@@ -15,6 +15,7 @@ Key Features:
 - Memory-bounded subscription tracking
 """
 
+import hashlib
 import logging
 import threading
 import time
@@ -663,8 +664,12 @@ class SubscriptionManager:
             self.logger.info(f"Cleared {len(subscription_ids)} subscriptions")
     
     def _hash_queries(self, queries: List[str]) -> str:
-        """Create a hash for a list of queries."""
-        return str(hash(tuple(sorted(queries))))
+        """Create a deterministic hash for a list of queries."""
+        # Sort queries to ensure deterministic ordering
+        sorted_queries = sorted(queries)
+        # Create a deterministic hash using SHA256
+        query_string = "\n".join(sorted_queries).encode('utf-8')
+        return hashlib.sha256(query_string).hexdigest()
     
     def _notify_state_change(self, query_id: QueryId, old_state: SubscriptionState, new_state: SubscriptionState) -> None:
         """Notify all callbacks of a state change."""

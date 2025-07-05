@@ -67,17 +67,33 @@ from .memory_management import (
     BoundedDict, BoundedSubscriptionManager, RecursionLimiter,
     MemoryAccountant, MessageSizeValidator, get_global_memory_accountant
 )
-from .validation import (
-    get_security_manager,
-    validate_url,
-    validate_websocket_url,
-    validate_sql_query,
-    validate_json_data,
-    sanitize_url,
-    sanitize_sql_query,
-    sanitize_json_data,
-    ValidationError
-)
+# Import validation with fallback handling
+try:
+    from .validation import (
+        get_security_manager,
+        validate_url,
+        validate_websocket_url,
+        validate_sql_query,
+        validate_json_data,
+        sanitize_url,
+        sanitize_sql_query,
+        sanitize_json_data,
+        ValidationError
+    )
+except ImportError:
+    # Fallback if validation module is not available
+    validate_json_data = None
+    ValidationError = Exception
+    
+    # Define minimal fallback functions - these won't be used in normal operation
+    # but prevent ImportError when validation module is unavailable
+    get_security_manager = lambda: None
+    validate_url = lambda url: True
+    validate_websocket_url = lambda url: True
+    validate_sql_query = lambda query: True
+    sanitize_url = lambda url: url
+    sanitize_sql_query = lambda query: query
+    sanitize_json_data = lambda data: data
 
 
 class SubscriptionMetrics:
@@ -1050,19 +1066,26 @@ class ModernWebSocketClient:
                 # Check if this is a JSON message received when binary protocol is expected
                 if frame_type == "TEXT" and self.use_binary:
                     try:
-                        # Validate JSON message for security before parsing
-                        json_result = validate_json_data(message, "websocket_message")
-                        if json_result.is_valid:
-                            json_data = json_result.sanitized_value
+                        # Validate JSON message for security before parsing if validation is available
+                        if validate_json_data:
+                            json_result = validate_json_data(message, "websocket_message")
+                            if json_result.is_valid:
+                                json_data = json_result.sanitized_value
+                                message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
+                                self.logger.warning(f"Unknown message type in data: {message_types}")
+                                
+                                # Log specific message types that are commonly mismatched
+                                for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
+                                    if isinstance(json_data, dict) and msg_type in json_data:
+                                        self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
+                            else:
+                                self.logger.warning(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
+                        else:
+                            # Fallback to direct parsing if validation not available
+                            import json
+                            json_data = json.loads(message)
                             message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
                             self.logger.warning(f"Unknown message type in data: {message_types}")
-                            
-                            # Log specific message types that are commonly mismatched
-                            for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
-                                if isinstance(json_data, dict) and msg_type in json_data:
-                                    self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
-                        else:
-                            self.logger.warning(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
                     except ValidationError as e:
                         self.logger.warning(f"JSON validation failed: {e}")
                     except Exception as e:

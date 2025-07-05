@@ -844,14 +844,24 @@ class ProtocolDecoder:
                 conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
                 connection_id = ConnectionId(data=conn_id_bytes)
             elif isinstance(conn_id_data, str):
-                if conn_id_data.startswith("0x"):
-                    conn_id_data = conn_id_data[2:]
-                connection_id = ConnectionId.from_hex(conn_id_data)
+                try:
+                    if conn_id_data.startswith("0x"):
+                        conn_id_data = conn_id_data[2:]
+                    connection_id = ConnectionId.from_hex(conn_id_data)
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    connection_id = ConnectionId(data=b"\x00" * 16)
             else:
                 connection_id = ConnectionId(data=b"\x00" * 16)
             
+            try:
+                identity = Identity.from_hex(identity_hex) if identity_hex else Identity(data=b"\x00")
+            except ValueError:
+                # Fallback for invalid hex strings
+                identity = Identity(data=b"\x00")
+            
             return IdentityToken(
-                identity=Identity.from_hex(identity_hex),
+                identity=identity,
                 token=token,
                 connection_id=connection_id
             )
@@ -865,9 +875,13 @@ class ProtocolDecoder:
                 # Check for legacy nested format: {"identity": {"__identity__": "0x..."}}
                 if "__identity__" in identity_data:
                     identity_hex = identity_data["__identity__"]
-                    if identity_hex.startswith("0x"):
-                        identity_hex = identity_hex[2:]
-                    identity = Identity.from_hex(identity_hex)
+                    try:
+                        if identity_hex.startswith("0x"):
+                            identity_hex = identity_hex[2:]
+                        identity = Identity.from_hex(identity_hex)
+                    except ValueError:
+                        # Fallback for invalid hex strings
+                        identity = Identity(data=b"\x00")
                 # Handle nested identity format: {"identity": {"data": [...]}}
                 elif "data" in identity_data:
                     identity_bytes = bytes(identity_data["data"]) if isinstance(identity_data["data"], list) else identity_data["data"]
@@ -878,10 +892,14 @@ class ProtocolDecoder:
                     identity = Identity(data=identity_bytes)
             elif isinstance(identity_data, str):
                 # Handle hex string format
-                if identity_data.startswith("0x"):
-                    identity = Identity.from_hex(identity_data[2:])
-                else:
-                    identity = Identity.from_hex(identity_data)
+                try:
+                    if identity_data.startswith("0x"):
+                        identity = Identity.from_hex(identity_data[2:])
+                    else:
+                        identity = Identity.from_hex(identity_data)
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    identity = Identity(data=str(identity_data).encode('utf-8'))
             elif isinstance(identity_data, list):
                 # Handle byte array format
                 identity = Identity(data=bytes(identity_data))
@@ -895,12 +913,23 @@ class ProtocolDecoder:
                 if "__connection_id__" in connection_id_data:
                     conn_id_inner = connection_id_data["__connection_id__"]
                     if isinstance(conn_id_inner, int):
-                        conn_id_bytes = conn_id_inner.to_bytes(16, byteorder='big')
-                        connection_id = ConnectionId(data=conn_id_bytes)
+                        # Safe parsing: check if integer fits in 16 bytes
+                        try:
+                            if conn_id_inner < 0 or conn_id_inner >= (1 << 128):
+                                raise OverflowError("Integer too large for 16-byte representation")
+                            conn_id_bytes = conn_id_inner.to_bytes(16, byteorder='big')
+                            connection_id = ConnectionId(data=conn_id_bytes)
+                        except (OverflowError, ValueError):
+                            # Fallback for invalid integer values
+                            connection_id = ConnectionId(data=b"\x00" * 16)
                     elif isinstance(conn_id_inner, str):
-                        if conn_id_inner.startswith("0x"):
-                            conn_id_inner = conn_id_inner[2:]
-                        connection_id = ConnectionId.from_hex(conn_id_inner)
+                        try:
+                            if conn_id_inner.startswith("0x"):
+                                conn_id_inner = conn_id_inner[2:]
+                            connection_id = ConnectionId.from_hex(conn_id_inner)
+                        except ValueError:
+                            # Fallback for invalid hex strings
+                            connection_id = ConnectionId(data=b"\x00" * 16)
                     else:
                         connection_id = ConnectionId(data=b"\x00" * 16)
                 # Handle nested connection_id format: {"connection_id": {"data": [...]}}
@@ -912,10 +941,14 @@ class ProtocolDecoder:
                     connection_id = ConnectionId(data=conn_id_bytes)
             elif isinstance(connection_id_data, str):
                 # Handle hex string format
-                if connection_id_data.startswith("0x"):
-                    connection_id = ConnectionId.from_hex(connection_id_data[2:])
-                else:
-                    connection_id = ConnectionId.from_hex(connection_id_data)
+                try:
+                    if connection_id_data.startswith("0x"):
+                        connection_id = ConnectionId.from_hex(connection_id_data[2:])
+                    else:
+                        connection_id = ConnectionId.from_hex(connection_id_data)
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    connection_id = ConnectionId(data=str(connection_id_data).encode('utf-8'))
             elif isinstance(connection_id_data, list):
                 # Handle byte array format
                 connection_id = ConnectionId(data=bytes(connection_id_data))
@@ -951,9 +984,13 @@ class ProtocolDecoder:
                 else:
                     caller_identity = Identity(data=str(caller_identity_data).encode('utf-8'))
             elif isinstance(caller_identity_data, str):
-                if caller_identity_data.startswith("0x"):
-                    caller_identity_data = caller_identity_data[2:]
-                caller_identity = Identity.from_hex(caller_identity_data) if caller_identity_data != "00" else Identity(data=b"\x00")
+                try:
+                    if caller_identity_data.startswith("0x"):
+                        caller_identity_data = caller_identity_data[2:]
+                    caller_identity = Identity.from_hex(caller_identity_data) if caller_identity_data != "00" else Identity(data=b"\x00")
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    caller_identity = Identity(data=b"\x00")
             else:
                 caller_identity = Identity(data=b"\x00")
             
@@ -964,9 +1001,13 @@ class ProtocolDecoder:
                 else:
                     caller_connection_id = ConnectionId(data=str(caller_conn_id_data).encode('utf-8'))
             elif isinstance(caller_conn_id_data, str):
-                if caller_conn_id_data.startswith("0x"):
-                    caller_conn_id_data = caller_conn_id_data[2:]
-                caller_connection_id = ConnectionId.from_hex(caller_conn_id_data) if caller_conn_id_data != "00" else ConnectionId(data=b"\x00")
+                try:
+                    if caller_conn_id_data.startswith("0x"):
+                        caller_conn_id_data = caller_conn_id_data[2:]
+                    caller_connection_id = ConnectionId.from_hex(caller_conn_id_data) if caller_conn_id_data != "00" else ConnectionId(data=b"\x00")
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    caller_connection_id = ConnectionId(data=b"\x00")
             else:
                 caller_connection_id = ConnectionId(data=b"\x00")
             
@@ -1048,15 +1089,26 @@ class ProtocolDecoder:
             
             # Parse legacy identity format
             caller_identity_hex = tx_data.get("__caller_identity__", "00")
-            if caller_identity_hex.startswith("0x"):
-                caller_identity_hex = caller_identity_hex[2:]
-            caller_identity = Identity.from_hex(caller_identity_hex)
+            try:
+                if caller_identity_hex.startswith("0x"):
+                    caller_identity_hex = caller_identity_hex[2:]
+                caller_identity = Identity.from_hex(caller_identity_hex)
+            except ValueError:
+                # Fallback for invalid hex strings
+                caller_identity = Identity(data=b"\x00")
             
             # Parse legacy connection id
             caller_conn_id = tx_data.get("__caller_connection_id__", 0)
             if isinstance(caller_conn_id, int):
-                conn_id_bytes = caller_conn_id.to_bytes(16, byteorder='big')
-                caller_connection_id = ConnectionId(data=conn_id_bytes)
+                # Safe parsing: check if integer fits in 16 bytes
+                try:
+                    if caller_conn_id < 0 or caller_conn_id >= (1 << 128):
+                        raise OverflowError("Integer too large for 16-byte representation")
+                    conn_id_bytes = caller_conn_id.to_bytes(16, byteorder='big')
+                    caller_connection_id = ConnectionId(data=conn_id_bytes)
+                except (OverflowError, ValueError):
+                    # Fallback for invalid integer values
+                    caller_connection_id = ConnectionId(data=b"\x00" * 16)
             else:
                 caller_connection_id = ConnectionId(data=b"\x00" * 16)
             

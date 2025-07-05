@@ -198,9 +198,8 @@ class ModernWebSocketClient:
         compression_config: Optional[CompressionConfig] = None,
         retry_policy: Optional[RetryPolicy] = None
     ):
-        # Initialize logger first (needed by _determine_frame_type)
-        self.logger = logging.getLogger(f"{__name__}.ModernWebSocketClient_{id(self)}")
-        self.logger.setLevel(logging.DEBUG)
+        # Use the module-level logger
+        self.logger = logger
         
         self.protocol = protocol
         self.use_binary = self._determine_frame_type(protocol)
@@ -566,10 +565,17 @@ class ModernWebSocketClient:
             
             # Validate and sanitize host
             try:
-                sanitized_host = sanitize_url(f"{protocol_scheme}://{self.host}", "host")
                 import urllib.parse
-                parsed_host = urllib.parse.urlparse(sanitized_host)
-                validated_host = parsed_host.netloc
+                parsed_host = urllib.parse.urlparse(f"{protocol_scheme}://{self.host}")
+                host = parsed_host.hostname
+                port = parsed_host.port
+                
+                # Validate the extracted host
+                if not host or not get_security_manager().validate_hostname(host):
+                    raise ValidationError(f"Invalid host: {host}")
+                
+                # Reconstruct the validated host with port if available
+                validated_host = f"{host}:{port}" if port else host
             except ValidationError as e:
                 raise WebSocketHandshakeError(f"Invalid host: {e}")
             
@@ -971,17 +977,13 @@ class ModernWebSocketClient:
             raise RuntimeError("Not connected to SpacetimeDB")
         
         # Validate SQL query for security
-        try:
-            # Validate the query for SQL injection and other security issues
-            query_result = validate_sql_query(query, "query_string")
-            if not query_result.is_valid:
-                raise RuntimeError(f"Invalid SQL query: {'; '.join(str(e) for e in query_result.errors)}")
-            
-            # Use sanitized query
-            sanitized_query = query_result.sanitized_value
-            
-        except ValidationError as e:
-            raise RuntimeError(f"SQL query validation failed: {e}")
+        # Validate the query for SQL injection and other security issues
+        query_result = validate_sql_query(query, "query_string")
+        if not query_result.is_valid:
+            raise RuntimeError(f"Invalid SQL query: {'; '.join(str(e) for e in query_result.errors)}")
+        
+        # Use sanitized query
+        sanitized_query = query_result.sanitized_value
         
         # Use legacy OneOffQuery for backward compatibility
         message_id = uuid.uuid4().bytes

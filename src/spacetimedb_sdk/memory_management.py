@@ -573,13 +573,14 @@ class MessageSizeValidator:
 
 # Global memory accountant instance
 _global_memory_accountant: Optional[MemoryAccountant] = None
-
+_memory_accountant_lock = threading.Lock()
 
 def get_global_memory_accountant() -> MemoryAccountant:
     """Get or create the global memory accountant."""
     global _global_memory_accountant
-    if _global_memory_accountant is None:
-        _global_memory_accountant = MemoryAccountant()
+    with _memory_accountant_lock:
+        if _global_memory_accountant is None:
+            _global_memory_accountant = MemoryAccountant()
     return _global_memory_accountant
 
 

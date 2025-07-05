@@ -877,9 +877,15 @@ class ProtocolDecoder:
             # Handle connection_id which might be a number or hex string
             conn_id_data = message.get("__connection_id__", 0)
             if isinstance(conn_id_data, int):
-                # Convert integer to 16-byte representation
-                conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
-                connection_id = ConnectionId(data=conn_id_bytes)
+                # Safe parsing: check if integer fits in 16 bytes
+                try:
+                    if conn_id_data < 0 or conn_id_data >= (1 << 128):
+                        raise OverflowError("Integer too large for 16-byte representation")
+                    conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
+                    connection_id = ConnectionId(data=conn_id_bytes)
+                except (OverflowError, ValueError):
+                    # Fallback for invalid integer values
+                    connection_id = ConnectionId(data=b"\x00" * 16)
             elif isinstance(conn_id_data, str):
                 try:
                     if conn_id_data.startswith("0x"):

@@ -36,7 +36,6 @@ class JSONValidator(Validator):
     
     def __init__(self, config: Optional[ValidationConfig] = None):
         super().__init__(config)
-        self._max_parse_depth = 0
     
     def validate(self, value: Any, field: Optional[str] = None) -> ValidationResult:
         """
@@ -110,18 +109,7 @@ class JSONValidator(Validator):
         
         # Try to parse JSON
         try:
-            # Reset depth tracking
-            self._max_parse_depth = 0
-            
-            parsed_data = json.loads(json_str, object_hook=self._depth_hook)
-            
-            # Final depth check (backup validation)
-            if self._max_parse_depth > self.config.max_json_depth:
-                errors.append(JSONValidationError(
-                    f"JSON nesting too deep: {self._max_parse_depth} > {self.config.max_json_depth}",
-                    field=field,
-                    value=json_str
-                ))
+            parsed_data = json.loads(json_str)
         
         except json.JSONDecodeError as e:
             errors.append(JSONValidationError(
@@ -185,37 +173,7 @@ class JSONValidator(Validator):
             warnings=warnings
         )
     
-    def _depth_hook(self, obj: Dict[str, Any]) -> Dict[str, Any]:
-        """Object hook to track parsing depth."""
-        # Calculate depth by inspecting the object structure
-        depth = self._calculate_depth(obj)
-        self._max_parse_depth = max(self._max_parse_depth, depth)
-        
-        # Check depth limit during parsing
-        if depth > self.config.max_json_depth:
-            raise JSONValidationError(f"JSON nesting too deep: {depth}")
-        
-        return obj
-    
-    def _calculate_depth(self, obj: Any, current_depth: int = 1) -> int:
-        """Calculate the actual depth of a nested object/array structure."""
-        if not isinstance(obj, (dict, list)):
-            return current_depth
-        
-        max_depth = current_depth
-        
-        if isinstance(obj, dict):
-            for value in obj.values():
-                if isinstance(value, (dict, list)):
-                    depth = self._calculate_depth(value, current_depth + 1)
-                    max_depth = max(max_depth, depth)
-        elif isinstance(obj, list):
-            for item in obj:
-                if isinstance(item, (dict, list)):
-                    depth = self._calculate_depth(item, current_depth + 1)
-                    max_depth = max(max_depth, depth)
-        
-        return max_depth
+
     
     def _pre_scan_depth(self, json_str: str) -> int:
         """

@@ -844,14 +844,8 @@ class ProtocolDecoder:
                     message = json_result.sanitized_value
                 except ValidationError as e:
                     raise ValueError(f"JSON validation failed: {e}")
-                except Exception as e:
-                    # Catch any other exceptions from validation and fall back to direct parsing
-                    # This handles cases where validate_json_data might raise unexpected exceptions
-                    try:
-                        message = json.loads(json_str)
-                    except json.JSONDecodeError as json_e:
-                        # If both validation and fallback fail, report the original validation error
-                        raise ValueError(f"JSON validation failed with error: {e}, and fallback parsing also failed: {json_e}")
+                # All other exceptions from validate_json_data (including security-related ones)
+                # should be propagated up instead of falling back to unsafe parsing
             else:
                 # Fallback to direct parsing if validation not available
                 message = json.loads(json_str)

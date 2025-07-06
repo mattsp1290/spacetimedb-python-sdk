@@ -87,13 +87,22 @@ except ImportError:
     
     # Define minimal fallback functions - these won't be used in normal operation
     # but prevent ImportError when validation module is unavailable
+    
+    # Simple ValidationResult mock for fallback
+    class ValidationResult:
+        def __init__(self, is_valid=True, sanitized_value=None, errors=None, warnings=None):
+            self.is_valid = is_valid
+            self.sanitized_value = sanitized_value
+            self.errors = errors or []
+            self.warnings = warnings or []
+    
     get_security_manager = lambda: None
-    validate_url = lambda url: True
-    validate_websocket_url = lambda url: True
-    validate_sql_query = lambda query: True
-    sanitize_url = lambda url: url
-    sanitize_sql_query = lambda query: query
-    sanitize_json_data = lambda data: data
+    validate_url = lambda url, field=None: ValidationResult(is_valid=True, sanitized_value=url)
+    validate_websocket_url = lambda url, field=None: ValidationResult(is_valid=True, sanitized_value=url)
+    validate_sql_query = lambda query, field=None: ValidationResult(is_valid=True, sanitized_value=query)
+    sanitize_url = lambda url, field=None: url
+    sanitize_sql_query = lambda query, field=None: query
+    sanitize_json_data = lambda data, field=None: data
 
 
 class SubscriptionMetrics:
@@ -586,9 +595,17 @@ class ModernWebSocketClient:
                 host = parsed_host.hostname
                 port = parsed_host.port
                 
-                # Validate the extracted host
-                if not host or not get_security_manager().validate_hostname(host):
+                # Validate the extracted host by reconstructing URL
+                if not host:
                     raise ValidationError(f"Invalid host: {host}")
+                
+                # Validate the host by creating a URL and validating it
+                security_manager = get_security_manager()
+                if security_manager:
+                    test_url = f"{protocol_scheme}://{host}"
+                    host_result = security_manager.validate_url(test_url, "host")
+                    if not host_result.is_valid:
+                        raise ValidationError(f"Invalid host: {'; '.join(str(e) for e in host_result.errors)}")
                 
                 # Reconstruct the validated host with port if available
                 validated_host = f"{host}:{port}" if port else host

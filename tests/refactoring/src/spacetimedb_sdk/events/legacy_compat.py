@@ -17,7 +17,7 @@ from .core_events import EventType, EventContext
 from .event_manager import UnifiedEventManager, EventManagerConfig
 
 
-class DeprecationWarning(UserWarning):
+class LegacyDeprecationWarning(UserWarning):
     """Warning for deprecated event system usage."""
     pass
 
@@ -30,7 +30,7 @@ def deprecated(alternative: str = None):
             message = f"{func.__name__} is deprecated"
             if alternative:
                 message += f". Use {alternative} instead"
-            warnings.warn(message, DeprecationWarning, stacklevel=2)
+            warnings.warn(message, LegacyDeprecationWarning, stacklevel=2)
             return func(*args, **kwargs)
         return wrapper
     return decorator
@@ -543,9 +543,9 @@ def get_global_compatibility_layer() -> CompatibilityLayer:
 def enable_legacy_warnings(enabled: bool = True):
     """Enable or disable legacy system warnings."""
     if enabled:
-        warnings.filterwarnings("default", category=DeprecationWarning)
+        warnings.filterwarnings("default", category=LegacyDeprecationWarning)
     else:
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", category=LegacyDeprecationWarning)
 
 
 def get_migration_guide() -> str:

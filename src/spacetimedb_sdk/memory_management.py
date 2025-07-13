@@ -152,16 +152,22 @@ class BoundedDict(Generic[K, V]):
         self._memory_accountant = memory_accountant
         self._lock = threading.RLock()
         self._size_cache: Dict[K, int] = {}
+        self._recursion_limiter = RecursionLimiter()
     
     def _estimate_size(self, value: V) -> int:
         """Estimate memory size of a value."""
-        if hasattr(value, '__sizeof__'):
-            return value.__sizeof__()
-        elif isinstance(value, dict):
-            return sys.getsizeof(value) + sum(self._estimate_size(v) for v in value.values())
-        elif isinstance(value, (list, tuple)):
-            return sys.getsizeof(value) + sum(self._estimate_size(v) for v in value)
-        else:
+        try:
+            with self._recursion_limiter:
+                if hasattr(value, '__sizeof__'):
+                    return value.__sizeof__()
+                elif isinstance(value, dict):
+                    return sys.getsizeof(value) + sum(self._estimate_size(v) for v in value.values())
+                elif isinstance(value, (list, tuple)):
+                    return sys.getsizeof(value) + sum(self._estimate_size(v) for v in value)
+                else:
+                    return sys.getsizeof(value)
+        except RecursionError:
+            # If we hit recursion limit, just return the base size to avoid stack overflow
             return sys.getsizeof(value)
     
     def _evict_if_needed(self) -> None:

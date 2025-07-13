@@ -199,8 +199,8 @@ class HandlerInfo:
     """Information about a registered event handler."""
     handler: UniversalEventHandler
     priority: EventPriority
-    is_async: bool
     registration_time: float
+    is_async: Optional[bool] = None
     call_count: int = 0
     total_duration: float = 0.0
     last_error: Optional[Exception] = None

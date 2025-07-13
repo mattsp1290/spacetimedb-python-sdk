@@ -194,8 +194,12 @@ class BoundedDict(Generic[K, V]):
                 return self._data[key]
             return default
     
-    def set(self, key: K, value: V) -> None:
-        """Set an item in the dictionary."""
+    def set(self, key: K, value: V) -> bool:
+        """Set an item in the dictionary.
+        
+        Returns:
+            bool: True if the item was successfully set, False if operation failed
+        """
         with self._lock:
             # Calculate size
             size = self._estimate_size(value)
@@ -204,7 +208,7 @@ class BoundedDict(Generic[K, V]):
             if self._memory_accountant:
                 if not self._memory_accountant.try_allocate('cache', size):
                     logger.warning(f"Memory allocation failed for cache item {key} ({size} bytes)")
-                    return
+                    return False
             
             # Remove old value if exists
             if key in self._data:
@@ -219,6 +223,7 @@ class BoundedDict(Generic[K, V]):
             self._data[key] = value
             self._size_cache[key] = size
             self._eviction_policy.on_access(key)
+            return True
     
     def delete(self, key: K) -> bool:
         """Delete an item from the dictionary."""

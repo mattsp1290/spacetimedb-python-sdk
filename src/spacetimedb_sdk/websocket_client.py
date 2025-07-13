@@ -643,7 +643,11 @@ class ModernWebSocketClient:
                     raise ValidationError(f"Invalid connection URL: {'; '.join(str(e) for e in url_result.errors)}")
                 url = url_result.sanitized_value
             except ValidationError as e:
-                raise WebSocketHandshakeError(f"Invalid connection URL: {e}")
+                raise WebSocketHandshakeError(
+                    status_code=400,
+                    status_message=f"Invalid connection URL: {e}",
+                    url=url
+                )
             
             # Store URL for error diagnostics
             self.connection_url = url
@@ -906,8 +910,12 @@ class ModernWebSocketClient:
         query_id = QueryId.generate()
         
         with self._lock:
-            self.active_subscriptions.set(request_id, query_id)
-            self.subscription_queries.set(query_id, [query])
+            if not self.active_subscriptions.set(request_id, query_id):
+                raise RuntimeError(f"Failed to store subscription for request_id {request_id}")
+            if not self.subscription_queries.set(query_id, [query]):
+                # Clean up the partial state
+                self.active_subscriptions.delete(request_id)
+                raise RuntimeError(f"Failed to store subscription query for query_id {query_id}")
         
         message = SubscribeSingleMessage(
             query=query,
@@ -923,8 +931,12 @@ class ModernWebSocketClient:
         query_id = QueryId.generate()
         
         with self._lock:
-            self.active_subscriptions.set(request_id, query_id)
-            self.subscription_queries.set(query_id, queries)
+            if not self.active_subscriptions.set(request_id, query_id):
+                raise RuntimeError(f"Failed to store subscription for request_id {request_id}")
+            if not self.subscription_queries.set(query_id, queries):
+                # Clean up the partial state
+                self.active_subscriptions.delete(request_id)
+                raise RuntimeError(f"Failed to store subscription queries for query_id {query_id}")
         
         message = SubscribeMultiMessage(
             query_strings=queries,
@@ -1609,12 +1621,3 @@ class ModernWebSocketClient:
     def reset_subscription_metrics(self) -> None:
         """Reset all subscription health metrics."""
         self.subscription_metrics.reset_metrics()
-    
-    def get_protocol_helper(self):
-        """Get the protocol helper for client-side encoding compatibility."""
-        return {
-            'encoder': self.encoder,
-            'decoder': self.decoder,
-            'use_binary': self.use_binary,
-            'protocol': self.protocol
-        }

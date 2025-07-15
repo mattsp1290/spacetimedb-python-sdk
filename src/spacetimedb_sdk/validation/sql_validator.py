@@ -280,25 +280,126 @@ class SQLValidator(Validator):
                 f"Invalid query template: {'; '.join(str(e) for e in template_result.errors)}"
             )
         
-        # Extract parameter names from template
-        param_names = re.findall(r':(\w+)', query_template)
-        
-        # Validate that all parameters are provided
-        missing_params = set(param_names) - set(params.keys())
-        if missing_params:
-            raise SQLValidationError(f"Missing parameters: {missing_params}")
-        
-        # Build parameter list in order
+        # Find all parameter occurrences outside of string literals and comments
+        param_pattern = re.compile(r':(\w+)')
         param_list = []
-        query = query_template
+        result_query = []
+        i = 0
         
-        for param_name in param_names:
-            if param_name in params:
-                param_list.append(params[param_name])
-                # Replace named parameter with positional parameter
-                query = query.replace(f':{param_name}', '?', 1)
+        while i < len(query_template):
+            char = query_template[i]
+            
+            # Skip string literals (single and double quotes)
+            if char in ("'", '"'):
+                quote_char = char
+                result_query.append(char)
+                i += 1
+                while i < len(query_template):
+                    current_char = query_template[i]
+                    result_query.append(current_char)
+                    if current_char == quote_char:
+                        # Check if it's escaped
+                        if i == 0 or query_template[i-1] != '\\':
+                            break
+                    i += 1
+                i += 1
+                continue
+            
+            # Skip line comments (-- style)
+            if char == '-' and i + 1 < len(query_template) and query_template[i + 1] == '-':
+                result_query.append(char)
+                i += 1
+                while i < len(query_template) and query_template[i] != '\n':
+                    result_query.append(query_template[i])
+                    i += 1
+                continue
+            
+            # Skip block comments (/* */ style)
+            if char == '/' and i + 1 < len(query_template) and query_template[i + 1] == '*':
+                result_query.append(char)
+                i += 1
+                result_query.append(query_template[i])  # append the '*'
+                i += 1
+                while i + 1 < len(query_template):
+                    result_query.append(query_template[i])
+                    if query_template[i] == '*' and query_template[i + 1] == '/':
+                        i += 1
+                        result_query.append(query_template[i])  # append the '/'
+                        break
+                    i += 1
+                i += 1
+                continue
+            
+            # Check for parameter pattern
+            if char == ':':
+                match = param_pattern.match(query_template, i)
+                if match:
+                    param_name = match.group(1)
+                    
+                    # Validate that the parameter is provided
+                    if param_name not in params:
+                        raise SQLValidationError(f"Missing parameter: {param_name}")
+                    
+                    # Add parameter value to list and replace with placeholder
+                    param_list.append(params[param_name])
+                    result_query.append('?')
+                    i = match.end()
+                    continue
+            
+            # Regular character
+            result_query.append(char)
+            i += 1
         
-        return query, param_list
+        # Validate that all provided parameters are used
+        used_params = set()
+        for match in param_pattern.finditer(self._remove_literals_and_comments(query_template)):
+            used_params.add(match.group(1))
+        
+        unused_params = set(params.keys()) - used_params
+        if unused_params:
+            raise SQLValidationError(f"Unused parameters: {unused_params}")
+        
+        return ''.join(result_query), param_list
+    
+    def _remove_literals_and_comments(self, query: str) -> str:
+        """Helper method to remove string literals and comments for parameter validation."""
+        result = []
+        i = 0
+        
+        while i < len(query):
+            char = query[i]
+            
+            # Skip string literals
+            if char in ("'", '"'):
+                quote_char = char
+                i += 1
+                while i < len(query):
+                    if query[i] == quote_char and (i == 0 or query[i-1] != '\\'):
+                        break
+                    i += 1
+                i += 1
+                continue
+            
+            # Skip line comments
+            if char == '-' and i + 1 < len(query) and query[i + 1] == '-':
+                while i < len(query) and query[i] != '\n':
+                    i += 1
+                continue
+            
+            # Skip block comments
+            if char == '/' and i + 1 < len(query) and query[i + 1] == '*':
+                i += 2
+                while i + 1 < len(query):
+                    if query[i] == '*' and query[i + 1] == '/':
+                        i += 2
+                        break
+                    i += 1
+                continue
+            
+            result.append(char)
+            i += 1
+        
+        return ''.join(result)
     
     def validate_parameter_value(self, value: Any, param_name: str) -> ValidationResult:
         """

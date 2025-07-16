@@ -618,11 +618,14 @@ class ModernWebSocketClient:
             # Validate and sanitize database identifier
             try:
                 security_manager = get_security_manager()
-                # Use data size validator to check database identifier
-                db_result = security_manager.size_validator.validate(db_identifier, "database_identifier")
-                if not db_result.is_valid:
-                    raise ValidationError(f"Invalid database identifier: {'; '.join(str(e) for e in db_result.errors)}")
-                validated_db_identifier = db_result.sanitized_value
+                validated_db_identifier = db_identifier
+                
+                # Use data size validator to check database identifier if available
+                if security_manager:
+                    db_result = security_manager.size_validator.validate(db_identifier, "database_identifier")
+                    if not db_result.is_valid:
+                        raise ValidationError(f"Invalid database identifier: {'; '.join(str(e) for e in db_result.errors)}")
+                    validated_db_identifier = db_result.sanitized_value
                 
                 # Additional validation: prevent path traversal
                 if '../' in validated_db_identifier or '..\\' in validated_db_identifier:

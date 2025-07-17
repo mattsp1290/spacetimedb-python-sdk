@@ -63,6 +63,46 @@ from .compression import (
     CompressionMetrics
 )
 from .large_message_handler import LargeMessageHandler
+from .memory_management import (
+    BoundedDict, BoundedSubscriptionManager, RecursionLimiter,
+    MemoryAccountant, MessageSizeValidator, get_global_memory_accountant
+)
+# Import validation with fallback handling
+try:
+    from .validation import (
+        get_security_manager,
+        validate_url,
+        validate_websocket_url,
+        validate_sql_query,
+        validate_json_data,
+        sanitize_url,
+        sanitize_sql_query,
+        sanitize_json_data,
+        ValidationError
+    )
+except ImportError:
+    # Fallback if validation module is not available
+    validate_json_data = None
+    ValidationError = Exception
+    
+    # Define minimal fallback functions - these won't be used in normal operation
+    # but prevent ImportError when validation module is unavailable
+    
+    # Simple ValidationResult mock for fallback
+    class ValidationResult:
+        def __init__(self, is_valid=True, sanitized_value=None, errors=None, warnings=None):
+            self.is_valid = is_valid
+            self.sanitized_value = sanitized_value
+            self.errors = errors or []
+            self.warnings = warnings or []
+    
+    get_security_manager = lambda: None
+    validate_url = lambda url, field=None: ValidationResult(is_valid=True, sanitized_value=url)
+    validate_websocket_url = lambda url, field=None: ValidationResult(is_valid=True, sanitized_value=url)
+    validate_sql_query = lambda query, field=None: ValidationResult(is_valid=True, sanitized_value=query)
+    sanitize_url = lambda url, field=None: url
+    sanitize_sql_query = lambda query, field=None: query
+    sanitize_json_data = lambda data, field=None: data
 
 
 class SubscriptionMetrics:
@@ -183,6 +223,9 @@ class ModernWebSocketClient:
         compression_config: Optional[CompressionConfig] = None,
         retry_policy: Optional[RetryPolicy] = None
     ):
+        # Use the module-level logger
+        self.logger = logging.getLogger(__name__)
+        
         self.protocol = protocol
         self.use_binary = self._determine_frame_type(protocol)
         
@@ -243,13 +286,29 @@ class ModernWebSocketClient:
         # Store connection URL for error diagnostics
         self.connection_url: Optional[str] = None
         
-        # Subscription tracking
-        self.active_subscriptions: Dict[int, QueryId] = {}  # request_id -> QueryId
-        self.subscription_queries: Dict[QueryId, List[str]] = {}  # QueryId -> queries
+        # Memory management
+        self.memory_accountant = get_global_memory_accountant()
+        self.message_validator = MessageSizeValidator(memory_accountant=self.memory_accountant)
         
-        # Request tracking
-        self.pending_requests: Dict[int, threading.Event] = {}
-        self.request_responses: Dict[int, Any] = {}
+        # Subscription tracking with bounded storage
+        self.active_subscriptions = BoundedDict[int, QueryId](
+            max_size=1000,
+            memory_accountant=self.memory_accountant
+        )
+        self.subscription_queries = BoundedDict[QueryId, List[str]](
+            max_size=1000,
+            memory_accountant=self.memory_accountant
+        )
+        
+        # Request tracking with bounded storage
+        self.pending_requests = BoundedDict[int, threading.Event](
+            max_size=5000,
+            memory_accountant=self.memory_accountant
+        )
+        self.request_responses = BoundedDict[int, Any](
+            max_size=5000,
+            memory_accountant=self.memory_accountant
+        )
         
         # Subscription state coordination for client integration
         self.subscription_state_callbacks: List[Callable[[str, Any], None]] = []
@@ -260,9 +319,7 @@ class ModernWebSocketClient:
         # Thread safety
         self._lock = threading.RLock()
         
-        # Logging
-        self.logger = logging.getLogger(f"{__name__}.ModernWebSocketClient_{id(self)}")
-        self.logger.setLevel(logging.DEBUG)
+        # Logging setup (logger already initialized above)
         if not self.logger.handlers:
             ch = logging.StreamHandler()
             ch.setLevel(logging.DEBUG)
@@ -372,15 +429,19 @@ class ModernWebSocketClient:
         # For simple JSON messages, either can handle - default to SDK
         return True
     
-    def _contains_binary_data(self, obj: Any) -> bool:
+    def _contains_binary_data(self, obj: Any, _recursion_limiter: Optional[RecursionLimiter] = None) -> bool:
         """Check if object contains binary data that needs special handling."""
-        if isinstance(obj, bytes):
-            return True
-        elif isinstance(obj, dict):
-            return any(self._contains_binary_data(value) for value in obj.values())
-        elif isinstance(obj, (list, tuple)):
-            return any(self._contains_binary_data(item) for item in obj)
-        return False
+        if _recursion_limiter is None:
+            _recursion_limiter = RecursionLimiter(max_depth=50)
+        
+        with _recursion_limiter:
+            if isinstance(obj, bytes):
+                return True
+            elif isinstance(obj, dict):
+                return any(self._contains_binary_data(value, _recursion_limiter) for value in obj.values())
+            elif isinstance(obj, (list, tuple)):
+                return any(self._contains_binary_data(item, _recursion_limiter) for item in obj)
+            return False
     
     def _send_client_encoded_message(self, message: Union[str, bytes]) -> None:
         """
@@ -524,14 +585,72 @@ class ModernWebSocketClient:
         def _attempt_connection():
             self.state = ConnectionState.CONNECTING
             
-            # Build WebSocket URL for v1.1.2 compatibility
+            # Build WebSocket URL for v1.1.2 compatibility with security validation
             protocol_scheme = "wss" if self.ssl_enabled else "ws"
-            # Always use database_address in the URL path
-            url = f"{protocol_scheme}://{self.host}/v1/database/{self.database_address}/subscribe"
             
-            # Add db_identity as query parameter if provided
-            if self.db_identity:
-                url += f"?db_identity={self.db_identity}"
+            # Validate and sanitize host
+            try:
+                import urllib.parse
+                parsed_host = urllib.parse.urlparse(f"{protocol_scheme}://{self.host}")
+                host = parsed_host.hostname
+                port = parsed_host.port
+                
+                # Validate the extracted host by reconstructing URL
+                if not host:
+                    raise ValidationError(f"Invalid host: {host}")
+                
+                # Validate the host by creating a URL and validating it
+                security_manager = get_security_manager()
+                if security_manager:
+                    test_url = f"{protocol_scheme}://{host}"
+                    host_result = security_manager.validate_url(test_url, "host")
+                    if not host_result.is_valid:
+                        raise ValidationError(f"Invalid host: {'; '.join(str(e) for e in host_result.errors)}")
+                
+                # Reconstruct the validated host with port if available
+                validated_host = f"{host}:{port}" if port else host
+            except ValidationError as e:
+                raise WebSocketHandshakeError(f"Invalid host: {e}")
+            
+            # Use db_identity in URL path if provided, otherwise use database_address
+            db_identifier = self.db_identity if self.db_identity else self.database_address
+            
+            # Validate and sanitize database identifier
+            try:
+                security_manager = get_security_manager()
+                validated_db_identifier = db_identifier
+                
+                # Use data size validator to check database identifier if available
+                if security_manager:
+                    db_result = security_manager.size_validator.validate(db_identifier, "database_identifier")
+                    if not db_result.is_valid:
+                        raise ValidationError(f"Invalid database identifier: {'; '.join(str(e) for e in db_result.errors)}")
+                    validated_db_identifier = db_result.sanitized_value
+                
+                # Additional validation: prevent path traversal
+                if '../' in validated_db_identifier or '..\\' in validated_db_identifier:
+                    raise ValidationError("Path traversal attempt in database identifier")
+                
+                # Sanitize for URL inclusion
+                validated_db_identifier = urllib.parse.quote(validated_db_identifier, safe='')
+                
+            except ValidationError as e:
+                raise WebSocketHandshakeError(f"Invalid database identifier: {e}")
+            
+            url = f"{protocol_scheme}://{validated_host}/v1/database/{validated_db_identifier}/subscribe"
+            
+            # Final URL validation
+            try:
+                url_result = validate_websocket_url(url, "connection_url")
+                if not url_result.is_valid:
+                    raise ValidationError(f"Invalid connection URL: {'; '.join(str(e) for e in url_result.errors)}")
+                url = url_result.sanitized_value
+            except ValidationError as e:
+                raise WebSocketHandshakeError(
+                    status_code=400,
+                    status_message=f"Invalid connection URL: {e}",
+                    url=url
+                )
             
             # Store URL for error diagnostics
             self.connection_url = url
@@ -644,6 +763,8 @@ class ModernWebSocketClient:
             self.connection_id = None
             self.active_subscriptions.clear()
             self.subscription_queries.clear()
+            self.pending_requests.clear()
+            self.request_responses.clear()
             self.negotiated_compression = None
             
             # Cleanup large message handler
@@ -792,8 +913,12 @@ class ModernWebSocketClient:
         query_id = QueryId.generate()
         
         with self._lock:
-            self.active_subscriptions[request_id] = query_id
-            self.subscription_queries[query_id] = [query]
+            if not self.active_subscriptions.set(request_id, query_id):
+                raise RuntimeError(f"Failed to store subscription for request_id {request_id}")
+            if not self.subscription_queries.set(query_id, [query]):
+                # Clean up the partial state
+                self.active_subscriptions.delete(request_id)
+                raise RuntimeError(f"Failed to store subscription query for query_id {query_id}")
         
         message = SubscribeSingleMessage(
             query=query,
@@ -809,8 +934,12 @@ class ModernWebSocketClient:
         query_id = QueryId.generate()
         
         with self._lock:
-            self.active_subscriptions[request_id] = query_id
-            self.subscription_queries[query_id] = queries
+            if not self.active_subscriptions.set(request_id, query_id):
+                raise RuntimeError(f"Failed to store subscription for request_id {request_id}")
+            if not self.subscription_queries.set(query_id, queries):
+                # Clean up the partial state
+                self.active_subscriptions.delete(request_id)
+                raise RuntimeError(f"Failed to store subscription queries for query_id {query_id}")
         
         message = SubscribeMultiMessage(
             query_strings=queries,
@@ -826,13 +955,12 @@ class ModernWebSocketClient:
         
         with self._lock:
             # Remove from tracking
-            if query_id in self.subscription_queries:
-                del self.subscription_queries[query_id]
+            self.subscription_queries.delete(query_id)
             
             # Find and remove from active subscriptions
             for req_id, qid in list(self.active_subscriptions.items()):
                 if qid.id == query_id.id:
-                    del self.active_subscriptions[req_id]
+                    self.active_subscriptions.delete(req_id)
                     break
         
         message = Unsubscribe(
@@ -896,11 +1024,20 @@ class ModernWebSocketClient:
         if self.state != ConnectionState.CONNECTED or not self.ws:
             raise RuntimeError("Not connected to SpacetimeDB")
         
+        # Validate SQL query for security
+        # Validate the query for SQL injection and other security issues
+        query_result = validate_sql_query(query, "query_string")
+        if not query_result.is_valid:
+            raise RuntimeError(f"Invalid SQL query: {'; '.join(str(e) for e in query_result.errors)}")
+        
+        # Use sanitized query
+        sanitized_query = query_result.sanitized_value
+        
         # Use legacy OneOffQuery for backward compatibility
         message_id = uuid.uuid4().bytes
         message = OneOffQuery(
             message_id=message_id,
-            query_string=query
+            query_string=sanitized_query
         )
         self.send_message(message)
         return message_id
@@ -942,6 +1079,14 @@ class ModernWebSocketClient:
     def _on_ws_message(self, ws, message) -> None:
         """WebSocket message received with enhanced large message handling."""
         try:
+            # Convert message to bytes for size validation
+            message_bytes = message.encode('utf-8') if isinstance(message, str) else message
+            
+            # Validate message size
+            if not self.message_validator.validate_message_size(message_bytes):
+                self.logger.error(f"Message too large, rejecting: {len(message_bytes)} bytes")
+                return
+            
             # Validate frame type against protocol configuration
             frame_type = "TEXT" if isinstance(message, str) else "BINARY"
             expected_frame_type = "BINARY" if self.use_binary else "TEXT"
@@ -953,16 +1098,30 @@ class ModernWebSocketClient:
                 # Check if this is a JSON message received when binary protocol is expected
                 if frame_type == "TEXT" and self.use_binary:
                     try:
-                        # Try to parse as JSON to provide better diagnostics
-                        json_data = json.loads(message)
-                        message_types = list(json_data.keys())
-                        self.logger.warning(f"Unknown message type in data: {message_types}")
-                        
-                        # Log specific message types that are commonly mismatched
-                        for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
-                            if msg_type in json_data:
-                                self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
-                    except:
+                        # Validate JSON message for security before parsing if validation is available
+                        if validate_json_data:
+                            json_result = validate_json_data(message, "websocket_message")
+                            if json_result.is_valid:
+                                json_data = json_result.sanitized_value
+                                message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
+                                self.logger.warning(f"Unknown message type in data: {message_types}")
+                                
+                                # Log specific message types that are commonly mismatched
+                                for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
+                                    if isinstance(json_data, dict) and msg_type in json_data:
+                                        self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
+                            else:
+                                self.logger.warning(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
+                        else:
+                            # Fallback to direct parsing if validation not available
+                            import json
+                            json_data = json.loads(message)
+                            message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
+                            self.logger.warning(f"Unknown message type in data: {message_types}")
+                    except ValidationError as e:
+                        self.logger.warning(f"JSON validation failed: {e}")
+                    except Exception as e:
+                        self.logger.warning(f"JSON processing error: {e}")
                         pass  # Continue with normal processing
             
             # Handle incoming message data with large message support
@@ -1056,29 +1215,11 @@ class ModernWebSocketClient:
             if message_size > large_message_threshold:
                 self.logger.info(f"Successfully processed large message: {type(server_message).__name__}")
             
-            # Forward to application with proper serialization for client compatibility
+            # Forward to application
             if self._on_message:
-                # Import serialization functions
-                from .serialization import serialize_for_client
-                from .protocol_handler import get_default_handler, format_for_client
-                
-                # Ensure the server message is properly serialized for client compatibility
-                # This is critical for fixing AttributeError issues where objects don't behave like dictionaries
-                try:
-                    # Use the protocol handler to format the message appropriately
-                    handler = get_default_handler()
-                    formatted_message = handler.format_message(server_message)
-                    self._on_message(formatted_message)
-                except Exception as format_error:
-                    # If formatting fails, fall back to basic serialization
-                    self.logger.warning(f"Message formatting failed, using basic serialization: {format_error}")
-                    try:
-                        serialized_message = serialize_for_client(server_message)
-                        self._on_message(serialized_message)
-                    except Exception as serialize_error:
-                        # Last resort: send original message and log the issue
-                        self.logger.error(f"Both formatting and serialization failed: {serialize_error}")
-                        self._on_message(server_message)
+                # Pass the raw server message object to the handler
+                # The modern client expects protocol objects, not serialized dicts
+                self._on_message(server_message)
                 
         except Exception as e:
             # Enhanced error logging for large message issues
@@ -1483,12 +1624,3 @@ class ModernWebSocketClient:
     def reset_subscription_metrics(self) -> None:
         """Reset all subscription health metrics."""
         self.subscription_metrics.reset_metrics()
-    
-    def get_protocol_helper(self):
-        """Get the protocol helper for client-side encoding compatibility."""
-        return {
-            'encoder': self.encoder,
-            'decoder': self.decoder,
-            'use_binary': self.use_binary,
-            'protocol': self.protocol
-        }

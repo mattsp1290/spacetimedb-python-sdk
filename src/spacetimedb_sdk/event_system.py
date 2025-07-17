@@ -69,6 +69,13 @@ class EventType(enum.Enum):
     ENERGY_EXHAUSTED = "energy.exhausted"
     ENERGY_REFILLED = "energy.refilled"
     
+    # Database events
+    DATABASE_UPDATE = "database.update"
+    INITIAL_SUBSCRIPTION = "subscription.initial"
+    
+    # Identity events (additional)
+    IDENTITY_TOKEN = "identity.token"
+    
     # Custom events
     CUSTOM = "custom"
 
@@ -500,6 +507,38 @@ class EventEmitter:
         
         return self.on(event_type, once_wrapper, priority, handler_id)
     
+    def on_raw(
+        self,
+        event_name: str,
+        handler: EventHandler,
+        priority: int = 0,
+        handler_name: Optional[str] = None
+    ) -> str:
+        """
+        Register an event handler for a raw event name.
+        
+        This method allows registration of handlers for events that aren't
+        defined in the EventType enum, enabling handling of server events
+        that the SDK doesn't explicitly know about.
+        
+        Args:
+            event_name: Raw event name string (e.g., "DatabaseUpdate", "CustomEvent")
+            handler: Function to handle the event
+            priority: Handler priority (higher = earlier execution)
+            handler_name: Optional name for the handler
+            
+        Returns:
+            Handler ID for removal
+            
+        Example:
+            def handle_database_update(ctx: EventContext):
+                print(f"Database update: {ctx.event.data}")
+                
+            handler_id = emitter.on_raw("DatabaseUpdate", handle_database_update)
+        """
+        # Use the same implementation as on() but ensure we pass a string
+        return self.on(event_name, handler, priority, handler_name)
+    
     def add_filter(self, filter_func: EventFilter, name: Optional[str] = None) -> str:
         """
         Add an event filter.
@@ -802,6 +841,48 @@ def create_event(
     """Create an event with metadata."""
     metadata = EventMetadata(**metadata_kwargs)
     return Event(type=event_type, data=data, metadata=metadata)
+
+
+def subscribe_to_raw_events(
+    handler: EventHandler,
+    event_names: List[str],
+    subscription_id: Optional[str] = None,
+    namespace: str = "default"
+) -> Dict[str, str]:
+    """
+    Subscribe to raw events by name without requiring EventType enum.
+    
+    This is a convenience function that allows clients to register handlers
+    for events that might not be defined in the EventType enum, such as
+    server-specific events like "DatabaseUpdate" or "IdentityToken".
+    
+    Args:
+        handler: Function to handle the events
+        event_names: List of raw event names to subscribe to
+        subscription_id: Optional subscription ID for tracking
+        namespace: Event bus namespace (default: "default")
+        
+    Returns:
+        Dict mapping event names to handler IDs
+        
+    Example:
+        def handle_database_events(ctx: EventContext):
+            print(f"Got {ctx.event_type}: {ctx.event.data}")
+            
+        handler_ids = subscribe_to_raw_events(
+            handle_database_events,
+            ["DatabaseUpdate", "IdentityToken", "CustomServerEvent"]
+        )
+    """
+    emitter = global_event_bus.get_emitter(namespace)
+    handler_ids = {}
+    
+    for event_name in event_names:
+        handler_name = f"{subscription_id or 'raw'}_{event_name}"
+        handler_id = emitter.on_raw(event_name, handler, handler_name=handler_name)
+        handler_ids[event_name] = handler_id
+    
+    return handler_ids
 
 
 def create_reducer_event(

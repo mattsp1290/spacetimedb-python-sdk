@@ -44,6 +44,14 @@ from .messages.one_off_query import (
     OneOffQueryMessage
 )
 
+# Import validation for secure JSON parsing
+try:
+    from .validation import validate_json_data, ValidationError
+except ImportError:
+    # Fallback if validation module is not available
+    validate_json_data = None
+    ValidationError = Exception
+
 # Protocol constants
 TEXT_PROTOCOL = "v1.json.spacetimedb"
 BIN_PROTOCOL = "v1.bsatn.spacetimedb"
@@ -824,26 +832,111 @@ class ProtocolDecoder:
     def _decode_json(self, data: bytes) -> ServerMessage:
         """Decode message from JSON with enhanced compatibility for latest SpacetimeDB."""
         try:
-            message = json.loads(data.decode('utf-8'))
+            # Decode bytes to string
+            json_str = data.decode('utf-8')
+            
+            # Validate JSON for security if validation is available
+            if validate_json_data:
+                try:
+                    json_result = validate_json_data(json_str, "protocol_message")
+                    if not json_result.is_valid:
+                        raise ValueError(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
+                    message = json_result.sanitized_value
+                except ValidationError as e:
+                    raise ValueError(f"JSON validation failed: {e}")
+                # All other exceptions from validate_json_data (including security-related ones)
+                # should be propagated up instead of falling back to unsafe parsing
+            else:
+                # Fallback to direct parsing if validation not available
+                message = json.loads(json_str)
+                
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"Failed to decode JSON message: {e}")
+        except ValueError:
+            # Re-raise ValueError exceptions (these are our custom validation errors)
+            raise
+        except Exception as e:
+            # Catch any other unexpected exceptions and provide a meaningful error
+            raise ValueError(f"Unexpected error during JSON message decoding: {e}")
         
-        if "IdentityToken" in message:
+        # Check for legacy identity format first
+        if "__identity__" in message:
+            # Handle legacy format: {'__identity__': '0x...', '__token__': '...', '__connection_id__': ...}
+            identity_hex = message.get("__identity__", "0x00")
+            if identity_hex.startswith("0x"):
+                identity_hex = identity_hex[2:]
+            
+            token = message.get("__token__", "")
+            
+            # Handle connection_id which might be a number or hex string
+            conn_id_data = message.get("__connection_id__", 0)
+            if isinstance(conn_id_data, int):
+                # Safe parsing: check if integer fits in 16 bytes
+                try:
+                    if conn_id_data < 0 or conn_id_data >= (1 << 128):
+                        raise OverflowError("Integer too large for 16-byte representation")
+                    conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
+                    connection_id = ConnectionId(data=conn_id_bytes)
+                except (OverflowError, ValueError):
+                    # Fallback for invalid integer values
+                    connection_id = ConnectionId(data=b"\x00" * 16)
+            elif isinstance(conn_id_data, str):
+                try:
+                    if conn_id_data.startswith("0x"):
+                        conn_id_data = conn_id_data[2:]
+                    connection_id = ConnectionId.from_hex(conn_id_data)
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    connection_id = ConnectionId(data=b"\x00" * 16)
+            else:
+                connection_id = ConnectionId(data=b"\x00" * 16)
+            
+            try:
+                identity = Identity.from_hex(identity_hex) if identity_hex else Identity(data=b"\x00")
+            except ValueError:
+                # Fallback for invalid hex strings
+                identity = Identity(data=b"\x00")
+            
+            return IdentityToken(
+                identity=identity,
+                token=token,
+                connection_id=connection_id
+            )
+        
+        elif "IdentityToken" in message:
             token_data = message["IdentityToken"]
             
             # Enhanced identity/connection_id parsing for latest SpacetimeDB format
             identity_data = token_data.get("identity")
             if isinstance(identity_data, dict):
+                # Check for legacy nested format: {"identity": {"__identity__": "0x..."}}
+                if "__identity__" in identity_data:
+                    identity_hex = identity_data["__identity__"]
+                    try:
+                        if identity_hex.startswith("0x"):
+                            identity_hex = identity_hex[2:]
+                        identity = Identity.from_hex(identity_hex)
+                    except ValueError:
+                        # Fallback for invalid hex strings
+                        identity = Identity(data=b"\x00")
                 # Handle nested identity format: {"identity": {"data": [...]}}
-                if "data" in identity_data:
+                elif "data" in identity_data:
                     identity_bytes = bytes(identity_data["data"]) if isinstance(identity_data["data"], list) else identity_data["data"]
+                    identity = Identity(data=identity_bytes)
                 else:
                     # Try to extract bytes from dict representation
                     identity_bytes = str(identity_data).encode('utf-8')
-                identity = Identity(data=identity_bytes)
+                    identity = Identity(data=identity_bytes)
             elif isinstance(identity_data, str):
                 # Handle hex string format
-                identity = Identity.from_hex(identity_data)
+                try:
+                    if identity_data.startswith("0x"):
+                        identity = Identity.from_hex(identity_data[2:])
+                    else:
+                        identity = Identity.from_hex(identity_data)
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    identity = Identity(data=str(identity_data).encode('utf-8'))
             elif isinstance(identity_data, list):
                 # Handle byte array format
                 identity = Identity(data=bytes(identity_data))
@@ -853,15 +946,46 @@ class ProtocolDecoder:
             
             connection_id_data = token_data.get("connection_id")
             if isinstance(connection_id_data, dict):
+                # Check for legacy nested format: {"connection_id": {"__connection_id__": ...}}
+                if "__connection_id__" in connection_id_data:
+                    conn_id_inner = connection_id_data["__connection_id__"]
+                    if isinstance(conn_id_inner, int):
+                        # Safe parsing: check if integer fits in 16 bytes
+                        try:
+                            if conn_id_inner < 0 or conn_id_inner >= (1 << 128):
+                                raise OverflowError("Integer too large for 16-byte representation")
+                            conn_id_bytes = conn_id_inner.to_bytes(16, byteorder='big')
+                            connection_id = ConnectionId(data=conn_id_bytes)
+                        except (OverflowError, ValueError):
+                            # Fallback for invalid integer values
+                            connection_id = ConnectionId(data=b"\x00" * 16)
+                    elif isinstance(conn_id_inner, str):
+                        try:
+                            if conn_id_inner.startswith("0x"):
+                                conn_id_inner = conn_id_inner[2:]
+                            connection_id = ConnectionId.from_hex(conn_id_inner)
+                        except ValueError:
+                            # Fallback for invalid hex strings
+                            connection_id = ConnectionId(data=b"\x00" * 16)
+                    else:
+                        connection_id = ConnectionId(data=b"\x00" * 16)
                 # Handle nested connection_id format: {"connection_id": {"data": [...]}}
-                if "data" in connection_id_data:
+                elif "data" in connection_id_data:
                     conn_id_bytes = bytes(connection_id_data["data"]) if isinstance(connection_id_data["data"], list) else connection_id_data["data"]
+                    connection_id = ConnectionId(data=conn_id_bytes)
                 else:
                     conn_id_bytes = str(connection_id_data).encode('utf-8')
-                connection_id = ConnectionId(data=conn_id_bytes)
+                    connection_id = ConnectionId(data=conn_id_bytes)
             elif isinstance(connection_id_data, str):
                 # Handle hex string format
-                connection_id = ConnectionId.from_hex(connection_id_data)
+                try:
+                    if connection_id_data.startswith("0x"):
+                        connection_id = ConnectionId.from_hex(connection_id_data[2:])
+                    else:
+                        connection_id = ConnectionId.from_hex(connection_id_data)
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    connection_id = ConnectionId(data=str(connection_id_data).encode('utf-8'))
             elif isinstance(connection_id_data, list):
                 # Handle byte array format
                 connection_id = ConnectionId(data=bytes(connection_id_data))
@@ -897,7 +1021,13 @@ class ProtocolDecoder:
                 else:
                     caller_identity = Identity(data=str(caller_identity_data).encode('utf-8'))
             elif isinstance(caller_identity_data, str):
-                caller_identity = Identity.from_hex(caller_identity_data) if caller_identity_data != "00" else Identity(data=b"\x00")
+                try:
+                    if caller_identity_data.startswith("0x"):
+                        caller_identity_data = caller_identity_data[2:]
+                    caller_identity = Identity.from_hex(caller_identity_data) if caller_identity_data != "00" else Identity(data=b"\x00")
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    caller_identity = Identity(data=b"\x00")
             else:
                 caller_identity = Identity(data=b"\x00")
             
@@ -908,7 +1038,13 @@ class ProtocolDecoder:
                 else:
                     caller_connection_id = ConnectionId(data=str(caller_conn_id_data).encode('utf-8'))
             elif isinstance(caller_conn_id_data, str):
-                caller_connection_id = ConnectionId.from_hex(caller_conn_id_data) if caller_conn_id_data != "00" else ConnectionId(data=b"\x00")
+                try:
+                    if caller_conn_id_data.startswith("0x"):
+                        caller_conn_id_data = caller_conn_id_data[2:]
+                    caller_connection_id = ConnectionId.from_hex(caller_conn_id_data) if caller_conn_id_data != "00" else ConnectionId(data=b"\x00")
+                except ValueError:
+                    # Fallback for invalid hex strings
+                    caller_connection_id = ConnectionId(data=b"\x00")
             else:
                 caller_connection_id = ConnectionId(data=b"\x00")
             
@@ -965,6 +1101,69 @@ class ProtocolDecoder:
                 error=error_data.get("error", "Unknown subscription error")
             )
             
+        # Check for other legacy message formats
+        elif "__initial_subscription__" in message:
+            # Handle legacy initial subscription format
+            sub_data = message.get("__initial_subscription__", {})
+            database_update = DatabaseUpdate(tables=[])
+            
+            # Parse legacy database update if present
+            if "__database_update__" in sub_data:
+                db_update = sub_data["__database_update__"]
+                if isinstance(db_update, dict) and "__tables__" in db_update:
+                    # Parse legacy table format - simplified for now
+                    database_update = DatabaseUpdate(tables=[])
+            
+            return InitialSubscription(
+                database_update=database_update,
+                request_id=sub_data.get("__request_id__", 0),
+                total_host_execution_duration=TimeDuration(nanos=sub_data.get("__duration_nanos__", 0))
+            )
+            
+        elif "__transaction_update__" in message:
+            # Handle legacy transaction update format
+            tx_data = message.get("__transaction_update__", {})
+            
+            # Parse legacy identity format
+            caller_identity_hex = tx_data.get("__caller_identity__", "00")
+            try:
+                if caller_identity_hex.startswith("0x"):
+                    caller_identity_hex = caller_identity_hex[2:]
+                caller_identity = Identity.from_hex(caller_identity_hex)
+            except ValueError:
+                # Fallback for invalid hex strings
+                caller_identity = Identity(data=b"\x00")
+            
+            # Parse legacy connection id
+            caller_conn_id = tx_data.get("__caller_connection_id__", 0)
+            if isinstance(caller_conn_id, int):
+                # Safe parsing: check if integer fits in 16 bytes
+                try:
+                    if caller_conn_id < 0 or caller_conn_id >= (1 << 128):
+                        raise OverflowError("Integer too large for 16-byte representation")
+                    conn_id_bytes = caller_conn_id.to_bytes(16, byteorder='big')
+                    caller_connection_id = ConnectionId(data=conn_id_bytes)
+                except (OverflowError, ValueError):
+                    # Fallback for invalid integer values
+                    caller_connection_id = ConnectionId(data=b"\x00" * 16)
+            else:
+                caller_connection_id = ConnectionId(data=b"\x00" * 16)
+            
+            return TransactionUpdate(
+                status=tx_data.get("__status__", "Unknown"),
+                timestamp=Timestamp(nanos_since_epoch=tx_data.get("__timestamp__", 0)),
+                caller_identity=caller_identity,
+                caller_connection_id=caller_connection_id,
+                reducer_call=ReducerCallInfo(
+                    reducer_name=tx_data.get("__reducer_name__", ""),
+                    reducer_id=tx_data.get("__reducer_id__", 0),
+                    args=b"",
+                    request_id=tx_data.get("__request_id__", 0)
+                ),
+                energy_quanta_used=EnergyQuanta(quanta=tx_data.get("__energy_used__", 0)),
+                total_host_execution_duration=TimeDuration(nanos=tx_data.get("__duration_nanos__", 0))
+            )
+            
         # Add more message type parsing as needed
         else:
             # Provide more detailed error information for unknown message types
@@ -978,13 +1177,24 @@ class ProtocolDecoder:
                 "OneOffQueryResponse"
             ]
             
+            # Check for legacy format keys
+            legacy_keys = [
+                "__identity__", "__initial_subscription__", "__transaction_update__",
+                "__subscription_error__", "__subscribe_applied__"
+            ]
+            
             # Log the unknown message for debugging
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Unknown message type in data: {message_keys}")
             
             # Provide a helpful error message suggesting possible fixes
-            if any(key in str(message_keys).lower() for key in [name.lower() for name in known_types]):
+            if any(key in message_keys for key in legacy_keys):
+                raise ValueError(
+                    f"Partially supported legacy message format: {message_keys}. "
+                    f"Please update your SpacetimeDB server to use the standard protocol format."
+                )
+            elif any(key in str(message_keys).lower() for key in [name.lower() for name in known_types]):
                 raise ValueError(
                     f"Unknown server message format: {message_keys}. "
                     f"This might be a known message type with an unexpected format. "

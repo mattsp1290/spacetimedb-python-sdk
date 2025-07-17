@@ -38,6 +38,15 @@ if TYPE_CHECKING:
 
 from .time_utils import EnhancedTimestamp, EnhancedTimeDuration, ScheduleAt
 
+# Import validation for secure input handling
+try:
+    from .validation import validate_url, validate_websocket_url, ValidationError
+except ImportError:
+    # Fallback if validation module is not available
+    validate_url = None
+    validate_websocket_url = None
+    ValidationError = Exception
+
 
 class SpacetimeDBConnectionBuilder:
     """
@@ -120,12 +129,24 @@ class SpacetimeDBConnectionBuilder:
         if not uri:
             raise ValueError("URI cannot be empty")
         
+        # Validate URI for security if validation is available
+        if validate_websocket_url:
+            try:
+                url_result = validate_websocket_url(uri, "connection_uri")
+                if not url_result.is_valid:
+                    raise ValueError(f"Invalid URI: {'; '.join(str(e) for e in url_result.errors)}")
+                validated_uri = url_result.sanitized_value
+            except ValidationError as e:
+                raise ValueError(f"URI validation failed: {e}")
+        else:
+            validated_uri = uri
+        
         # Parse and validate URI
-        parsed = urllib.parse.urlparse(uri)
+        parsed = urllib.parse.urlparse(validated_uri)
         if parsed.scheme not in ('ws', 'wss'):
             raise ValueError(f"Invalid URI scheme: {parsed.scheme}. Must be 'ws' or 'wss'")
         
-        self._uri = uri
+        self._uri = validated_uri
         self._host = f"{parsed.hostname}:{parsed.port or (443 if parsed.scheme == 'wss' else 80)}"
         self._ssl_enabled = (parsed.scheme == 'wss')
         
@@ -147,8 +168,28 @@ class SpacetimeDBConnectionBuilder:
         if not module_name:
             raise ValueError("Module name cannot be empty")
         
-        self._module_name = module_name
-        self._database_address = module_name
+        # Validate module name for security
+        if validate_url:  # Use URL validator for basic string validation
+            try:
+                # Create a dummy URL to validate the module name as a path component
+                test_url = f"wss://localhost/{module_name}"
+                url_result = validate_url(test_url, "module_name")
+                if not url_result.is_valid:
+                    raise ValueError(f"Invalid module name: {'; '.join(str(e) for e in url_result.errors)}")
+                # Extract the validated module name from the URL
+                validated_parsed = urllib.parse.urlparse(url_result.sanitized_value)
+                validated_module_name = validated_parsed.path.lstrip('/')
+            except ValidationError as e:
+                raise ValueError(f"Module name validation failed: {e}")
+        else:
+            validated_module_name = module_name
+        
+        # Additional validation for module name format
+        if '../' in validated_module_name or '..\\' in validated_module_name:
+            raise ValueError("Module name cannot contain path traversal sequences")
+        
+        self._module_name = validated_module_name
+        self._database_address = validated_module_name
         return self
     
     def with_token(self, token: str) -> 'SpacetimeDBConnectionBuilder':

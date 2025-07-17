@@ -1,131 +1,191 @@
 """
-Enhanced Event System for SpacetimeDB SDK
+Unified Event System for SpacetimeDB SDK
 
-Production-ready event management system extracted from blackholio-python-client
-with SpacetimeDB-specific event types and advanced features.
+This module provides a consolidated event management system that unifies
+all previous event systems into a single, powerful system.
 
-Key Features:
-- Hierarchical event types with priority-based processing
-- Multi-layered filtering and middleware pipeline
+Features:
+- Unified EventType enum consolidating all previous event types
+- Single UnifiedEventManager replacing all previous managers
+- Backward compatibility layer for smooth migration
+- Enhanced filtering and routing capabilities
 - Async/sync handler support with thread pool integration
-- Comprehensive metrics and monitoring capabilities
-- Event lifecycle management with TTL and expiration
-- Publisher/subscriber pattern with context management
-- Error isolation and graceful degradation
-- SpacetimeDB-specific event types for database operations
+- Comprehensive metrics and monitoring
+- Event context management with metadata
+- Legacy compatibility for gradual migration
 
-Event Types:
-- CONNECTION: Connection state changes and network events
-- AUTHENTICATION: Identity and token management events
-- SUBSCRIPTION: Query subscription lifecycle events
-- TABLE_UPDATE: Database table modification events
-- REDUCER_CALL: Reducer function execution events
-- TRANSACTION: Database transaction events
-- QUERY: Database query execution events
-- SYSTEM: System-level operation events
-- ERROR: Error condition events
-- DEBUG: Debug and diagnostic events
-- PERFORMANCE: Performance monitoring events
+Migration Guide:
+The old event systems (event_system.py, event_manager.py, events/enhanced_event_system.py)
+have been consolidated. Use the legacy_compat module for backward compatibility during migration.
+
+Key Changes:
+- All EventType enums unified into single enum
+- All event managers unified into UnifiedEventManager
+- Consistent API across all event handling
+- Enhanced performance and memory usage
+- Better error isolation and debugging
 """
 
-# Enhanced event system core
-from .enhanced_event_system import (
-    # Core types
+# Core unified event system
+from .core_events import (
+    # Core types and events
+    Event,
+    BaseEvent,
     EventType,
     EventPriority,
-    Event,
-    EventT,
+    EventMetadata,
     
-    # Filtering and metrics
-    EventFilter,
-    EventMetrics,
-    
-    # Handlers and subscribers
-    EventHandler,
-    AsyncEventHandler,
-    SyncEventHandler,
-    EventSubscriber,
-    CallbackEventSubscriber,
-    FilteredEventSubscriber,
-    
-    # Event manager
-    EnhancedEventManager,
-    
-    # Convenience functions
-    get_event_manager,
-    event_context,
-    publish_event,
-    subscribe_to_events
-)
-
-# SpacetimeDB-specific events
-from .spacetimedb_events import (
-    # Event classes
+    # Specific event types
     ConnectionEvent,
     AuthenticationEvent,
     SubscriptionEvent,
-    TableUpdateEvent,
-    ReducerCallEvent,
+    TableEvent,
+    ReducerEvent,
     TransactionEvent,
-    QueryEvent,
-    SystemEvent,
+    MessageEvent,
     ErrorEvent,
-    DebugEvent,
     PerformanceEvent,
     
-    # Convenience functions
+    # Event creation functions
     create_connection_event,
-    create_table_update_event,
-    create_reducer_call_event,
+    create_table_event,
+    create_reducer_event,
     create_error_event,
-    create_performance_event
+    create_performance_event,
+)
+
+# Event management
+from .event_manager import (
+    UnifiedEventManager,
+    get_event_manager,
+    set_event_manager,
+    emit_event,
+    emit_event_async,
+    subscribe_to_events,
+    EventMetrics as ManagerMetrics,
+    HandlerInfo,
+)
+
+# Event context
+from .event_context import (
+    EventContext,
+)
+
+# Event filtering
+from .event_filters import (
+    EventFilter,
+    TypeFilter,
+    PriorityFilter,
+    AgeFilter,
+    SourceFilter,
+    DataFilter,
+    RegexFilter,
+    CustomFilter,
+    CompositeFilter,
+    NotFilter,
+    CommonFilters,
+    
+    # Filter creation functions
+    type_filter,
+    priority_filter,
+    age_filter,
+    source_filter,
+    data_filter,
+    regex_filter,
+    custom_filter,
+    and_filter,
+    or_filter,
+    not_filter,
+)
+
+# Legacy compatibility (with deprecation warnings)
+from .legacy_compat import (
+    # Legacy types for backward compatibility
+    LegacyEventType,
+    SDKEventType,
+    EnhancedEventType,
+    LegacyEventData,
+    LegacySDKEventManager,
+    LegacyEventEmitter,
+    
+    # Migration helpers
+    map_legacy_to_unified,
+    migrate_legacy_handlers,
+    create_migration_guide,
+    get_legacy_sdk_event_manager,
+    get_legacy_event_emitter,
 )
 
 __all__ = [
-    # Core types
+    # Core unified system
+    'Event',
+    'BaseEvent',
     'EventType',
     'EventPriority',
-    'Event',
-    'EventT',
+    'EventMetadata',
+    'EventContext',
     
-    # Filtering and metrics
-    'EventFilter',
-    'EventMetrics',
-    
-    # Handlers and subscribers
-    'EventHandler',
-    'AsyncEventHandler',
-    'SyncEventHandler',
-    'EventSubscriber',
-    'CallbackEventSubscriber',
-    'FilteredEventSubscriber',
-    
-    # Event manager
-    'EnhancedEventManager',
-    
-    # Convenience functions
-    'get_event_manager',
-    'event_context',
-    'publish_event',
-    'subscribe_to_events',
-    
-    # SpacetimeDB-specific events
+    # Specific event types
     'ConnectionEvent',
-    'AuthenticationEvent',
+    'AuthenticationEvent', 
     'SubscriptionEvent',
-    'TableUpdateEvent',
-    'ReducerCallEvent',
+    'TableEvent',
+    'ReducerEvent',
     'TransactionEvent',
-    'QueryEvent',
-    'SystemEvent',
+    'MessageEvent',
     'ErrorEvent',
-    'DebugEvent',
     'PerformanceEvent',
     
-    # Event creation functions
+    # Event manager
+    'UnifiedEventManager',
+    'get_event_manager',
+    'set_event_manager',
+    'ManagerMetrics',
+    'HandlerInfo',
+    
+    # Convenience functions
+    'emit_event',
+    'emit_event_async',
+    'subscribe_to_events',
     'create_connection_event',
-    'create_table_update_event',
-    'create_reducer_call_event',
+    'create_table_event',
+    'create_reducer_event',
     'create_error_event',
-    'create_performance_event'
+    'create_performance_event',
+    
+    # Event filtering
+    'EventFilter',
+    'TypeFilter',
+    'PriorityFilter',
+    'AgeFilter',
+    'SourceFilter',
+    'DataFilter',
+    'RegexFilter',
+    'CustomFilter',
+    'CompositeFilter',
+    'NotFilter',
+    'CommonFilters',
+    'type_filter',
+    'priority_filter',
+    'age_filter',
+    'source_filter',
+    'data_filter',
+    'regex_filter',
+    'custom_filter',
+    'and_filter',
+    'or_filter',
+    'not_filter',
+    
+    # Legacy compatibility (deprecated)
+    'LegacyEventType',
+    'SDKEventType',
+    'EnhancedEventType',
+    'LegacyEventData',
+    'LegacySDKEventManager',
+    'LegacyEventEmitter',
+    'map_legacy_to_unified',
+    'migrate_legacy_handlers',
+    'create_migration_guide',
+    'get_legacy_sdk_event_manager',
+    'get_legacy_event_emitter',
 ]

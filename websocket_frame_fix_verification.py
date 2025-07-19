@@ -67,7 +67,7 @@ if all_fixed:
     print('  "Client caused error on text message: data too short for [u8]"')
     print()
     print("Key changes:")
-    print("- ModernWebSocketClient.send_message() checks self.use_binary")
+    print("- WebSocketClient.send_message() checks self.use_binary")
     print("- WebSocketClient.send() checks self.protocol == 'v1.bsatn.spacetimedb'")
     print("- Both use websocket.ABNF.OPCODE_BINARY when sending binary data")
 else:

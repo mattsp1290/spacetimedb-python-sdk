@@ -9,6 +9,7 @@ import asyncio
 import threading
 import time
 import logging
+from .utils.error_formatting import ErrorFormatter
 from typing import Dict, List, Optional, Callable, Any, Set
 from enum import Enum
 from dataclasses import dataclass
@@ -201,7 +202,7 @@ class RobustConnectionManager:
                     await asyncio.sleep(delay)
                 else:
                     # Non-recoverable error
-                    self.logger.error(f"Non-recoverable error: {e}")
+                    self.logger.error(ErrorFormatter.format_connection_error("non-recoverable operation", e))
                     raise e
         
         # All retry attempts failed
@@ -237,7 +238,7 @@ class RobustConnectionManager:
             try:
                 self.on_recovery_started(error_type, error_message)
             except Exception as e:
-                self.logger.error(f"Error in recovery started callback: {e}")
+                self.logger.error(ErrorFormatter.format_event_error("recovery started callback", e))
         
         # Check circuit breaker threshold
         if self.health.error_count >= self.circuit_breaker_threshold:
@@ -292,7 +293,7 @@ class RobustConnectionManager:
                 try:
                     self.on_circuit_breaker_opened()
                 except Exception as e:
-                    self.logger.error(f"Error in circuit breaker opened callback: {e}")
+                    self.logger.error(ErrorFormatter.format_event_error("circuit breaker opened callback", e))
     
     async def _close_circuit_breaker(self) -> None:
         """Close circuit breaker after successful connection."""
@@ -306,7 +307,7 @@ class RobustConnectionManager:
                 try:
                     self.on_circuit_breaker_closed()
                 except Exception as e:
-                    self.logger.error(f"Error in circuit breaker closed callback: {e}")
+                    self.logger.error(ErrorFormatter.format_event_error("circuit breaker closed callback", e))
     
     async def _check_circuit_breaker(self) -> None:
         """Check if circuit breaker should be reset."""

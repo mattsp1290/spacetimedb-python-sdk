@@ -21,7 +21,7 @@ from .mock_infrastructure import (
 
 
 @dataclass
-class TestScenario:
+class ScenarioConfig:
     """Test scenario configuration"""
     name: str
     description: str
@@ -35,10 +35,10 @@ class TestFixtures:
     """Collection of test fixtures for various scenarios"""
     
     @staticmethod
-    def get_connection_scenarios() -> List[TestScenario]:
+    def get_connection_scenarios() -> List[ScenarioConfig]:
         """Get connection test scenarios"""
         return [
-            TestScenario(
+            ScenarioConfig(
                 name="normal_connection",
                 description="Normal successful connection",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -48,7 +48,7 @@ class TestFixtures:
                     'subscriptions_allowed': True
                 }
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="slow_connection",
                 description="Connection with slow server responses",
                 server_behavior=MockServerBehavior.SLOW_RESPONSE,
@@ -58,7 +58,7 @@ class TestFixtures:
                     'eventual_success': True
                 }
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="auth_failures",
                 description="Connection with authentication failures",
                 server_behavior=MockServerBehavior.AUTHENTICATION_FAILURES,
@@ -68,7 +68,7 @@ class TestFixtures:
                     'eventual_auth': False
                 }
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="intermittent_errors",
                 description="Connection with intermittent server errors",
                 server_behavior=MockServerBehavior.INTERMITTENT_ERRORS,
@@ -81,10 +81,10 @@ class TestFixtures:
         ]
         
     @staticmethod
-    def get_subscription_scenarios() -> List[TestScenario]:
+    def get_subscription_scenarios() -> List[ScenarioConfig]:
         """Get subscription test scenarios"""
         return [
-            TestScenario(
+            ScenarioConfig(
                 name="single_subscription",
                 description="Single table subscription",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -95,7 +95,7 @@ class TestFixtures:
                 },
                 test_data={'tables': ['users'], 'update_count': 5}
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="multiple_subscriptions",
                 description="Multiple table subscriptions",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -106,7 +106,7 @@ class TestFixtures:
                 },
                 test_data={'tables': ['users', 'messages', 'logs'], 'update_count': 10}
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="subscription_with_errors",
                 description="Subscriptions with server errors",
                 server_behavior=MockServerBehavior.INTERMITTENT_ERRORS,
@@ -117,7 +117,7 @@ class TestFixtures:
                 },
                 test_data={'tables': ['users', 'messages'], 'update_count': 15}
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="high_volume_subscriptions",
                 description="High volume subscription data",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -131,10 +131,10 @@ class TestFixtures:
         ]
         
     @staticmethod
-    def get_authentication_scenarios() -> List[TestScenario]:
+    def get_authentication_scenarios() -> List[ScenarioConfig]:
         """Get authentication test scenarios"""
         return [
-            TestScenario(
+            ScenarioConfig(
                 name="successful_auth",
                 description="Successful authentication flow",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -144,7 +144,7 @@ class TestFixtures:
                     'authenticated_state': True
                 }
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="auth_token_refresh",
                 description="Authentication token refresh",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -154,7 +154,7 @@ class TestFixtures:
                     'new_token_valid': True
                 }
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="auth_failures_with_retry",
                 description="Authentication failures with retry logic",
                 server_behavior=MockServerBehavior.AUTHENTICATION_FAILURES,
@@ -164,7 +164,7 @@ class TestFixtures:
                     'eventual_failure': True
                 }
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="concurrent_auth_requests",
                 description="Concurrent authentication requests",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -177,10 +177,10 @@ class TestFixtures:
         ]
         
     @staticmethod
-    def get_integration_scenarios() -> List[TestScenario]:
+    def get_integration_scenarios() -> List[ScenarioConfig]:
         """Get integration test scenarios"""
         return [
-            TestScenario(
+            ScenarioConfig(
                 name="full_lifecycle",
                 description="Complete client lifecycle",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -193,7 +193,7 @@ class TestFixtures:
                 },
                 test_data={'duration': 30.0}
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="error_recovery",
                 description="Error recovery and resilience",
                 server_behavior=MockServerBehavior.INTERMITTENT_ERRORS,
@@ -205,7 +205,7 @@ class TestFixtures:
                 },
                 test_data={'duration': 20.0}
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="performance_under_load",
                 description="Performance under high load",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -216,7 +216,7 @@ class TestFixtures:
                 },
                 test_data={'duration': 15.0, 'load_factor': 10}
             ),
-            TestScenario(
+            ScenarioConfig(
                 name="module_isolation",
                 description="Module isolation and independence",
                 server_behavior=MockServerBehavior.NORMAL,
@@ -233,7 +233,7 @@ class TestFixtures:
 class ScenarioRunner:
     """Helper class to run test scenarios"""
     
-    def __init__(self, scenario: TestScenario):
+    def __init__(self, scenario: ScenarioConfig):
         self.scenario = scenario
         self.server: Optional[MockSpacetimeDBServer] = None
         self.results: Dict[str, Any] = {}
@@ -487,7 +487,7 @@ def integration_scenarios():
 @pytest.fixture
 def scenario_runner():
     """Provide scenario runner factory"""
-    def _create_runner(scenario: TestScenario) -> ScenarioRunner:
+    def _create_runner(scenario: ScenarioConfig) -> ScenarioRunner:
         return ScenarioRunner(scenario)
     return _create_runner
 

@@ -10,23 +10,29 @@ Tests all aspects of subscription management including:
 - Error handling
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import threading
 import time
 from unittest.mock import Mock, patch
 from typing import List, Optional
 
-from src.spacetimedb_sdk.connection.subscription_manager import (
+from spacetimedb_sdk.connection.subscription_manager import (
     SubscriptionManager,
     SubscriptionState,
     SubscriptionInfo,
     SubscriptionMetrics,
     create_subscription_manager
 )
-from src.spacetimedb_sdk.query_id import QueryId
+from spacetimedb_sdk.query_id import QueryId
 # Import events with fallback for testing
 try:
-    from src.spacetimedb_sdk.events import (
+    from spacetimedb_sdk.events import (
         EnhancedEventManager,
         SubscriptionEvent,
         EventType
@@ -560,7 +566,7 @@ class TestSubscriptionManagerIntegration:
     def test_event_integration(self):
         """Test integration with real event system."""
         try:
-            from src.spacetimedb_sdk.events import EnhancedEventManager as RealEventManager
+            from spacetimedb_sdk.events import EnhancedEventManager as RealEventManager
             event_manager = RealEventManager()
         except ImportError:
             # Use mock event manager for testing

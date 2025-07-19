@@ -26,7 +26,7 @@ from ..testing import (
     ProtocolComplianceTester,
     PerformanceBenchmark
 )
-from ..modern_client import ModernSpacetimeDBClient
+from ..spacetimedb_client import SpacetimeDBClient
 from ..connection_builder import SpacetimeDBConnectionBuilder
 
 
@@ -95,14 +95,14 @@ def benchmark() -> PerformanceBenchmark:
 @pytest.fixture
 async def client_builder() -> SpacetimeDBConnectionBuilder:
     """Provide a connection builder for tests."""
-    return ModernSpacetimeDBClient.builder()
+    return SpacetimeDBClient.builder()
 
 
 @pytest.fixture
-async def mock_client(mock_connection) -> ModernSpacetimeDBClient:
+async def mock_client(mock_connection) -> SpacetimeDBClient:
     """Provide a mock client for testing."""
     # Create a client that uses mock connection
-    client = ModernSpacetimeDBClient(
+    client = SpacetimeDBClient(
         uri=get_test_database_url(),
         module_name=get_test_module_name()
     )

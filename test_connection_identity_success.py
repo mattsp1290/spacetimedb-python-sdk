@@ -377,11 +377,11 @@ def test_connection_event_system():
 
 def test_modern_client_integration():
     print("[DEBUG] Starting test_modern_client_integration")
-    from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     from spacetimedb_sdk.connection_id import ConnectionEventType, ConnectionState
     
-    print("[DEBUG] test_modern_client_integration: Creating ModernSpacetimeDBClient(start_message_processing=False, test_mode=True)")
-    client = ModernSpacetimeDBClient(start_message_processing=False, test_mode=True)
+    print("[DEBUG] test_modern_client_integration: Creating SpacetimeDBClient(start_message_processing=False, test_mode=True)")
+    client = SpacetimeDBClient(start_message_processing=False, test_mode=True)
     print("[DEBUG] test_modern_client_integration: Client created.")
     
     try:

@@ -11,6 +11,12 @@ This test suite validates the authentication handler implementation including:
 - Security features
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import time
 import threading

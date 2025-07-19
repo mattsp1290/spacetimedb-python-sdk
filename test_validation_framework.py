@@ -9,6 +9,12 @@ This test file validates that the security framework properly prevents:
 4. Other input validation vulnerabilities
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import json
 import sys
 import time

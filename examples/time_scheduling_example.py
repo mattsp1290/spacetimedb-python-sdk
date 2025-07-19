@@ -15,6 +15,12 @@ Use cases shown:
 - Performance benchmarking
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import logging
 from datetime import datetime, timedelta, timezone

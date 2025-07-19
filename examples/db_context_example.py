@@ -5,6 +5,12 @@ Demonstrates structured access to database tables and reducers
 using the DbContext interface, matching TypeScript SDK patterns.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 from typing import Optional, List, Dict, Any
 

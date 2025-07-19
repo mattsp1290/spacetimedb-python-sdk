@@ -12,11 +12,12 @@ import queue
 from unittest.mock import Mock, patch, MagicMock
 from typing import Dict, Any, Optional, List, Callable
 
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, ConnectionState
+from spacetimedb_sdk.websocket_client import WebSocketClient, ConnectionState
 from spacetimedb_sdk.protocol import (
-    Identity, ConnectionId, QueryId,
+    Identity, ConnectionId,
     IdentityToken, Subscribe, SubscriptionError
 )
+from spacetimedb_sdk.query_id import QueryId
 
 
 class MockIntegratedWebSocketClient:
@@ -169,11 +170,11 @@ class MockIntegratedWebSocketClient:
         if not self.is_modules_initialized:
             raise RuntimeError("Modules not initialized")
             
-        if self.connection_state != ConnectionState.CONNECTED:
+        if self.connection_state not in [ConnectionState.CONNECTED, ConnectionState.AUTHENTICATED]:
             raise RuntimeError("Not connected")
             
         # Create subscription through subscription manager
-        query_id = str(QueryId.random())
+        query_id = str(QueryId.generate())
         success = self.subscription_manager.add_subscription(
             query_id, table_name, sql_query
         )

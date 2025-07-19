@@ -5,13 +5,19 @@ Tests all data structures including OperationsMap, specialized collections,
 concurrent access patterns, and performance monitoring.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import threading
 import time
 from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
-from src.spacetimedb_sdk.data_structures import (
+from spacetimedb_sdk.data_structures import (
     OperationsMap, IdentityCollection, ConnectionIdCollection, QueryIdCollection,
     ConcurrentSet, LRUCache, CollectionManager, CollectionStrategy,
     CollectionMetrics, Equalable, collection_manager,
@@ -19,8 +25,8 @@ from src.spacetimedb_sdk.data_structures import (
     create_query_id_collection, create_concurrent_set, create_lru_cache,
     get_collection, get_all_metrics
 )
-from src.spacetimedb_sdk.protocol import Identity, ConnectionId, QueryId
-from src.spacetimedb_sdk.time_utils import EnhancedTimestamp
+from spacetimedb_sdk.protocol import Identity, ConnectionId, QueryId
+from spacetimedb_sdk.time_utils import EnhancedTimestamp
 
 
 class CustomEqualableObject:

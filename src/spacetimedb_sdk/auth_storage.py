@@ -28,6 +28,7 @@ Migration example:
 
 import json
 import logging
+from .utils.error_formatting import ErrorFormatter
 import os
 import threading
 import time
@@ -249,7 +250,7 @@ class SpacetimeDBAuthStorage:
                     self._cleanup_expired_credentials()
                     
             except Exception as e:
-                self.logger.error(f"Failed to load credentials from {self.credentials_file}: {e}")
+                self.logger.error(ErrorFormatter.format_auth_error("credential loading", e, f"file: {self.credentials_file}"))
                 self._cache_loaded = True  # Mark as loaded even on error to prevent repeated attempts
     
     def _save_credentials(self) -> None:
@@ -272,7 +273,7 @@ class SpacetimeDBAuthStorage:
                 self.logger.debug(f"Saved {len(data)} credential entries to {self.credentials_file}")
                 
             except Exception as e:
-                self.logger.error(f"Failed to save credentials to {self.credentials_file}: {e}")
+                self.logger.error(ErrorFormatter.format_auth_error("credential saving", e, f"file: {self.credentials_file}"))
     
     def store_credentials(
         self,
@@ -313,7 +314,7 @@ class SpacetimeDBAuthStorage:
             self._credentials_cache[key] = credentials
             self._save_credentials()
             
-            self.logger.info(f"Stored credentials for {host}/{database} (identity: {identity[:8]}...)")
+            self.logger.info(f"Stored credentials for {host}/{database}")
     
     def get_credentials(
         self,
@@ -414,7 +415,7 @@ class SpacetimeDBAuthStorage:
                     self.credentials_file.unlink()
                 self.logger.info("Cleared all stored credentials")
             except Exception as e:
-                self.logger.error(f"Failed to clear credentials file: {e}")
+                self.logger.error(ErrorFormatter.format_auth_error("credential clearing", e))
     
     def _cleanup_expired_credentials(self) -> int:
         """

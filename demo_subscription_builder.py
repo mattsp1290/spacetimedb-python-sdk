@@ -9,7 +9,7 @@ SpacetimeDB connection. Shows TypeScript SDK compatibility and advanced features
 import sys
 sys.path.append('src')
 
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.subscription_builder import (
     AdvancedSubscriptionBuilder,
     SubscriptionState,
@@ -59,7 +59,7 @@ def demo_builder_api():
     print("=" * 50)
     
     # Create a mock client for demonstration
-    client = ModernSpacetimeDBClient(start_message_processing=False)
+    client = SpacetimeDBClient(start_message_processing=False)
     
     # Show builder creation
     print("1. Creating subscription builder:")
@@ -142,7 +142,7 @@ def demo_subscription_strategies():
     print("\n📊 Subscription Strategy Demonstration:")
     print("=" * 45)
     
-    client = ModernSpacetimeDBClient(start_message_processing=False)
+    client = SpacetimeDBClient(start_message_processing=False)
     builder = client.subscription_builder()
     
     # Test adaptive strategy selection
@@ -179,7 +179,7 @@ def demo_subscription_state():
         print(f"   - {state.value.upper()}: {state.name}")
     
     # Demonstrate state transitions
-    client = ModernSpacetimeDBClient(start_message_processing=False)
+    client = SpacetimeDBClient(start_message_processing=False)
     builder = client.subscription_builder()
     
     state_changes = []
@@ -215,7 +215,7 @@ def demo_advanced_features():
     print("   ✅ Performance analytics")
     
     # Show metrics structure
-    client = ModernSpacetimeDBClient(start_message_processing=False)
+    client = SpacetimeDBClient(start_message_processing=False)
     builder = client.subscription_builder()
     metrics = builder.get_metrics()
     

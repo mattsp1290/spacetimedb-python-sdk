@@ -19,7 +19,7 @@ from .time_utils import (
 )
 
 if TYPE_CHECKING:
-    from .modern_client import ModernSpacetimeDBClient
+    from .spacetimedb_client import SpacetimeDBClient
 
 
 class ScheduleStatus(Enum):
@@ -90,7 +90,7 @@ class ReducerScheduler:
     - Support cancellation and rescheduling
     """
     
-    def __init__(self, client: 'ModernSpacetimeDBClient'):
+    def __init__(self, client: 'SpacetimeDBClient'):
         """
         Initialize the scheduler.
         
@@ -584,7 +584,7 @@ class ReducerScheduler:
 
 # Convenience functions for common scheduling patterns
 def schedule_once(
-    client: 'ModernSpacetimeDBClient',
+    client: 'SpacetimeDBClient',
     reducer_name: str,
     args: List[Any],
     delay: Union[EnhancedTimeDuration, timedelta, float]
@@ -597,7 +597,7 @@ def schedule_once(
 
 
 def schedule_repeating(
-    client: 'ModernSpacetimeDBClient',
+    client: 'SpacetimeDBClient',
     reducer_name: str,
     args: List[Any],
     interval: Union[EnhancedTimeDuration, timedelta, float]
@@ -610,7 +610,7 @@ def schedule_repeating(
 
 
 def schedule_at(
-    client: 'ModernSpacetimeDBClient',
+    client: 'SpacetimeDBClient',
     reducer_name: str,
     args: List[Any],
     timestamp: Union[EnhancedTimestamp, datetime, float]

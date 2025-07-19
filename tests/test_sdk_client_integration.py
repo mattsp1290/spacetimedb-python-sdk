@@ -15,7 +15,7 @@ from unittest.mock import Mock, patch, MagicMock
 from typing import Dict, List, Any, Optional
 
 # SDK imports
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, SubscriptionMetrics
+from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetrics
 from spacetimedb_sdk.message_validator import SpacetimeDBMessageValidator, MessageValidationError
 from spacetimedb_sdk.large_message_handler import LargeMessageHandler
 from spacetimedb_sdk.connection_recovery import RobustConnectionManager
@@ -164,7 +164,7 @@ class TestFrameTypeSelection:
         """Test that SDK and client use same frame type for protocol."""
         
         # Test SDK frame type detection
-        sdk_client = ModernWebSocketClient(protocol=protocol)
+        sdk_client = WebSocketClient(protocol=protocol)
         sdk_frame_type = "BINARY" if sdk_client.use_binary else "TEXT"
         
         # Test mock client frame type detection
@@ -183,7 +183,7 @@ class TestProtocolHelperIntegration:
     def test_protocol_helper_access(self):
         """Test that client can access SDK protocol helper."""
         
-        sdk_client = ModernWebSocketClient(protocol=TEXT_PROTOCOL)
+        sdk_client = WebSocketClient(protocol=TEXT_PROTOCOL)
         protocol_helper = sdk_client.get_protocol_helper()
         
         # Should provide access to encoding/decoding components
@@ -199,7 +199,7 @@ class TestProtocolHelperIntegration:
     def test_client_encoding_bypass(self):
         """Test that client can bypass SDK encoding."""
         
-        sdk_client = ModernWebSocketClient(protocol=TEXT_PROTOCOL)
+        sdk_client = WebSocketClient(protocol=TEXT_PROTOCOL)
         mock_ws = MockWebSocket()
         sdk_client.ws = mock_ws
         sdk_client.state = sdk_client.state.CONNECTED
@@ -225,7 +225,7 @@ class TestSubscriptionStateSync:
     def test_subscription_state_callbacks(self):
         """Test subscription state callback registration and notification."""
         
-        sdk_client = ModernWebSocketClient()
+        sdk_client = WebSocketClient()
         state_changes = []
         
         def track_state(event_type: str, data: Any):
@@ -251,7 +251,7 @@ class TestSubscriptionStateSync:
     def test_subscription_error_callbacks(self):
         """Test subscription error callback handling."""
         
-        sdk_client = ModernWebSocketClient()
+        sdk_client = WebSocketClient()
         error_events = []
         
         def track_errors(event_type: str, data: Any):
@@ -500,7 +500,7 @@ class TestEndToEndIntegration:
         """Test complete message flow from client through SDK."""
         
         # Create SDK client
-        sdk_client = ModernWebSocketClient(protocol=TEXT_PROTOCOL)
+        sdk_client = WebSocketClient(protocol=TEXT_PROTOCOL)
         
         # Create mock client 
         mock_client = MockBlackholioClient(protocol=TEXT_PROTOCOL)
@@ -528,7 +528,7 @@ class TestEndToEndIntegration:
     def test_subscription_lifecycle_integration(self):
         """Test complete subscription lifecycle with health monitoring."""
         
-        sdk_client = ModernWebSocketClient()
+        sdk_client = WebSocketClient()
         
         # Track subscription events
         subscription_events = []

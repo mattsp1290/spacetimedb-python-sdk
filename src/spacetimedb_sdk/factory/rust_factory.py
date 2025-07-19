@@ -7,6 +7,7 @@ taking advantage of Rust-specific performance characteristics and features.
 
 from typing import Dict, Any, Optional
 import logging
+from ..utils.error_formatting import ErrorFormatter
 
 from .base import (
     SpacetimeDBClientFactoryBase,
@@ -192,5 +193,5 @@ class RustOptimizedFactory(SpacetimeDBClientFactoryBase):
             return True
             
         except Exception as e:
-            logger.error(f"Rust server compatibility check failed: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Rust Factory", "compatibility check", e))
             return False

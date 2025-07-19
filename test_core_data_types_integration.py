@@ -5,6 +5,12 @@ Tests all primitive and complex data types against real SpacetimeDB
 instances to ensure correct serialization, storage, and retrieval.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 import time
@@ -12,7 +18,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 
 from spacetimedb_sdk import (
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     configure_default_logging,
     SpacetimeDBServer,
     SpacetimeDBConfig,

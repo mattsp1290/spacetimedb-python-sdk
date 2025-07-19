@@ -9,6 +9,7 @@ for client creation.
 
 from typing import Any, Dict, Optional, Union
 import logging
+from ..utils.error_formatting import ErrorFormatter
 
 from .registry import registry, SpacetimeDBFactoryRegistry
 from .base import SpacetimeDBClientFactory, ServerLanguage, OptimizationProfile
@@ -16,7 +17,7 @@ from .rust_factory import RustOptimizedFactory
 from .python_factory import PythonOptimizedFactory
 from .csharp_factory import CSharpOptimizedFactory
 from .go_factory import GoOptimizedFactory
-from ..modern_client import ModernSpacetimeDBClient
+from ..spacetimedb_client import SpacetimeDBClient
 from ..exceptions import (
     SpacetimeDBConnectionError,
     SpacetimeDBError,
@@ -90,7 +91,7 @@ def get_spacetimedb_factory(
             )
         raise SpacetimeDBError(str(e))
     except Exception as e:
-        logger.error(f"Failed to get factory for {language}: {e}")
+        logger.error(ErrorFormatter.format_generic_error("Factory", f"get factory for {language}", e))
         raise SpacetimeDBError(
             f"Cannot get factory for language '{language}': {str(e)}"
         )
@@ -104,7 +105,7 @@ def create_spacetimedb_client(
     optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
     factory: Optional[SpacetimeDBClientFactory] = None,
     **kwargs: Any
-) -> ModernSpacetimeDBClient:
+) -> SpacetimeDBClient:
     """
     Create a SpacetimeDB client optimized for the specified server language.
     
@@ -121,7 +122,7 @@ def create_spacetimedb_client(
         **kwargs: Additional configuration parameters
         
     Returns:
-        ModernSpacetimeDBClient: Optimized client instance
+        SpacetimeDBClient: Optimized client instance
         
     Raises:
         SpacetimeDBConnectionError: If client creation fails
@@ -171,7 +172,7 @@ def create_spacetimedb_client(
         # Re-raise our exceptions
         raise
     except Exception as e:
-        logger.error(f"Failed to create SpacetimeDB client: {e}")
+        logger.error(ErrorFormatter.format_generic_error("Factory", "create SpacetimeDB client", e))
         raise SpacetimeDBConnectionError(
             f"Cannot create SpacetimeDB client: {str(e)}"
         )
@@ -184,7 +185,7 @@ def create_optimized_client(
     optimization_profile: OptimizationProfile,
     auth_token: Optional[str] = None,
     **kwargs: Any
-) -> ModernSpacetimeDBClient:
+) -> SpacetimeDBClient:
     """
     Create a client with specific optimization profile.
     
@@ -199,7 +200,7 @@ def create_optimized_client(
         **kwargs: Additional configuration
         
     Returns:
-        ModernSpacetimeDBClient: Optimized client
+        SpacetimeDBClient: Optimized client
     """
     return create_spacetimedb_client(
         host=host,
@@ -288,7 +289,7 @@ def validate_server_compatibility(
         factory = get_spacetimedb_factory(server_language)
         return factory.validate_compatibility(server_version)
     except Exception as e:
-        logger.error(f"Compatibility validation failed: {e}")
+        logger.error(ErrorFormatter.format_generic_error("Factory", "compatibility validation", e))
         return False
 
 
@@ -320,7 +321,7 @@ def create_rust_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.PERFORMANCE,
     **kwargs: Any
-) -> ModernSpacetimeDBClient:
+) -> SpacetimeDBClient:
     """Create a client optimized for Rust servers."""
     return create_spacetimedb_client(
         host=host,
@@ -338,7 +339,7 @@ def create_python_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
     **kwargs: Any
-) -> ModernSpacetimeDBClient:
+) -> SpacetimeDBClient:
     """Create a client optimized for Python servers."""
     return create_spacetimedb_client(
         host=host,
@@ -356,7 +357,7 @@ def create_csharp_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
     **kwargs: Any
-) -> ModernSpacetimeDBClient:
+) -> SpacetimeDBClient:
     """Create a client optimized for C# servers."""
     return create_spacetimedb_client(
         host=host,
@@ -374,7 +375,7 @@ def create_go_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.PERFORMANCE,
     **kwargs: Any
-) -> ModernSpacetimeDBClient:
+) -> SpacetimeDBClient:
     """Create a client optimized for Go servers."""
     return create_spacetimedb_client(
         host=host,

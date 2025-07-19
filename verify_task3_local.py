@@ -5,6 +5,12 @@ This script verifies that the circular import issue between
 connection_builder.py and connection_pool.py has been resolved.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 import os
 import traceback
@@ -159,10 +165,10 @@ def test_builder_pool_integration() -> Tuple[bool, str]:
     
     try:
         clear_modules()
-        from spacetimedb_sdk import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Test the builder pattern
-        builder = ModernSpacetimeDBClient.builder()
+        builder = SpacetimeDBClient.builder()
         
         # Configure for pool
         configured_builder = (builder
@@ -214,12 +220,12 @@ def test_string_annotations() -> Tuple[bool, str]:
             if "'SpacetimeDBConnectionBuilder'" in line or '"SpacetimeDBConnectionBuilder"' in line:
                 string_annotations.append(f"Line {i+1}: {line.strip()}")
         
-        # Check if the module uses ModernSpacetimeDBClient.builder() instead
-        uses_builder_pattern = "ModernSpacetimeDBClient.builder()" in content
+        # Check if the module uses SpacetimeDBClient.builder() instead
+        uses_builder_pattern = "SpacetimeDBClient.builder()" in content
         
         if uses_builder_pattern:
-            test_result("Uses ModernSpacetimeDBClient.builder() pattern", True)
-            details = "Connection pool uses the builder pattern from ModernSpacetimeDBClient"
+            test_result("Uses SpacetimeDBClient.builder() pattern", True)
+            details = "Connection pool uses the builder pattern from SpacetimeDBClient"
         else:
             details = f"Found {len(string_annotations)} string annotations"
             if string_annotations:
@@ -284,9 +290,9 @@ def test_external_usage() -> Tuple[bool, str]:
         
         # Test 1: Basic client creation
         try:
-            from spacetimedb_sdk import ModernSpacetimeDBClient
+            from spacetimedb_sdk import SpacetimeDBClient
             
-            client_builder = ModernSpacetimeDBClient.builder() \
+            client_builder = SpacetimeDBClient.builder() \
                 .with_uri("ws://localhost:3000") \
                 .with_module_name("my_game")
             
@@ -297,9 +303,9 @@ def test_external_usage() -> Tuple[bool, str]:
         
         # Test 2: Connection pool creation
         try:
-            from spacetimedb_sdk import ModernSpacetimeDBClient, RetryPolicy
+            from spacetimedb_sdk import SpacetimeDBClient, RetryPolicy
             
-            pool_builder = ModernSpacetimeDBClient.builder() \
+            pool_builder = SpacetimeDBClient.builder() \
                 .with_uri("ws://localhost:3000") \
                 .with_module_name("my_game") \
                 .with_connection_pool(min_connections=10, max_connections=50) \
@@ -356,7 +362,7 @@ def run_all_tests() -> bool:
         print("  1. No direct imports of SpacetimeDBConnectionBuilder in connection_pool.py")
         print("  2. Lazy imports in connection_builder.py for build_pool()")
         print("  3. Shared types module for common type definitions")
-        print("  4. ModernSpacetimeDBClient.builder() pattern")
+        print("  4. SpacetimeDBClient.builder() pattern")
         print("  5. Test fixtures removed from main __init__.py")
     else:
         print(f"\n❌ {total_tests - passed_tests} test(s) failed.")

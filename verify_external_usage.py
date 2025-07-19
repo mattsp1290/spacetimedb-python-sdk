@@ -4,6 +4,12 @@ Comprehensive verification script to ensure the SDK is ready for external usage.
 This simulates how external packages will use the SDK after pip installation.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import os
 import sys
 import subprocess
@@ -73,7 +79,7 @@ sys.path.insert(0, 'src')
 # Test main imports
 from spacetimedb_sdk import (
     SpacetimeDBClient,
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     SpacetimeDBConnectionBuilder,
     ConnectionPool,
     LoadBalancedConnectionManager,
@@ -98,10 +104,10 @@ print("All imports successful")
 import sys
 sys.path.insert(0, 'src')
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 # Test builder creation
-builder = ModernSpacetimeDBClient.builder()
+builder = SpacetimeDBClient.builder()
 assert builder is not None
 
 # Test fluent API
@@ -127,11 +133,11 @@ print("Builder pattern works correctly")
 import sys
 sys.path.insert(0, 'src')
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 # Test pool configuration
 builder = (
-    ModernSpacetimeDBClient.builder()
+    SpacetimeDBClient.builder()
     .with_uri("ws://localhost:3000")
     .with_module_name("test")
     .with_connection_pool(min_connections=5, max_connections=20)
@@ -172,7 +178,7 @@ from spacetimedb_sdk.connection_pool import ConnectionPool
 
 # Test import order 3: shared_types first
 from spacetimedb_sdk.shared_types import RetryPolicy
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 print("No circular imports detected")
 """
@@ -246,11 +252,11 @@ print("No test fixtures in main package")
 import sys
 sys.path.insert(0, 'src')
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.shared_types import RetryPolicy
 
 # Example 1: Simple client creation
-client = ModernSpacetimeDBClient.builder() \\
+client = SpacetimeDBClient.builder() \\
     .with_uri("ws://localhost:3000") \\
     .with_module_name("my_game") \\
     .with_token("auth_token") \\
@@ -263,7 +269,7 @@ retry_policy = RetryPolicy(
     max_delay=30.0
 )
 
-pool_builder = ModernSpacetimeDBClient.builder() \\
+pool_builder = SpacetimeDBClient.builder() \\
     .with_uri("ws://localhost:3000") \\
     .with_module_name("my_game") \\
     .with_connection_pool(
@@ -315,11 +321,11 @@ setup(
 import sys
 sys.path.insert(0, '""" + str(self.project_root / "src") + """')
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 def main():
     # Try to use the SDK
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     builder.with_uri("ws://localhost:3000")
     builder.with_module_name("test")
     

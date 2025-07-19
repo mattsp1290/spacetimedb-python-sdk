@@ -9,6 +9,12 @@ This demonstrates all security features implemented in prof-4:
 - MFA support
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import json
 from pathlib import Path
@@ -16,21 +22,21 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, Any
 
 # Import security components
-from src.spacetimedb_sdk.enhanced_connection_builder import (
+from spacetimedb_sdk.enhanced_connection_builder import (
     EnhancedConnectionBuilder, create_secure_client, create_enterprise_client
 )
-from src.spacetimedb_sdk.security_manager import (
+from spacetimedb_sdk.security_manager import (
     SecurityConfig, CertificatePin, TLSVersion, SecurityManager,
     pin_from_string
 )
-from src.spacetimedb_sdk.secure_storage import (
+from spacetimedb_sdk.secure_storage import (
     SecureStorage, StorageConfig, StorageBackend, create_secure_token
 )
-from src.spacetimedb_sdk.auth_providers import (
+from spacetimedb_sdk.auth_providers import (
     OAuth2Config, OAuth2Flow, JWTConfig, APIKeyConfig,
     MultiAuthProvider, AuthProviderFactory, MFAProvider, MFAConfig, MFAMethod
 )
-from src.spacetimedb_sdk.security_audit import (
+from spacetimedb_sdk.security_audit import (
     SecurityAuditor, AuditConfig, ComplianceStandard,
     SecurityEventType, SeverityLevel
 )
@@ -417,7 +423,7 @@ def demonstrate_security_decorator():
     """Demonstrate the security event decorator."""
     print("\n=== Testing Security Event Decorator ===")
     
-    from src.spacetimedb_sdk.security_audit import security_event, AuditableMixin
+    from spacetimedb_sdk.security_audit import security_event, AuditableMixin
     
     class SecureDataService(AuditableMixin):
         """Example service with security auditing."""

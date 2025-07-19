@@ -9,6 +9,12 @@ Tests the complete BSATN binary protocol support including:
 - Error handling
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import uuid
 from datetime import datetime, timedelta
@@ -61,7 +67,7 @@ from spacetimedb_sdk import (
     TimeDuration,
     
     # WebSocket client
-    ModernWebSocketClient,
+    WebSocketClient,
 )
 
 # Import types that aren't exported from main module
@@ -466,7 +472,7 @@ class TestWebSocketClientIntegration:
     
     def test_binary_protocol_client_creation(self):
         """Test creating a WebSocket client with binary protocol."""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             protocol=BIN_PROTOCOL,
             auto_reconnect=False
         )
@@ -478,7 +484,7 @@ class TestWebSocketClientIntegration:
     
     def test_text_protocol_client_creation(self):
         """Test creating a WebSocket client with text protocol."""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             protocol=TEXT_PROTOCOL,
             auto_reconnect=False
         )
@@ -491,13 +497,13 @@ class TestWebSocketClientIntegration:
     def test_message_encoding_selection(self):
         """Test that client uses correct encoding based on protocol."""
         # Binary protocol client
-        binary_client = ModernWebSocketClient(
+        binary_client = WebSocketClient(
             protocol=BIN_PROTOCOL,
             auto_reconnect=False
         )
         
         # Text protocol client
-        text_client = ModernWebSocketClient(
+        text_client = WebSocketClient(
             protocol=TEXT_PROTOCOL,
             auto_reconnect=False
         )

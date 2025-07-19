@@ -3,23 +3,29 @@
 Simple test to verify the connection builder pattern works correctly.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 sys.path.append('src')
 
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.connection_builder import SpacetimeDBConnectionBuilder
 
 def test_builder_creation():
     """Test that builder can be created."""
     print("Testing builder creation...")
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     assert isinstance(builder, SpacetimeDBConnectionBuilder)
     print("✅ Builder created successfully")
 
 def test_fluent_api():
     """Test that fluent API works."""
     print("Testing fluent API...")
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     
     result = (builder
               .with_uri("ws://localhost:3000")
@@ -35,7 +41,7 @@ def test_validation():
     print("Testing validation...")
     
     # Test invalid configuration
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     validation = builder.validate()
     assert not validation['valid']
     print("✅ Invalid configuration properly detected")
@@ -51,7 +57,7 @@ def test_error_handling():
     """Test error handling."""
     print("Testing error handling...")
     
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     
     # Test invalid URI
     try:
@@ -79,7 +85,7 @@ def test_typescript_compatibility():
     print("Testing TypeScript SDK compatibility...")
     
     # This pattern should match TypeScript SDK exactly
-    builder = (ModernSpacetimeDBClient.builder()
+    builder = (SpacetimeDBClient.builder()
                .with_uri("ws://localhost:3000")
                .with_module_name("my_game")
                .with_token("my_token")
@@ -122,9 +128,7 @@ def main():
         print(f"\n❌ TEST FAILED: {e}")
         import traceback
         traceback.print_exc()
-        return False
-    
-    return True
+        raise AssertionError("TEST FAILED: " + str(e))
 
 if __name__ == "__main__":
     success = main()

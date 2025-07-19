@@ -76,9 +76,10 @@ class MockAuthenticationHandler:
             # Store credentials
             if self.auth_token:
                 credentials = AuthCredentials(
-                    token=self.auth_token,
                     identity=str(self.identity),
-                    connection_id=str(self.connection_id)
+                    token=self.auth_token,
+                    host="localhost:3000",
+                    database="test_db"
                 )
                 self.credentials_store[str(self.identity)] = credentials
                 
@@ -263,6 +264,10 @@ class MockAuthenticationHandler:
         
     def refresh_authentication(self) -> bool:
         """Refresh authentication if needed"""
+        # If no token, can't authenticate
+        if not self.auth_token:
+            return False
+            
         if self.is_token_expired():
             self.clear_identity()
             return self.authenticate()
@@ -499,9 +504,10 @@ class TestAuthenticationHandler:
         # Store credentials
         identity_str = "test_identity"
         credentials = AuthCredentials(
-            token="test_token",
             identity=identity_str,
-            connection_id="test_connection_id"
+            token="test_token",
+            host="localhost:3000",
+            database="test_db"
         )
         
         handler.store_credentials(identity_str, credentials)
@@ -511,7 +517,8 @@ class TestAuthenticationHandler:
         assert retrieved is not None
         assert retrieved.token == "test_token"
         assert retrieved.identity == identity_str
-        assert retrieved.connection_id == "test_connection_id"
+        assert retrieved.host == "localhost:3000"
+        assert retrieved.database == "test_db"
         
         # Clear credentials
         success = handler.clear_stored_credentials(identity_str)

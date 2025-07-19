@@ -6,6 +6,7 @@ validation components to provide comprehensive security for the SDK.
 """
 
 import logging
+from ..utils.error_formatting import ErrorFormatter
 import threading
 from typing import Any, Dict, Optional, List, Callable, Union
 from dataclasses import dataclass, field
@@ -264,6 +265,23 @@ class SecurityManager:
             self._request_timestamps.append(current_time)
             return True
     
+    def validate_hostname(self, hostname: str) -> bool:
+        """
+        Validate hostname format and return boolean result.
+        
+        Args:
+            hostname: Hostname to validate
+            
+        Returns:
+            True if hostname is valid, False otherwise
+        """
+        if not hostname:
+            return False
+            
+        # Use the URL validator's hostname validation logic
+        errors = self.url_validator._validate_hostname(hostname, "hostname", hostname)
+        return len(errors) == 0
+
     def validate_connection_parameters(self, host: str, database: str, 
                                      auth_token: Optional[str] = None) -> ValidationResult:
         """
@@ -352,7 +370,7 @@ class SecurityManager:
             try:
                 self.config.on_validation_failure(validation_type, value)
             except Exception as e:
-                self.logger.error(f"Error in validation failure callback: {e}")
+                self.logger.error(ErrorFormatter.format_generic_error("Security Manager", "validation failure callback", e))
         
         if self.config.strict_mode:
             self._security_metrics['security_violations'] += 1
@@ -364,7 +382,7 @@ class SecurityManager:
                         value
                     )
                 except Exception as e:
-                    self.logger.error(f"Error in security violation callback: {e}")
+                    self.logger.error(ErrorFormatter.format_generic_error("Security Manager", "security violation callback", e))
 
 
 # Global security manager instance
@@ -444,3 +462,8 @@ def sanitize_sql_query(query: str, field: Optional[str] = None) -> str:
 def sanitize_json_data(data: Any, field: Optional[str] = None) -> Any:
     """Sanitize JSON data using global security manager."""
     return get_security_manager().sanitize_json_data(data, field)
+
+
+def validate_hostname(hostname: str) -> bool:
+    """Validate hostname using global security manager."""
+    return get_security_manager().validate_hostname(hostname)

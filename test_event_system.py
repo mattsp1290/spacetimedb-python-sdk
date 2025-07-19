@@ -9,6 +9,12 @@ Tests the TypeScript SDK-compatible advanced event system with:
 - Event history and metrics
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import unittest
 import time
@@ -29,7 +35,7 @@ from spacetimedb_sdk.event_system import (
     global_event_bus
 )
 from spacetimedb_sdk.protocol import Identity, ConnectionId
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 
 class TestEventMetadata(unittest.TestCase):
@@ -590,15 +596,15 @@ class TestGlobalEventBus(unittest.TestCase):
 
 
 class TestClientIntegration(unittest.TestCase):
-    """Test integration with ModernSpacetimeDBClient."""
+    """Test integration with SpacetimeDBClient."""
     
-    @patch('spacetimedb_sdk.modern_client.ModernWebSocketClient')
+    @patch('spacetimedb_sdk.modern_client.WebSocketClient')
     def setUp(self, mock_ws_client_class):
         """Set up test client."""
         self.mock_ws = Mock()
         mock_ws_client_class.return_value = self.mock_ws
         
-        self.client = ModernSpacetimeDBClient(
+        self.client = SpacetimeDBClient(
             start_message_processing=False  # Disable for testing
         )
         

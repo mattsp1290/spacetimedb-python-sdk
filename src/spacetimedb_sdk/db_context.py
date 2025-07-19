@@ -12,7 +12,7 @@ import asyncio
 from dataclasses import dataclass
 
 if TYPE_CHECKING:
-    from .modern_client import ModernSpacetimeDBClient
+    from .spacetimedb_client import SpacetimeDBClient
     from .remote_module import RemoteModule, TableMetadata, ReducerMetadata
 
 from .protocol import CallReducerFlags
@@ -61,7 +61,7 @@ class ReducerProtocol(Protocol):
 class DbView:
     """Base class for database view access."""
     
-    def __init__(self, client: 'ModernSpacetimeDBClient', module: Optional['RemoteModule'] = None):
+    def __init__(self, client: 'SpacetimeDBClient', module: Optional['RemoteModule'] = None):
         self._client = client
         self._module = module
         self._tables: Dict[str, TableProtocol] = {}
@@ -86,7 +86,7 @@ class DbView:
 class Reducers:
     """Base class for reducer access."""
     
-    def __init__(self, client: 'ModernSpacetimeDBClient', module: Optional['RemoteModule'] = None):
+    def __init__(self, client: 'SpacetimeDBClient', module: Optional['RemoteModule'] = None):
         self._client = client
         self._module = module
         self._reducers: Dict[str, ReducerProtocol] = {}
@@ -133,7 +133,7 @@ class DbContext(Generic[TDbView, TReducers, TSetReducerFlags]):
     
     def __init__(
         self,
-        client: 'ModernSpacetimeDBClient',
+        client: 'SpacetimeDBClient',
         db_view_class: Type[TDbView] = DbView,
         reducers_class: Type[TReducers] = Reducers,
         set_reducer_flags_class: Type[TSetReducerFlags] = SetReducerFlags,
@@ -216,7 +216,7 @@ class DbContext(Generic[TDbView, TReducers, TSetReducerFlags]):
 class TableAccessor:
     """Provides access to a specific table with common operations."""
     
-    def __init__(self, client: 'ModernSpacetimeDBClient', table_name: str, metadata: Optional['TableMetadata'] = None):
+    def __init__(self, client: 'SpacetimeDBClient', table_name: str, metadata: Optional['TableMetadata'] = None):
         self._client = client
         self._table_name = table_name
         self._metadata = metadata
@@ -278,7 +278,7 @@ class TableAccessor:
 class ReducerAccessor:
     """Provides access to a specific reducer."""
     
-    def __init__(self, client: 'ModernSpacetimeDBClient', reducer_name: str, metadata: Optional['ReducerMetadata'] = None):
+    def __init__(self, client: 'SpacetimeDBClient', reducer_name: str, metadata: Optional['ReducerMetadata'] = None):
         self._client = client
         self._reducer_name = reducer_name
         self._metadata = metadata
@@ -361,13 +361,13 @@ def create_db_context(
 class DbContextBuilder:
     """Fluent builder for creating DbContext instances."""
     
-    client: Optional['ModernSpacetimeDBClient'] = None
+    client: Optional['SpacetimeDBClient'] = None
     db_view_class: Type = DbView
     reducers_class: Type = Reducers
     set_reducer_flags_class: Type = SetReducerFlags
     module: Optional['RemoteModule'] = None
     
-    def with_client(self, client: 'ModernSpacetimeDBClient') -> 'DbContextBuilder':
+    def with_client(self, client: 'SpacetimeDBClient') -> 'DbContextBuilder':
         """Set the client instance."""
         self.client = client
         return self
@@ -411,7 +411,7 @@ class DbContextBuilder:
 class GeneratedDbView(DbView):
     """Base class for generated database views with typed tables."""
     
-    def __init__(self, client: 'ModernSpacetimeDBClient', table_registry: Dict[str, Type], module: Optional['RemoteModule'] = None):
+    def __init__(self, client: 'SpacetimeDBClient', table_registry: Dict[str, Type], module: Optional['RemoteModule'] = None):
         super().__init__(client, module)
         self._table_registry = table_registry
     
@@ -425,7 +425,7 @@ class GeneratedDbView(DbView):
 class GeneratedReducers(Reducers):
     """Base class for generated reducers with typed methods."""
     
-    def __init__(self, client: 'ModernSpacetimeDBClient', reducer_registry: Dict[str, Type], module: Optional['RemoteModule'] = None):
+    def __init__(self, client: 'SpacetimeDBClient', reducer_registry: Dict[str, Type], module: Optional['RemoteModule'] = None):
         super().__init__(client, module)
         self._reducer_registry = reducer_registry
     
@@ -444,7 +444,7 @@ class TypedDbContext(DbContext[TDbView, TReducers, TSetReducerFlags]):
     
     def __init__(
         self,
-        client: 'ModernSpacetimeDBClient',
+        client: 'SpacetimeDBClient',
         db_view_class: Type[TDbView],
         reducers_class: Type[TReducers],
         set_reducer_flags_class: Type[TSetReducerFlags],

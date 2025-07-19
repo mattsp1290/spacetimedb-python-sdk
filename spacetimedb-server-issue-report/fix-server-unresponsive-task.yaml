@@ -1,0 +1,121 @@
+task_id: fix-spacetimedb-server-unresponsive
+title: Fix SpacetimeDB Server Unresponsive State
+category: platform/server
+priority: critical
+status: todo
+assigned_to: platform-team
+created_by: python-sdk-team
+created_at: 2025-05-31T22:59:00Z
+blocking:
+  - blackholio-ml-agent-integration
+  - python-sdk-testing
+  
+description: |
+  The SpacetimeDB server process is running but not responding to any HTTP or WebSocket requests.
+  This is causing a complete service outage preventing all client connections.
+  
+symptoms:
+  - HTTP endpoints timeout (including /health)
+  - WebSocket connections timeout
+  - CLI commands hang indefinitely
+  - Server accepts TCP connections but doesn't process requests
+  
+evidence:
+  - server_pid: 83356
+  - start_time: "2025-05-31T16:49:00Z"
+  - runtime_hours: 6+
+  - cpu_time_seconds: 1283
+  - test_results: "spacetimedb-server-issue-report/SPACETIMEDB_SERVER_UNRESPONSIVE_ISSUE.md"
+  
+root_cause_theories:
+  - deadlock_in_request_handler:
+      description: "Server may be experiencing a deadlock in request processing"
+      likelihood: high
+  - blocked_event_loop:
+      description: "Main event loop may be blocked by synchronous operation"
+      likelihood: high
+  - resource_exhaustion:
+      description: "Internal resources (threads, connections) may be exhausted"
+      likelihood: medium
+  - configuration_issue:
+      description: "In-memory mode or JWT config may be causing issues"
+      likelihood: low
+
+acceptance_criteria:
+  - Server responds to HTTP health checks within 1 second
+  - WebSocket connections successfully upgrade
+  - CLI commands complete successfully
+  - Python SDK can connect to published modules
+  - No request timeouts under normal load
+
+immediate_actions:
+  - step1:
+      action: "Kill existing process (PID 83356)"
+      command: "kill -9 83356"
+  - step2:
+      action: "Start server with debug logging"
+      command: "RUST_LOG=debug ./target/release/spacetimedb-standalone start --data-dir /tmp/spacetimedb-test-data --listen-addr 0.0.0.0:3000 --in-memory"
+  - step3:
+      action: "Monitor logs for errors or warnings"
+  - step4:
+      action: "Test connection with Python SDK"
+      test_script: "test_blackholio_connection.py"
+
+investigation_steps:
+  - check_thread_state:
+      description: "Analyze thread dump to identify blocked threads"
+      tools: ["gdb", "lldb", "thread profiler"]
+  - analyze_logs:
+      description: "Review server logs before unresponsive state"
+      location: "/tmp/spacetimedb-test-data/logs"
+  - profile_memory:
+      description: "Check for memory leaks or excessive allocation"
+      tools: ["valgrind", "heaptrack"]
+  - trace_system_calls:
+      description: "Use strace/dtrace to see what server is doing"
+      command: "strace -p 83356"
+
+long_term_fixes:
+  - implement_health_check_thread:
+      description: "Separate health check handler from main request processing"
+      effort: medium
+  - add_request_timeouts:
+      description: "Add configurable timeouts for all blocking operations"
+      effort: medium
+  - implement_watchdog:
+      description: "Auto-detect and recover from unresponsive states"
+      effort: high
+  - add_diagnostics_endpoint:
+      description: "Endpoint for thread dumps and internal state"
+      effort: medium
+
+testing_requirements:
+  - unit_tests:
+      - "Test request timeout handling"
+      - "Test concurrent connection limits"
+      - "Test recovery from blocked state"
+  - integration_tests:
+      - "Load test with many concurrent connections"
+      - "Test server recovery after kill -9"
+      - "Test health check under load"
+  - monitoring:
+      - "Add Prometheus metrics for request latency"
+      - "Alert on health check failures"
+      - "Track connection pool usage"
+
+verification:
+  - run_test_script: "python test_blackholio_connection.py"
+  - check_health: "curl -v http://localhost:3000/health"
+  - test_websocket: "python test_websocket_raw.py"
+  - verify_cli: "spacetimedb-cli list -s http://localhost:3000"
+  
+dependencies:
+  - spacetimedb-standalone binary
+  - Python SDK with v1.1.2 support
+  - Blackholio module published
+
+notes: |
+  - Python SDK verified working with correct v1.1.2 protocol
+  - Issue is entirely server-side
+  - Blocking ML agent teams from testing
+  - Server has been running for 6+ hours when issue discovered

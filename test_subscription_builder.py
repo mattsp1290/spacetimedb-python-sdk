@@ -6,6 +6,12 @@ This test suite verifies the advanced subscription builder API works correctly
 and provides the same functionality as the TypeScript SDK's subscription patterns.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 sys.path.append('src')
 
@@ -14,7 +20,7 @@ from unittest.mock import Mock, patch, MagicMock
 import time
 import threading
 
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.subscription_builder import (
     AdvancedSubscriptionBuilder,
     AdvancedSubscription,
@@ -32,7 +38,7 @@ class TestAdvancedSubscriptionBuilder:
     
     def setup_method(self):
         """Setup test fixtures."""
-        self.mock_client = Mock(spec=ModernSpacetimeDBClient)
+        self.mock_client = Mock(spec=SpacetimeDBClient)
         self.mock_client.is_connected = True
         self.builder = AdvancedSubscriptionBuilder(self.mock_client)
     
@@ -371,7 +377,7 @@ class TestAdvancedSubscription:
     
     def setup_method(self):
         """Setup test fixtures."""
-        self.mock_client = Mock(spec=ModernSpacetimeDBClient)
+        self.mock_client = Mock(spec=SpacetimeDBClient)
         self.mock_client.is_connected = True
         
         # Create builder and subscription

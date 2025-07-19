@@ -13,6 +13,7 @@ Provides sophisticated event handling matching TypeScript SDK:
 import asyncio
 import enum
 import logging
+from .utils.error_formatting import ErrorFormatter
 import time
 import threading
 import uuid
@@ -612,7 +613,7 @@ class EventEmitter:
                         context.stop_propagation()
                         return context
                 except Exception as e:
-                    self.logger.error(f"Error in filter {filter_id}: {e}")
+                    self.logger.error(ErrorFormatter.format_event_error(f"filter {filter_id}", e))
             
             # Apply transformers
             for transformer_id, transformer in self._transformers:
@@ -621,7 +622,7 @@ class EventEmitter:
                     if transformed is not None:
                         event = transformed
                 except Exception as e:
-                    self.logger.error(f"Error in transformer {transformer_id}: {e}")
+                    self.logger.error(ErrorFormatter.format_event_error(f"transformer {transformer_id}", e))
             
             # Create context
             context = EventContext(event, self.name, **context_kwargs)
@@ -649,7 +650,7 @@ class EventEmitter:
                     
                 except Exception as e:
                     self._metrics['errors_caught'] += 1
-                    self.logger.error(f"Error in handler {handler_id}: {e}", exc_info=True)
+                    self.logger.error(ErrorFormatter.format_event_error(f"handler {handler_id}", e), exc_info=True)
                     context.set_response('error', str(e))
             
             # Complete context
@@ -690,7 +691,7 @@ class EventEmitter:
                 self._metrics['async_handlers_run'] += 1
             except Exception as e:
                 self._metrics['errors_caught'] += 1
-                self.logger.error(f"Error in async handler {handler_id}: {e}", exc_info=True)
+                self.logger.error(ErrorFormatter.format_event_error(f"async handler {handler_id}", e), exc_info=True)
                 context.set_response('error', str(e))
         
         asyncio.run_coroutine_threadsafe(run(), self._async_loop)

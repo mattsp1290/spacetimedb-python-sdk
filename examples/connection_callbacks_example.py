@@ -7,6 +7,12 @@ This shows the difference between:
 2. Instance method connect_instance() - preserves registered callbacks
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 import time
 import logging

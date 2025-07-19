@@ -14,6 +14,7 @@ import threading
 import time
 import random
 import logging
+from .utils.error_formatting import ErrorFormatter
 from typing import Dict, List, Optional, Callable, Any, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
@@ -22,7 +23,7 @@ import uuid
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, Future
 
-from .modern_client import ModernSpacetimeDBClient
+from .spacetimedb_client import SpacetimeDBClient
 from .websocket_client import ConnectionState as WebSocketConnectionState
 from .connection_id import (
     EnhancedConnectionId,
@@ -39,6 +40,7 @@ from .shared_types import (
     CircuitBreaker,
     RetryPolicy
 )
+from .monitoring import get_global_monitor, monitor_performance
 
 # No TYPE_CHECKING imports needed - SpacetimeDBConnectionBuilder is not used
 
@@ -55,7 +57,7 @@ class PooledConnection:
         self.pool_id = pool_id
         self.connection_id = str(uuid.uuid4())
         self.config = connection_config
-        self.client: Optional[ModernSpacetimeDBClient] = None
+        self.client: Optional[SpacetimeDBClient] = None
         self.state = PooledConnectionState.IDLE
         self.health = ConnectionHealth(
             connection_id=self.connection_id,
@@ -77,7 +79,7 @@ class PooledConnection:
         """Establish the connection."""
         try:
             # Build connection using the builder pattern
-            builder = ModernSpacetimeDBClient.builder()
+            builder = SpacetimeDBClient.builder()
             
             # Apply configuration
             if 'uri' in self.config:
@@ -110,7 +112,7 @@ class PooledConnection:
             return True
             
         except Exception as e:
-            self.logger.error(f"Failed to connect: {e}")
+            self.logger.error(ErrorFormatter.format_connection_error("initialization", e))
             self.state = PooledConnectionState.UNHEALTHY
             self.health.state = self.state
             self.health.record_failure()
@@ -123,7 +125,7 @@ class PooledConnection:
                 try:
                     self.client.disconnect()
                 except Exception as e:
-                    self.logger.error(f"Error during disconnect: {e}")
+                    self.logger.error(ErrorFormatter.format_connection_error("disconnect", e))
                 finally:
                     self.client = None
             
@@ -160,7 +162,7 @@ class PooledConnection:
                 return False
                 
         except Exception as e:
-            self.logger.error(f"Health check failed: {e}")
+            self.logger.error(ErrorFormatter.format_connection_error("health check", e))
             self.health.record_failure()
             self.state = PooledConnectionState.UNHEALTHY
             return False
@@ -295,7 +297,7 @@ class ConnectionPool:
                 self._check_pool_health()
                 time.sleep(self.health_check_interval)
             except Exception as e:
-                self.logger.error(f"Health monitor error: {e}")
+                self.logger.error(ErrorFormatter.format_connection_error("health monitor", e))
     
     def _check_pool_health(self) -> None:
         """Check health of all connections and recover unhealthy ones."""
@@ -322,8 +324,11 @@ class ConnectionPool:
                     if len(self.connections) < self.min_connections:
                         self._create_connection()
     
+    @monitor_performance("connection_pool_acquire")
     def get_connection(self) -> Optional[PooledConnection]:
         """Get an available connection using the configured strategy."""
+        start_time = time.time()
+        
         with self._lock:
             if self._shutdown:
                 return None
@@ -334,13 +339,41 @@ class ConnectionPool:
             for _ in range(attempts):
                 conn = self._select_connection()
                 if conn and conn.acquire():
+                    # Record successful acquisition
+                    acquisition_time = time.time() - start_time
+                    monitor = get_global_monitor()
+                    monitor.record_pool_metrics(
+                        "connection_pool",
+                        len(self.connections),
+                        self.max_connections,
+                        acquisition_time
+                    )
                     return conn
             
             # No available connections, try to create one if possible
             if len(self.connections) < self.max_connections:
                 new_conn = self._create_connection()
                 if new_conn and new_conn.acquire():
+                    # Record successful acquisition with new connection
+                    acquisition_time = time.time() - start_time
+                    monitor = get_global_monitor()
+                    monitor.record_pool_metrics(
+                        "connection_pool",
+                        len(self.connections),
+                        self.max_connections,
+                        acquisition_time
+                    )
                     return new_conn
+            
+            # Record failed acquisition
+            acquisition_time = time.time() - start_time
+            monitor = get_global_monitor()
+            monitor.record_pool_metrics(
+                "connection_pool",
+                len(self.connections),
+                self.max_connections,
+                acquisition_time
+            )
             
             return None
     
@@ -407,7 +440,7 @@ class ConnectionPool:
     
     def execute_with_retry(
         self,
-        operation: Callable[[ModernSpacetimeDBClient], Any],
+        operation: Callable[[SpacetimeDBClient], Any],
         operation_name: str = "operation"
     ) -> Any:
         """
@@ -477,7 +510,7 @@ class ConnectionPool:
     
     async def execute_async_with_retry(
         self,
-        operation: Callable[[ModernSpacetimeDBClient], Any],
+        operation: Callable[[SpacetimeDBClient], Any],
         operation_name: str = "operation"
     ) -> Any:
         """Async version of execute_with_retry."""
@@ -593,7 +626,7 @@ class ConnectionPool:
                 try:
                     conn.disconnect()
                 except Exception as e:
-                    self.logger.error(f"Error disconnecting {conn.connection_id[:8]}: {e}")
+                    self.logger.error(ErrorFormatter.format_connection_error(f"disconnecting {conn.connection_id[:8]}", e))
             
             self.connections.clear()
             self.connection_order.clear()
@@ -662,7 +695,7 @@ class LoadBalancedConnectionManager:
     
     def execute_on_pool(
         self,
-        operation: Callable[[ModernSpacetimeDBClient], Any],
+        operation: Callable[[SpacetimeDBClient], Any],
         pool_name: Optional[str] = None,
         operation_name: str = "operation"
     ) -> Any:

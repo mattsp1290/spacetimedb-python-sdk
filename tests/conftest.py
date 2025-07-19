@@ -209,3 +209,183 @@ def wait_for_connection():
         return False
         
     return _wait
+
+
+@pytest.fixture
+def performance_monitor():
+    """Monitor performance metrics during tests"""
+    import psutil
+    
+    class PerformanceMonitor:
+        def __init__(self):
+            self.process = psutil.Process()
+            self.start_memory = self.process.memory_info().rss / 1024 / 1024  # MB
+            self.start_cpu = self.process.cpu_percent()
+            self.start_time = time.time()
+        
+        def get_memory_usage(self):
+            return self.process.memory_info().rss / 1024 / 1024  # MB
+        
+        def get_memory_delta(self):
+            return self.get_memory_usage() - self.start_memory
+        
+        def get_cpu_usage(self):
+            return self.process.cpu_percent()
+        
+        def get_elapsed_time(self):
+            return time.time() - self.start_time
+    
+    return PerformanceMonitor()
+
+
+@pytest.fixture
+def event_system():
+    """Provide isolated event system for testing"""
+    from spacetimedb_sdk.events import UnifiedEventManager
+    return UnifiedEventManager()
+
+
+@pytest.fixture
+def mock_auth_handler():
+    """Mock authentication handler"""
+    mock_handler = Mock()
+    mock_handler.authenticate.return_value = {
+        "token": "test_token_12345",
+        "identity": "test_identity",
+        "expires_at": time.time() + 3600
+    }
+    mock_handler.is_authenticated.return_value = True
+    mock_handler.get_token.return_value = "test_token_12345"
+    return mock_handler
+
+
+@pytest.fixture
+def mock_websocket_factory():
+    """Factory for creating mock WebSocket connections"""
+    
+    def create_mock_websocket(
+        connect_delay=0.1, 
+        should_fail=False, 
+        fail_message="Connection failed"
+    ):
+        mock_ws = Mock()
+        
+        def run_forever():
+            if should_fail:
+                if mock_ws.on_error:
+                    mock_ws.on_error(mock_ws, Exception(fail_message))
+                if mock_ws.on_close:
+                    mock_ws.on_close(mock_ws, 1006, fail_message)
+            else:
+                time.sleep(connect_delay)
+                if mock_ws.on_open:
+                    mock_ws.on_open(mock_ws)
+                # Send identity token
+                if mock_ws.on_message:
+                    identity_msg = json.dumps({
+                        "IdentityToken": {
+                            "token": "test_token",
+                            "identity": "a" * 64,
+                            "connection_id": "b" * 32
+                        }
+                    })
+                    mock_ws.on_message(mock_ws, identity_msg)
+        
+        mock_ws.run_forever = run_forever
+        mock_ws.send = Mock()
+        mock_ws.close = Mock()
+        mock_ws.closed = False
+        
+        return mock_ws
+    
+    return create_mock_websocket
+
+
+@pytest.fixture
+def comprehensive_test_data():
+    """Provide comprehensive test data for various scenarios"""
+    return {
+        "valid_hosts": [
+            "localhost:3000",
+            "127.0.0.1:8080",
+            "example.com:9000",
+            "192.168.1.100:3000"
+        ],
+        "invalid_hosts": [
+            "",
+            "invalid",
+            "localhost:99999",
+            "127.0.0.1:0"
+        ],
+        "valid_db_names": [
+            "test_db",
+            "user-database",
+            "db_123",
+            "production_db"
+        ],
+        "invalid_db_names": [
+            "",
+            "db with spaces",
+            "db/with/slashes",
+            "db;with;semicolons"
+        ],
+        "test_events": [
+            {"type": "TableUpdate", "table": "users", "data": {"id": 1}},
+            {"type": "ReducerResult", "reducer": "create_user", "result": {"success": True}},
+            {"type": "ConnectionUpdate", "state": "connected", "timestamp": time.time()},
+            {"type": "AuthUpdate", "authenticated": True, "token": "new_token"}
+        ],
+        "error_scenarios": [
+            {"error": "Connection timeout", "code": "TIMEOUT"},
+            {"error": "Invalid credentials", "code": "AUTH_FAILED"},
+            {"error": "Database not found", "code": "DB_NOT_FOUND"},
+            {"error": "Rate limit exceeded", "code": "RATE_LIMITED"}
+        ]
+    }
+
+
+@pytest.fixture
+def security_test_payloads():
+    """Provide security test payloads"""
+    return {
+        "sql_injection": [
+            "'; DROP TABLE users; --",
+            "' OR '1'='1",
+            "admin'--",
+            "1; DELETE FROM users WHERE 1=1"
+        ],
+        "xss_payloads": [
+            "<script>alert('xss')</script>",
+            "javascript:alert(1)",
+            "onerror=alert(1)",
+            "<img src=x onerror=alert(1)>"
+        ],
+        "buffer_overflow": [
+            "A" * 1000,
+            "A" * 10000,
+            "A" * 100000
+        ],
+        "format_strings": [
+            "%s%s%s%s",
+            "%x%x%x%x",
+            "%n%n%n%n"
+        ],
+        "null_bytes": [
+            "test\x00data",
+            "test\x00\x00\x00",
+            "\x00test"
+        ]
+    }
+
+
+@pytest.fixture(scope="session")
+def test_server_config():
+    """Configuration for test server"""
+    return {
+        "host": "localhost",
+        "port": 3000,
+        "ssl_enabled": False,
+        "timeout": 30,
+        "max_connections": 100,
+        "buffer_size": 8192
+    }

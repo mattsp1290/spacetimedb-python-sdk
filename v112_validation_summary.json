@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-05-29T21:54:00.341091",
+  "all_passed": false,
+  "test_categories": {
+    "real_server": {
+      "success": false,
+      "passed": 0,
+      "failed": 0
+    },
+    "performance": {
+      "success": false,
+      "passed": 0,
+      "failed": 12
+    },
+    "integration": {
+      "success": true,
+      "passed": 13,
+      "failed": 0
+    }
+  },
+  "issues": [
+    "real_server tests failed",
+    "performance tests failed",
+    "performance: /Users/punk1290/.pyenv/versions/3.12.8/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option \"asyncio_default_fixture_loop_scope\" is unset.\nThe ",
+    "Example application failed",
+    "Traceback (most recent call last):\n  File \"/Users/punk1290/git/spacetimedb-python-sdk/examples/quickstart/client/main_v112.py\", line 14, in <module>\n    from module_bindings.user import User\n  File \"/"
+  ],
+  "recommendations": [],
+  "example_tested": true,
+  "example_success": false
+}

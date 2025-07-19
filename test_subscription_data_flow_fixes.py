@@ -5,20 +5,26 @@ This test module validates the fixes implemented to address the subscription
 data flow issues identified in the bug report.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import unittest
 import time
 from unittest.mock import Mock, patch
 from typing import Any, Dict
 
 # Import the modules we're testing
-from src.spacetimedb_sdk.serialization import (
+from spacetimedb_sdk.serialization import (
     _safe_extract, _get_message_type, _handle_database_update,
     _handle_subscription_update, serialize_for_client
 )
-from src.spacetimedb_sdk.subscription_manager import (
+from spacetimedb_sdk.subscription_manager import (
     SubscriptionManager, SubscriptionState, SubscriptionInfo
 )
-from src.spacetimedb_sdk.event_manager import (
+from spacetimedb_sdk.event_manager import (
     SDKEventManager, EventType, EventData
 )
 

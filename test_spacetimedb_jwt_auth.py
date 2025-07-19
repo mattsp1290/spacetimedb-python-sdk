@@ -7,6 +7,12 @@ SpacetimeDB Python SDK, verifying the authentication handshake protocol
 and credential storage.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import logging
 import sys
@@ -18,10 +24,10 @@ from unittest.mock import Mock, patch, MagicMock
 # Add src to path for testing
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.auth_storage import AuthCredentials, SpacetimeDBAuthStorage
 from spacetimedb_sdk.exceptions import SpacetimeDBAuthHandshakeError
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, ConnectionState
+from spacetimedb_sdk.websocket_client import WebSocketClient, ConnectionState
 
 
 def setup_logging():
@@ -107,7 +113,7 @@ def test_websocket_client_auth_headers():
     print("🌐 Testing WebSocket client authentication headers...")
     
     # Create client
-    client = ModernWebSocketClient()
+    client = WebSocketClient()
     
     # Test with no authentication
     client.auth_token = None
@@ -138,10 +144,10 @@ def test_mock_authentication_handshake():
     print("🤝 Testing authentication handshake flow...")
     
     # Create client in test mode
-    client = ModernSpacetimeDBClient(test_mode=True)
+    client = SpacetimeDBClient(test_mode=True)
     
     # Mock the WebSocket client's error handling
-    ws_client = ModernWebSocketClient()
+    ws_client = WebSocketClient()
     client.ws_client = ws_client
     
     # Simulate the authentication handshake
@@ -196,7 +202,7 @@ def test_client_integration():
     print("🔗 Testing client integration...")
     
     # Test with test mode (no real WebSocket connection)
-    client = ModernSpacetimeDBClient(test_mode=True)
+    client = SpacetimeDBClient(test_mode=True)
     
     # Test connection without auth (should work in test mode)
     try:
@@ -292,10 +298,10 @@ def demo_usage():
     print("""
 # Basic usage with automatic authentication:
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 # Create client
-client = ModernSpacetimeDBClient()
+client = SpacetimeDBClient()
 
 # Connect to authenticated server
 # If server requires authentication, the handshake will happen automatically

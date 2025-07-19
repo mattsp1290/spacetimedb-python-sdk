@@ -20,8 +20,8 @@ import tracemalloc
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient
+from spacetimedb_sdk.spacetimedb_client import SpacetimeDBClient
+from spacetimedb_sdk.websocket_client import WebSocketClient
 
 # Import mock server
 from mock_spacetimedb_server import (
@@ -126,7 +126,7 @@ class TestConnectionPerformance(unittest.TestCase):
             times = []
             
             for i in range(10):  # 10 iterations per scenario
-                client = ModernSpacetimeDBClient()
+                client = SpacetimeDBClient()
                 
                 start_time = time.perf_counter()
                 try:
@@ -156,7 +156,7 @@ class TestConnectionPerformance(unittest.TestCase):
         """Test reconnection performance after disconnect."""
         print("\n=== Reconnection Performance ===")
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         # Initial connection
         start_time = time.perf_counter()
@@ -229,7 +229,7 @@ class TestMessageThroughput(unittest.TestCase):
         """Test message sending throughput."""
         print("\n=== Message Throughput Test ===")
         
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         self.client._connect_internal(
             auth_token=None,
             host="localhost:3021",
@@ -273,7 +273,7 @@ class TestMessageThroughput(unittest.TestCase):
         """Test performance of subscription updates."""
         print("\n=== Subscription Update Performance ===")
         
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         # Track update latencies
         update_latencies = []
@@ -341,7 +341,7 @@ class TestMemoryUsage(unittest.TestCase):
         
         # Create multiple connections
         for i in range(10):
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3022",
@@ -374,7 +374,7 @@ class TestMemoryUsage(unittest.TestCase):
         """Test memory usage of long-running connections."""
         print("\n=== Long-Running Connection Memory ===")
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         process = psutil.Process()
         
         # Connect
@@ -442,7 +442,7 @@ class TestConcurrentOperations(unittest.TestCase):
             lock = threading.Lock()
             
             def connect_client():
-                client = ModernSpacetimeDBClient()
+                client = SpacetimeDBClient()
                 start_time = time.perf_counter()
                 
                 try:
@@ -502,7 +502,7 @@ class TestConcurrentOperations(unittest.TestCase):
         clients = []
         
         for i in range(client_count):
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3023",
@@ -587,7 +587,7 @@ class TestCompressionPerformance(unittest.TestCase):
         ]
         
         for scenario_name, use_compression in scenarios:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             # Connect with compression setting
             start_time = time.perf_counter()

@@ -63,6 +63,7 @@ from .event_manager import (
     emit_event_async,
     subscribe_to_events,
     EventMetrics as ManagerMetrics,
+    EventMetrics,
     HandlerInfo,
 )
 
@@ -116,6 +117,13 @@ from .legacy_compat import (
     get_legacy_event_emitter,
 )
 
+# EventSystem compatibility layer
+from .event_system import (
+    EventSystem,
+    get_event_system,
+    EventManager,
+)
+
 __all__ = [
     # Core unified system
     'Event',
@@ -141,6 +149,7 @@ __all__ = [
     'get_event_manager',
     'set_event_manager',
     'ManagerMetrics',
+    'EventMetrics',
     'HandlerInfo',
     
     # Convenience functions
@@ -188,4 +197,13 @@ __all__ = [
     'create_migration_guide',
     'get_legacy_sdk_event_manager',
     'get_legacy_event_emitter',
+    
+    # EventSystem compatibility layer
+    'EventSystem',
+    'get_event_system', 
+    'EventManager',
+    
+    # No backward compatibility - use UnifiedEventManager directly
 ]
+
+# No backward compatibility - use UnifiedEventManager directly

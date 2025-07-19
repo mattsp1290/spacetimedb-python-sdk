@@ -1,0 +1,10 @@
+--- a/src/spacetimedb_sdk/websocket_client.py
++++ b/src/spacetimedb_sdk/websocket_client.py
+@@ -212,7 +212,7 @@ class ModernWebSocketClient:
+             
+             # Build WebSocket URL
+             protocol_scheme = "wss" if self.ssl_enabled else "ws"
+-            url = f"{protocol_scheme}://{self.host}/database/subscribe/{self.database_address}"
++            url = f"{protocol_scheme}://{self.host}/v1/database/subscribe/{self.database_address}"
+             
+             self.logger.debug(f"_do_connect: Set state to CONNECTING. URL: {url}")

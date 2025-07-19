@@ -7,6 +7,7 @@ It enables dynamic factory registration and retrieval based on server language.
 
 from typing import Dict, Type, Optional, Any
 import logging
+from ..utils.error_formatting import ErrorFormatter
 from threading import Lock
 
 from .base import SpacetimeDBClientFactory, ServerLanguage
@@ -121,7 +122,7 @@ class SpacetimeDBFactoryRegistry:
                 return factory
                 
             except Exception as e:
-                logger.error(f"Failed to create factory for {language.value}: {e}")
+                logger.error(ErrorFormatter.format_generic_error("Registry", f"create factory for {language.value}", e))
                 raise ValueError(
                     f"Cannot create factory for {language.value}: {str(e)}"
                 )

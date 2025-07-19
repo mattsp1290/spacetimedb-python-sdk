@@ -39,6 +39,18 @@ class SpacetimeDBMessageValidator:
         'UnsubscribeMulti'
     }
     
+    # Enhanced message classes that map to legacy validation names
+    ENHANCED_MESSAGE_MAPPING = {
+        'SubscribeSingleMessage': 'SubscribeSingle',
+        'SubscribeMultiMessage': 'SubscribeMulti',
+        'UnsubscribeMultiMessage': 'UnsubscribeMulti',
+        'OneOffQueryMessage': 'OneOffQuery',
+        'CallReducerMessage': 'CallReducer'
+    }
+    
+    # All valid message class names (legacy + enhanced)
+    VALID_CLASS_NAMES = VALID_MESSAGE_TYPES | set(ENHANCED_MESSAGE_MAPPING.keys())
+    
     # Invalid custom message types that clients sometimes try to send
     INVALID_CUSTOM_TYPES = {
         'heartbeat',
@@ -80,9 +92,7 @@ class SpacetimeDBMessageValidator:
             if hasattr(message, '__class__'):
                 # Check if it's a valid ClientMessage type
                 class_name = message.__class__.__name__
-                if class_name in ['CallReducer', 'Subscribe', 'SubscribeSingle', 
-                                'SubscribeMulti', 'Unsubscribe', 'UnsubscribeMulti', 
-                                'OneOffQuery', 'OneOffQueryMessage']:
+                if class_name in self.VALID_CLASS_NAMES:
                     return True
                 else:
                     raise MessageValidationError(
@@ -142,10 +152,7 @@ class SpacetimeDBMessageValidator:
         has_valid_message_type = bool(valid_keys.intersection(self.VALID_MESSAGE_TYPES))
         
         # Also check for enhanced message types that might have different names
-        enhanced_message_types = {
-            'SubscribeSingleMessage', 'SubscribeMultiMessage', 
-            'UnsubscribeMultiMessage', 'OneOffQueryMessage'
-        }
+        enhanced_message_types = set(self.ENHANCED_MESSAGE_MAPPING.keys())
         has_enhanced_message_type = bool(valid_keys.intersection(enhanced_message_types))
         
         # Accept message if it has valid message type structure
@@ -195,6 +202,22 @@ class SpacetimeDBMessageValidator:
         
         elif 'OneOffQuery' in message:
             self._validate_one_off_query(message['OneOffQuery'])
+        
+        # Handle enhanced message types
+        elif 'SubscribeSingleMessage' in message:
+            self._validate_subscribe_single(message['SubscribeSingleMessage'])
+        
+        elif 'SubscribeMultiMessage' in message:
+            self._validate_subscribe_multi(message['SubscribeMultiMessage'])
+        
+        elif 'UnsubscribeMultiMessage' in message:
+            self._validate_unsubscribe_multi(message['UnsubscribeMultiMessage'])
+        
+        elif 'OneOffQueryMessage' in message:
+            self._validate_one_off_query(message['OneOffQueryMessage'])
+        
+        elif 'CallReducerMessage' in message:
+            self._validate_call_reducer(message['CallReducerMessage'])
     
     def _validate_call_reducer(self, call_reducer: Dict[str, Any]) -> None:
         """Validate CallReducer message format."""

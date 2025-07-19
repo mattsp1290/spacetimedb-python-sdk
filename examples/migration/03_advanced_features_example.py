@@ -4,6 +4,12 @@ Advanced Features Example - Leveraging New SDK Capabilities
 This example demonstrates advanced features available after migration.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 from typing import Dict, Any
 from spacetimedb_sdk import (

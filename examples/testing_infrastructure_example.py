@@ -9,6 +9,12 @@ Demonstrates how to use the comprehensive testing utilities:
 - Test fixtures and isolation
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 import time

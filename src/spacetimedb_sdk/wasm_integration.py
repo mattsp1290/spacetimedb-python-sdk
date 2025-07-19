@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 import uuid
 
-from .modern_client import ModernSpacetimeDBClient
+from .spacetimedb_client import SpacetimeDBClient
 from .logger import get_logger, LogLevel
 # Import from the testing module, not the testing package
 from . import testing
@@ -200,7 +200,7 @@ class WASMTestHarness:
     def __init__(self, server: Optional[SpacetimeDBServer] = None):
         self.server = server or SpacetimeDBServer()
         self.databases: Dict[str, str] = {}  # name -> address mapping
-        self.clients: List[ModernSpacetimeDBClient] = []
+        self.clients: List[SpacetimeDBClient] = []
         
     async def setup(self):
         """Set up test harness."""
@@ -265,11 +265,11 @@ class WASMTestHarness:
         raise RuntimeError(f"Could not extract database address from output: {result.stdout}")
     
     async def create_client(self, database_address: str, 
-                          auth_token: Optional[str] = None) -> ModernSpacetimeDBClient:
+                          auth_token: Optional[str] = None) -> SpacetimeDBClient:
         """Create a client connected to the database."""
         uri = f"ws://127.0.0.1:{self.server.config.listen_port}"
         
-        client = (ModernSpacetimeDBClient.builder()
+        client = (SpacetimeDBClient.builder()
                  .with_uri(uri)
                  .with_module_name(database_address)
                  .with_auth_token(auth_token)
@@ -280,12 +280,12 @@ class WASMTestHarness:
         
         return client
     
-    async def call_reducer(self, client: ModernSpacetimeDBClient, 
+    async def call_reducer(self, client: SpacetimeDBClient, 
                           reducer_name: str, *args) -> str:
         """Call a reducer and return request ID."""
         return client.call_reducer(reducer_name, *args)
     
-    async def wait_for_transaction(self, client: ModernSpacetimeDBClient,
+    async def wait_for_transaction(self, client: SpacetimeDBClient,
                                  timeout: float = 5.0) -> None:
         """Wait for a transaction to be processed."""
         # Simple implementation - wait for any transaction update

@@ -222,8 +222,8 @@ class ConnectionPoolProtocol(Protocol):
 
 
 @runtime_checkable
-class ModernSpacetimeDBClientProtocol(Protocol):
-    """Protocol for ModernSpacetimeDBClient to avoid circular imports."""
+class SpacetimeDBClientProtocol(Protocol):
+    """Protocol for SpacetimeDBClient to avoid circular imports."""
     
     @classmethod
     def builder(cls) -> ConnectionBuilderProtocol:

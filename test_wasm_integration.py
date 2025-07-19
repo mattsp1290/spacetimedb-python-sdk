@@ -4,6 +4,12 @@ Test WASM integration foundation for SpacetimeDB Python SDK.
 This test file demonstrates the WASM integration infrastructure.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 from pathlib import Path

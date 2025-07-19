@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.protocol import TEXT_PROTOCOL, BIN_PROTOCOL
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient
+from spacetimedb_sdk.websocket_client import WebSocketClient
 
 
 class TestProtocolConfiguration:
@@ -40,7 +40,7 @@ class TestProtocolConfiguration:
         
     def test_protocol_passed_to_websocket(self, mock_websocket):
         """Test that protocol is correctly passed to WebSocket client"""
-        with patch.object(ModernWebSocketClient, '__init__', return_value=None) as mock_init:
+        with patch.object(WebSocketClient, '__init__', return_value=None) as mock_init:
             client = SpacetimeDBClient(
                 autogen_package=None, 
                 protocol=BIN_PROTOCOL,

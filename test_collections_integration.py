@@ -5,6 +5,12 @@ Tests complex collections, arrays, nested structures, and bulk operations
 using actual SpacetimeDB WASM modules.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 import time
@@ -14,7 +20,7 @@ import random
 import json
 
 from spacetimedb_sdk import (
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     configure_default_logging,
     get_logger,
     

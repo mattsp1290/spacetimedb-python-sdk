@@ -109,9 +109,9 @@ class TestAuthenticationHandlerIntegration:
         handler = AuthenticationHandler()
         integration = WebSocketAuthIntegration(auth_handler=handler)
         
-        # Get headers with legacy token
+        # Get headers with legacy token (use different database to avoid stored credentials)
         headers = integration.prepare_connection_headers(
-            "localhost", "test_db", legacy_token="legacy_token"
+            "localhost", "legacy_test_db", legacy_token="legacy_token"
         )
         
         assert "Authorization" in headers
@@ -128,7 +128,11 @@ class TestAuthenticationHandlerIntegration:
             "spacetime-identity-token: jwt.token.here"
         )
         
-        handshake_error = SpacetimeDBAuthHandshakeError(error_message)
+        handshake_error = SpacetimeDBAuthHandshakeError(
+            identity="abcdef123456789",
+            token="jwt.token.here", 
+            response_headers={"spacetime-identity": "abcdef123456789", "spacetime-identity-token": "jwt.token.here"}
+        )
         
         # Handle the error
         should_retry = integration.handle_authentication_error(
@@ -245,7 +249,7 @@ class TestAuthenticationHandlerIntegration:
         integration = WebSocketAuthIntegration(auth_handler=handler)
         
         # Test handling authentication error
-        auth_error = AuthenticationError("Invalid credentials")
+        auth_error = AuthenticationError("Invalid credentials", status_code=401)
         should_retry = integration.handle_authentication_error(
             auth_error, "localhost", "test_db"
         )

@@ -8,6 +8,7 @@ storage as fallback options.
 
 import json
 import logging
+from ..utils.error_formatting import ErrorFormatter
 import os
 import threading
 import time
@@ -43,13 +44,20 @@ class AuthCredentials:
         token: str,
         host: Optional[str] = None,
         database: Optional[str] = None,
-        timestamp: Optional[float] = None
+        timestamp: Optional[float] = None,
+        is_anonymous: Optional[bool] = None
     ):
         self.identity = identity
         self.token = token
         self.host = host
         self.database = database
         self.timestamp = timestamp or time.time()
+        # If is_anonymous is not specified, try to determine from identity
+        if is_anonymous is None:
+            # Anonymous identity is typically all zeros or empty
+            self.is_anonymous = self._detect_anonymous_identity(identity)
+        else:
+            self.is_anonymous = is_anonymous
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert credentials to dictionary for storage."""
@@ -58,7 +66,8 @@ class AuthCredentials:
             'token': self.token,
             'host': self.host,
             'database': self.database,
-            'timestamp': self.timestamp
+            'timestamp': self.timestamp,
+            'is_anonymous': self.is_anonymous
         }
     
     @classmethod
@@ -69,7 +78,8 @@ class AuthCredentials:
             token=data['token'],
             host=data.get('host'),
             database=data.get('database'),
-            timestamp=data.get('timestamp', time.time())
+            timestamp=data.get('timestamp', time.time()),
+            is_anonymous=data.get('is_anonymous')
         )
     
     @property
@@ -83,7 +93,28 @@ class AuthCredentials:
         return self.age_seconds > max_age_seconds
     
     def __str__(self) -> str:
-        return f"AuthCredentials(identity={self.identity[:8]}..., host={self.host}, database={self.database})"
+        return f"AuthCredentials(identity={self.identity[:8]}..., host={self.host}, database={self.database}, is_anonymous={self.is_anonymous})"
+    
+    def _detect_anonymous_identity(self, identity: str) -> bool:
+        """
+        Detect if an identity string represents an anonymous identity.
+        
+        Args:
+            identity: The identity string (typically hex)
+            
+        Returns:
+            True if the identity appears to be anonymous, False otherwise
+        """
+        if not identity:
+            return True
+        
+        # Remove common prefixes and convert to lowercase
+        clean_identity = identity.lower()
+        if clean_identity.startswith('0x'):
+            clean_identity = clean_identity[2:]
+        
+        # Anonymous identities are typically all zeros
+        return all(c == '0' for c in clean_identity)
 
 
 class SecureAuthStorage:
@@ -234,7 +265,7 @@ class SecureAuthStorage:
             data = json.dumps(credentials.to_dict())
             keyring.set_password(self.KEYRING_SERVICE_NAME, key, data)
         except Exception as e:
-            self.logger.error(f"Failed to store credentials in keyring: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("keyring storage", e))
             raise
     
     def _get_from_keyring(self, key: str) -> Optional[AuthCredentials]:
@@ -245,7 +276,7 @@ class SecureAuthStorage:
                 return AuthCredentials.from_dict(json.loads(data))
             return None
         except Exception as e:
-            self.logger.error(f"Failed to get credentials from keyring: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("keyring retrieval", e))
             return None
     
     def _remove_from_keyring(self, key: str) -> bool:
@@ -254,7 +285,7 @@ class SecureAuthStorage:
             keyring.delete_password(self.KEYRING_SERVICE_NAME, key)
             return True
         except Exception as e:
-            self.logger.error(f"Failed to remove credentials from keyring: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("keyring removal", e))
             return False
     
     def _load_credentials_from_file(self) -> Dict[str, AuthCredentials]:
@@ -278,7 +309,7 @@ class SecureAuthStorage:
             
             return credentials
         except Exception as e:
-            self.logger.error(f"Failed to load credentials from file: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("file loading", e))
             return {}
     
     def _save_credentials_to_file(self, credentials: Dict[str, AuthCredentials]) -> None:
@@ -305,7 +336,7 @@ class SecureAuthStorage:
             temp_file.replace(self.credentials_file)
             
         except Exception as e:
-            self.logger.error(f"Failed to save credentials to file: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("file saving", e))
             raise
     
     def _load_credentials(self) -> None:
@@ -333,7 +364,7 @@ class SecureAuthStorage:
                 self.logger.debug(f"Loaded {len(self._credentials_cache)} credential entries")
                 
             except Exception as e:
-                self.logger.error(f"Failed to load credentials: {e}")
+                self.logger.error(ErrorFormatter.format_auth_error("credential loading", e))
                 self._cache_loaded = True
     
     def store_credentials(
@@ -372,7 +403,7 @@ class SecureAuthStorage:
             else:
                 self._save_credentials_to_file(self._credentials_cache)
             
-            self.logger.info(f"Stored credentials for {host}/{database} (identity: {identity[:8]}...)")
+            self.logger.info(f"Stored credentials for {host}/{database}")
     
     def get_credentials(
         self,
@@ -470,7 +501,7 @@ class SecureAuthStorage:
                 
                 self.logger.info("Cleared all stored credentials")
             except Exception as e:
-                self.logger.error(f"Failed to clear credentials: {e}")
+                self.logger.error(ErrorFormatter.format_auth_error("credential clearing", e))
     
     def _cleanup_expired_credentials(self) -> int:
         """Remove expired credentials from cache and storage."""
@@ -583,5 +614,5 @@ class SecureAuthStorage:
             return migrated
             
         except Exception as e:
-            self.logger.error(f"Failed to migrate from plaintext: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("plaintext migration", e))
             return 0

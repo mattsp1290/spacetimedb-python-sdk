@@ -8,6 +8,12 @@ Demonstrates how to use the WASM integration infrastructure:
 - Performance benchmarking
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import time
 from pathlib import Path

@@ -4,6 +4,12 @@ Validation script for Task 2: Create Shared Types Module
 Tests that the circular import issue has been resolved.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 import traceback
 from typing import List, Tuple, Optional
@@ -71,19 +77,19 @@ def test_import_client():
     assert SpacetimeDBClient
 
 
-@test("Test 6: Import ModernSpacetimeDBClient")
+@test("Test 6: Import SpacetimeDBClient")
 def test_import_modern_client():
     """Test importing the modern client."""
-    from spacetimedb_sdk import ModernSpacetimeDBClient
-    assert ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
+    assert SpacetimeDBClient
 
 
 @test("Test 7: Create connection builder")
 def test_create_builder():
     """Test creating a connection builder."""
-    from spacetimedb_sdk import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     assert builder is not None
     
     # Test fluent API
@@ -99,10 +105,10 @@ def test_create_builder():
 @test("Test 8: Validate builder configuration")
 def test_builder_validation():
     """Test builder validation without building."""
-    from spacetimedb_sdk import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     
     builder = (
-        ModernSpacetimeDBClient.builder()
+        SpacetimeDBClient.builder()
         .with_uri("ws://localhost:3000")
         .with_module_name("test_module")
     )
@@ -117,10 +123,10 @@ def test_builder_validation():
 @test("Test 9: Test connection pool configuration")
 def test_connection_pool_config():
     """Test configuring connection pool via builder."""
-    from spacetimedb_sdk import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     
     builder = (
-        ModernSpacetimeDBClient.builder()
+        SpacetimeDBClient.builder()
         .with_uri("ws://localhost:3000")
         .with_module_name("test_module")
         .with_connection_pool(

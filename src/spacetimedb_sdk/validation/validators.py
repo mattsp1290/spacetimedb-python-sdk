@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union, NamedTuple
 from dataclasses import dataclass, field
 import logging
+from ..utils.error_formatting import ErrorFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +99,7 @@ class Validator(ABC):
             result = self.validate(value, field)
             return result.is_valid
         except Exception as e:
-            self.logger.error(f"Validation failed with exception: {e}")
+            self.logger.error(ErrorFormatter.format_generic_error("Validator", "validation", e))
             return False
     
     def sanitize(self, value: Any, field: Optional[str] = None) -> Any:

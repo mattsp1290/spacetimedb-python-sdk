@@ -5,20 +5,26 @@ Tests all the bounded data structures and memory limits to ensure
 they properly prevent memory exhaustion attacks.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import threading
 import time
 import gc
 from typing import Dict, Any
 
-from src.spacetimedb_sdk.memory_management import (
+from spacetimedb_sdk.memory_management import (
     BoundedDict, BoundedSubscriptionManager, RecursionLimiter,
     MemoryAccountant, MessageSizeValidator, LRUEvictionPolicy,
     TTLEvictionPolicy, configure_memory_limits
 )
-from src.spacetimedb_sdk.bsatn.bounded_reader import BoundedBsatnReader, create_bounded_reader
-from src.spacetimedb_sdk.bsatn.bounded_writer import BoundedBsatnWriter, create_bounded_writer
-from src.spacetimedb_sdk.bounded_client_cache import BoundedClientCache, BoundedTableCache
+from spacetimedb_sdk.bsatn.bounded_reader import BoundedBsatnReader, create_bounded_reader
+from spacetimedb_sdk.bsatn.bounded_writer import BoundedBsatnWriter, create_bounded_writer
+from spacetimedb_sdk.bounded_cache import BoundedClientCache, BoundedTableCache
 
 
 class TestBoundedDict:
@@ -435,10 +441,10 @@ class TestIntegration:
         """Test that websocket client uses bounded structures."""
         # This would require mocking the websocket client
         # For now, just test that imports work
-        from src.spacetimedb_sdk.websocket_client import ModernWebSocketClient
+        from spacetimedb_sdk.websocket_client import WebSocketClient
         
         # Verify the client can be created (imports are working)
-        client = ModernWebSocketClient()
+        client = WebSocketClient()
         
         # Check that bounded structures are used
         assert hasattr(client, 'memory_accountant')

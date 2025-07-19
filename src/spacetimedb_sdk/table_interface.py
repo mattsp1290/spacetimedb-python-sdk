@@ -11,6 +11,7 @@ Provides rich table interaction APIs matching TypeScript SDK functionality:
 """
 
 import logging
+from .utils.error_formatting import ErrorFormatter
 from typing import Any, Callable, Dict, Iterator, List, Optional, Type, TypeVar, Generic, Union
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
@@ -89,7 +90,7 @@ class CallbackManager:
             try:
                 callback(*args, **kwargs)
             except Exception as e:
-                logger.error(f"Error in {event_type} callback for table {self.table_name}: {e}")
+                logger.error(ErrorFormatter.format_event_error(f"{event_type} callback for table {self.table_name}", e))
 
 
 class TableHandle(Generic[T]):

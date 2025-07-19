@@ -9,6 +9,12 @@ Tests the enhanced time handling capabilities including:
 - High-precision timing
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import asyncio
 import time
@@ -965,11 +971,11 @@ class TestSchedulingConvenienceFunctions:
 
 
 class TestModernClientSchedulingIntegration:
-    """Test integration between ModernSpacetimeDBClient and scheduling system."""
+    """Test integration between SpacetimeDBClient and scheduling system."""
     
     @pytest.fixture
     def mock_client(self):
-        """Create a mock ModernSpacetimeDBClient for testing."""
+        """Create a mock SpacetimeDBClient for testing."""
         from unittest.mock import Mock, AsyncMock
         
         client = Mock()
@@ -986,12 +992,12 @@ class TestModernClientSchedulingIntegration:
         return client
     
     def test_client_scheduler_property(self, mock_client):
-        """Test that ModernSpacetimeDBClient has scheduler property."""
-        from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+        """Test that SpacetimeDBClient has scheduler property."""
+        from spacetimedb_sdk import SpacetimeDBClient
         from spacetimedb_sdk.scheduling import ReducerScheduler
         
         # Create a real client instance for testing
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         # Access scheduler property
         scheduler = client.scheduler
@@ -1000,11 +1006,11 @@ class TestModernClientSchedulingIntegration:
         assert scheduler.client == client
     
     def test_client_call_reducer_async(self, mock_client):
-        """Test that ModernSpacetimeDBClient has call_reducer_async method."""
-        from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+        """Test that SpacetimeDBClient has call_reducer_async method."""
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Create a real client instance
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         # Check that call_reducer_async method exists
         assert hasattr(client, 'call_reducer_async')
@@ -1013,12 +1019,12 @@ class TestModernClientSchedulingIntegration:
     @pytest.mark.asyncio
     async def test_scheduler_with_real_client(self):
         """Test scheduler integration with real client."""
-        from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         from spacetimedb_sdk.time_utils import EnhancedTimeDuration
         from unittest.mock import Mock, AsyncMock
         
         # Create client with mocked WebSocket
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         client.ws_client = Mock()
         client.ws_client.is_connected = True
         client.call_reducer_async = AsyncMock(return_value="test_result")

@@ -25,6 +25,7 @@ class ConnectionState(Enum):
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
+    DISCONNECTING = "disconnecting"
     RECONNECTING = "reconnecting"
     FAILED = "failed"
 

@@ -209,38 +209,10 @@ class SecurityManager:
                 self.logger.error(f"Failed to load client certificate: {e}")
                 raise
         
-        # Set custom verification callback if pinning is enabled
-        if self.config.pins and self.config.enforce_pinning:
-            if hostname and hostname not in self.config.pin_bypass_hosts:
-                # Store the original callback
-                original_callback = context.verify_callback
-                
-                def pin_verification_callback(conn, cert_binary, errno, depth, preverify_ok):
-                    """Custom callback for certificate pinning."""
-                    # First run the original validation
-                    if original_callback:
-                        preverify_ok = original_callback(conn, cert_binary, errno, depth, preverify_ok)
-                    
-                    if not preverify_ok:
-                        return False
-                    
-                    # Only check pins for the leaf certificate
-                    if depth == 0:
-                        try:
-                            cert = x509.load_der_x509_certificate(cert_binary, default_backend())
-                            if not self._verify_pins(cert, hostname):
-                                self.logger.error(f"Certificate pinning failed for {hostname}")
-                                self.pin_misses += 1
-                                return False
-                            self.pin_hits += 1
-                        except Exception as e:
-                            self.logger.error(f"Pin verification error: {e}")
-                            return False
-                    
-                    return True
-                
-                # Note: In production, we'd use context.set_verify_callback
-                # but for compatibility, we'll check pins after connection
+        # Note: Certificate pinning will be enforced post-connection
+        # Python's ssl module doesn't support custom verification callbacks
+        # like OpenSSL, so we perform pin verification after the handshake
+        # in the verify_certificate method.
                 
         return context
     

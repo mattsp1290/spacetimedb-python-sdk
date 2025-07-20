@@ -9,6 +9,9 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union, NamedTuple
 from dataclasses import dataclass, field
 import logging
+import re
+import time
+from functools import wraps
 from ..utils.error_formatting import ErrorFormatter
 
 logger = logging.getLogger(__name__)
@@ -29,17 +32,19 @@ class ValidationError(Exception):
         return f"Validation error: {self.message}"
 
 
-class ValidationResult(NamedTuple):
+@dataclass
+class ValidationResult:
     """Result of a validation operation."""
     is_valid: bool
     sanitized_value: Any = None
-    errors: List[ValidationError] = []
-    warnings: List[str] = []
+    errors: List[ValidationError] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
     
     @property
     def value(self) -> Any:
         """Get the sanitized value or original value if validation failed."""
         return self.sanitized_value if self.is_valid else None
+
 
 
 @dataclass
@@ -250,7 +255,6 @@ class RegexValidator(Validator):
     
     def __init__(self, pattern: str, config: Optional[ValidationConfig] = None):
         super().__init__(config)
-        import re
         self.pattern = pattern
         self.regex = re.compile(pattern)
     

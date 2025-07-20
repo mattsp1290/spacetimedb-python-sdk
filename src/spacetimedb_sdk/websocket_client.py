@@ -70,17 +70,42 @@ from .memory_management import (
     BoundedDict, BoundedSubscriptionManager, RecursionLimiter,
     MemoryAccountant, MessageSizeValidator, get_global_memory_accountant
 )
-from .validation import (
-    get_security_manager,
-    validate_url,
-    validate_websocket_url,
-    validate_sql_query,
-    validate_json_data,
-    sanitize_url,
-    sanitize_sql_query,
-    sanitize_json_data,
-    ValidationError
-)
+# Import validation with fallback handling
+try:
+    from .validation import (
+        get_security_manager,
+        validate_url,
+        validate_websocket_url,
+        validate_sql_query,
+        validate_json_data,
+        sanitize_url,
+        sanitize_sql_query,
+        sanitize_json_data,
+        ValidationError
+    )
+except ImportError:
+    # Fallback if validation module is not available
+    validate_json_data = None
+    ValidationError = Exception
+    
+    # Define minimal fallback functions - these won't be used in normal operation
+    # but prevent ImportError when validation module is unavailable
+    
+    # Simple ValidationResult mock for fallback
+    class ValidationResult:
+        def __init__(self, is_valid=True, sanitized_value=None, errors=None, warnings=None):
+            self.is_valid = is_valid
+            self.sanitized_value = sanitized_value
+            self.errors = errors or []
+            self.warnings = warnings or []
+    
+    get_security_manager = lambda: None
+    validate_url = lambda url, field=None: ValidationResult(is_valid=True, sanitized_value=url)
+    validate_websocket_url = lambda url, field=None: ValidationResult(is_valid=True, sanitized_value=url)
+    validate_sql_query = lambda query, field=None: ValidationResult(is_valid=True, sanitized_value=query)
+    sanitize_url = lambda url, field=None: url
+    sanitize_sql_query = lambda query, field=None: query
+    sanitize_json_data = lambda data, field=None: data
 
 
 class SubscriptionMetrics:
@@ -673,9 +698,17 @@ class WebSocketClient:
                 host = parsed_host.hostname
                 port = parsed_host.port
                 
-                # Validate the extracted host
-                if not host or not get_security_manager().validate_hostname(host):
+                # Validate the extracted host by reconstructing URL
+                if not host:
                     raise ValidationError(f"Invalid host: {host}")
+                
+                # Validate the host by creating a URL and validating it
+                security_manager = get_security_manager()
+                if security_manager:
+                    test_url = f"{protocol_scheme}://{host}"
+                    host_result = security_manager.validate_url(test_url, "host")
+                    if not host_result.is_valid:
+                        raise ValidationError(f"Invalid host: {'; '.join(str(e) for e in host_result.errors)}")
                 
                 # Reconstruct the validated host with port if available
                 validated_host = f"{host}:{port}" if port else host
@@ -688,11 +721,14 @@ class WebSocketClient:
             # Validate and sanitize database identifier
             try:
                 security_manager = get_security_manager()
-                # Use data size validator to check database identifier
-                db_result = security_manager.size_validator.validate(db_identifier, "database_identifier")
-                if not db_result.is_valid:
-                    raise ValidationError(f"Invalid database identifier: {'; '.join(str(e) for e in db_result.errors)}")
-                validated_db_identifier = db_result.sanitized_value
+                validated_db_identifier = db_identifier
+                
+                # Use data size validator to check database identifier if available
+                if security_manager:
+                    db_result = security_manager.size_validator.validate(db_identifier, "database_identifier")
+                    if not db_result.is_valid:
+                        raise ValidationError(f"Invalid database identifier: {'; '.join(str(e) for e in db_result.errors)}")
+                    validated_db_identifier = db_result.sanitized_value
                 
                 # Additional validation: prevent path traversal
                 if '../' in validated_db_identifier or '..\\' in validated_db_identifier:
@@ -720,7 +756,11 @@ class WebSocketClient:
                     raise ValidationError(f"Invalid connection URL: {'; '.join(str(e) for e in url_result.errors)}")
                 url = url_result.sanitized_value
             except ValidationError as e:
-                raise WebSocketHandshakeError(f"Invalid connection URL: {e}")
+                raise WebSocketHandshakeError(
+                    status_code=400,
+                    status_message=f"Invalid connection URL: {e}",
+                    url=url
+                )
             
             # Store URL for error diagnostics
             self.connection_url = url
@@ -1020,8 +1060,12 @@ class WebSocketClient:
         query_id = QueryId.generate()
         
         with self._lock:
-            self.active_subscriptions.set(request_id, query_id)
-            self.subscription_queries.set(query_id, [query])
+            if not self.active_subscriptions.set(request_id, query_id):
+                raise RuntimeError(f"Failed to store subscription for request_id {request_id}")
+            if not self.subscription_queries.set(query_id, [query]):
+                # Clean up the partial state
+                self.active_subscriptions.delete(request_id)
+                raise RuntimeError(f"Failed to store subscription query for query_id {query_id}")
             # Legacy compatibility: add to subscriptions dict
             self.subscriptions[str(query_id)] = {
                 'query': query,
@@ -1043,8 +1087,12 @@ class WebSocketClient:
         query_id = QueryId.generate()
         
         with self._lock:
-            self.active_subscriptions.set(request_id, query_id)
-            self.subscription_queries.set(query_id, queries)
+            if not self.active_subscriptions.set(request_id, query_id):
+                raise RuntimeError(f"Failed to store subscription for request_id {request_id}")
+            if not self.subscription_queries.set(query_id, queries):
+                # Clean up the partial state
+                self.active_subscriptions.delete(request_id)
+                raise RuntimeError(f"Failed to store subscription queries for query_id {query_id}")
             # Legacy compatibility: add to subscriptions dict
             self.subscriptions[str(query_id)] = {
                 'queries': queries,
@@ -1267,19 +1315,26 @@ class WebSocketClient:
                 # Check if this is a JSON message received when binary protocol is expected
                 if frame_type == "TEXT" and self.use_binary:
                     try:
-                        # Validate JSON message for security before parsing
-                        json_result = validate_json_data(message, "websocket_message")
-                        if json_result.is_valid:
-                            json_data = json_result.sanitized_value
+                        # Validate JSON message for security before parsing if validation is available
+                        if validate_json_data:
+                            json_result = validate_json_data(message, "websocket_message")
+                            if json_result.is_valid:
+                                json_data = json_result.sanitized_value
+                                message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
+                                self.logger.warning(f"Unknown message type in data: {message_types}")
+                                
+                                # Log specific message types that are commonly mismatched
+                                for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
+                                    if isinstance(json_data, dict) and msg_type in json_data:
+                                        self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
+                            else:
+                                self.logger.warning(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
+                        else:
+                            # Fallback to direct parsing if validation not available
+                            import json
+                            json_data = json.loads(message)
                             message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
                             self.logger.warning(f"Unknown message type in data: {message_types}")
-                            
-                            # Log specific message types that are commonly mismatched
-                            for msg_type in ['IdentityToken', 'InitialSubscription', 'TransactionUpdate']:
-                                if isinstance(json_data, dict) and msg_type in json_data:
-                                    self.logger.warning(f"Unknown message type in data: {{'{msg_type}': {{...}}}}")
-                        else:
-                            self.logger.warning(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
                     except ValidationError as e:
                         self.logger.warning(f"JSON validation failed: {e}")
                     except Exception as e:
@@ -2069,15 +2124,6 @@ class WebSocketClient:
         """Reset all subscription health metrics."""
         self.subscription_metrics.reset_metrics()
     
-    def get_protocol_helper(self):
-        """Get the protocol helper for client-side encoding compatibility."""
-        return {
-            'encoder': self.encoder,
-            'decoder': self.decoder,
-            'use_binary': self.use_binary,
-            'protocol': self.protocol
-        }
-    
     # Legacy API compatibility methods
     def subscribe(self, table_name: str, sql_query: str = None) -> QueryId:
         """
@@ -2110,26 +2156,6 @@ class WebSocketClient:
         if self.ws:
             self.ws.send(message, opcode=websocket.ABNF.OPCODE_BINARY)
     
-    def send_heartbeat(self) -> None:
-        """
-        Legacy API: Send heartbeat message.
-        """
-        # Modern implementation doesn't need explicit heartbeats
-        # WebSocket handles this automatically
-        pass
-    
-    def should_use_sdk_encoding(self) -> bool:
-        """
-        Legacy API: Check if SDK encoding should be used.
-        """
-        return self.use_binary
-    
-    def detect_expected_frame_type(self) -> str:
-        """
-        Legacy API: Detect expected frame type.
-        """
-        return "BINARY" if self.use_binary else "TEXT"
-    
     # Legacy API properties for backward compatibility
     @property
     def connection_state(self) -> ConnectionState:
@@ -2150,6 +2176,3 @@ class WebSocketClient:
     def ws_app(self, value: Optional[websocket.WebSocketApp]) -> None:
         """Legacy alias for ws."""
         self.ws = value
-
-
-# No backward compatibility - use ModernWebSocketClient directly

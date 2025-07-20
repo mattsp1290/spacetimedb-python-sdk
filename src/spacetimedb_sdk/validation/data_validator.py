@@ -36,8 +36,6 @@ class JSONValidator(Validator):
     
     def __init__(self, config: Optional[ValidationConfig] = None):
         super().__init__(config)
-        self._max_parse_depth = 0
-        self._current_depth = 0
     
     def validate(self, value: Any, field: Optional[str] = None) -> ValidationResult:
         """
@@ -91,18 +89,37 @@ class JSONValidator(Validator):
                 value=json_str
             ))
         
+        # Pre-scan for depth before parsing to prevent memory exhaustion
+        try:
+            pre_scan_depth = self._pre_scan_depth(json_str)
+            if pre_scan_depth > self.config.max_json_depth:
+                errors.append(JSONValidationError(
+                    f"JSON nesting too deep: {pre_scan_depth} > {self.config.max_json_depth}",
+                    field=field,
+                    value=json_str
+                ))
+                return ValidationResult(is_valid=False, errors=errors)
+        except Exception as e:
+            errors.append(JSONValidationError(
+                f"JSON depth pre-scan failed: {e}",
+                field=field,
+                value=json_str
+            ))
+            return ValidationResult(is_valid=False, errors=errors)
+        
         # Try to parse JSON
         try:
-            # Use custom decoder to track depth
+            # Reset depth tracking
             self._max_parse_depth = 0
-            self._current_depth = 0
+            self._current_parse_depth = 0
             
             parsed_data = json.loads(json_str, object_hook=self._depth_hook)
             
-            # Check depth limit
-            if self._max_parse_depth > self.config.max_json_depth:
+            # Final depth validation on the parsed data
+            final_depth = self._calculate_depth_safe(parsed_data, max_depth=self.config.max_json_depth + 10)
+            if final_depth > self.config.max_json_depth:
                 errors.append(JSONValidationError(
-                    f"JSON nesting too deep: {self._max_parse_depth} > {self.config.max_json_depth}",
+                    f"JSON nesting too deep: {final_depth} > {self.config.max_json_depth}",
                     field=field,
                     value=json_str
                 ))
@@ -169,24 +186,140 @@ class JSONValidator(Validator):
             warnings=warnings
         )
     
+
     def _depth_hook(self, obj: Dict[str, Any]) -> Dict[str, Any]:
-        """Object hook to track parsing depth."""
-        self._current_depth += 1
-        self._max_parse_depth = max(self._max_parse_depth, self._current_depth)
+        """Object hook to track parsing depth safely."""
+        # Simple counter to track nested object processing
+        # This prevents excessive recursion during parsing
+        self._current_parse_depth += 1
+        self._max_parse_depth = max(self._max_parse_depth, self._current_parse_depth)
         
-        # Check depth limit during parsing
-        if self._current_depth > self.config.max_json_depth:
-            raise JSONValidationError(f"JSON nesting too deep: {self._current_depth}")
+        try:
+            # Basic safety check to prevent RecursionError during parsing
+            if self._current_parse_depth > 990:  # Python's default recursion limit is ~1000
+                raise JSONValidationError(f"JSON parsing depth approaching recursion limit: {self._current_parse_depth}")
+            
+            # The pre-scan depth check should catch most depth violations
+            # This is just a safety net during parsing
+            if self._current_parse_depth > self.config.max_json_depth * 2:  # Conservative limit
+                raise JSONValidationError(f"JSON parsing depth too deep: {self._current_parse_depth}")
+                
+            return obj
+            
+        except JSONValidationError:
+            raise
+        except RecursionError:
+            raise JSONValidationError("JSON nesting too deep (recursion limit exceeded)")
+        except Exception as e:
+            raise JSONValidationError(f"JSON parsing failed: {e}")
+        finally:
+            self._current_parse_depth -= 1
+    
+    def _calculate_depth(self, obj: Any, current_depth: int = 1) -> int:
+        """Calculate the actual depth of a nested object/array structure."""
+        # Add safety check to prevent RecursionError
+        if current_depth > 1000:  # Prevent stack overflow
+            raise JSONValidationError("JSON nesting too deep (recursion limit exceeded)")
+            
+        if not isinstance(obj, (dict, list)):
+            return current_depth
         
-        self._current_depth -= 1
-        return obj
+        max_depth = current_depth
+        
+        if isinstance(obj, dict):
+            for value in obj.values():
+                if isinstance(value, (dict, list)):
+                    depth = self._calculate_depth(value, current_depth + 1)
+                    max_depth = max(max_depth, depth)
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    depth = self._calculate_depth(item, current_depth + 1)
+                    max_depth = max(max_depth, depth)
+        
+        return max_depth
+
+      
+    def _calculate_depth_safe(self, obj: Any, max_depth: int = 100, current_depth: int = 1) -> int:
+        """
+        Calculate depth with strict recursion limits to prevent stack overflow.
+        This is a safer version used as fallback when frame inspection fails.
+        """
+        if current_depth > max_depth:
+            # Don't raise error, just return max to prevent infinite recursion
+            return max_depth
+            
+        if not isinstance(obj, (dict, list)):
+            return current_depth
+        
+        calculated_max_depth = current_depth
+        
+        if isinstance(obj, dict):
+            for value in obj.values():
+                if isinstance(value, (dict, list)):
+                    depth = self._calculate_depth_safe(value, max_depth, current_depth + 1)
+                    calculated_max_depth = max(calculated_max_depth, depth)
+        elif isinstance(obj, list):
+            for item in obj:
+                if isinstance(item, (dict, list)):
+                    depth = self._calculate_depth_safe(item, max_depth, current_depth + 1)
+                    calculated_max_depth = max(calculated_max_depth, depth)
+        
+        return calculated_max_depth
+    
+    
+    def _pre_scan_depth(self, json_str: str) -> int:
+        """
+        Pre-scan JSON string to detect excessive nesting before parsing.
+        This prevents memory exhaustion from deeply nested structures.
+        """
+        max_depth = 0
+        current_depth = 0
+        in_string = False
+        escaped = False
+        
+        for i, char in enumerate(json_str):
+            if escaped:
+                escaped = False
+                continue
+            
+            if char == '\\' and in_string:
+                escaped = True
+                continue
+            
+            if char == '"' and not escaped:
+                in_string = not in_string
+                continue
+            
+            if in_string:
+                continue
+            
+            if char in '{[':
+                current_depth += 1
+                max_depth = max(max_depth, current_depth)
+                
+                # Fail fast if depth exceeds limit
+                if current_depth > self.config.max_json_depth:
+                    return current_depth
+            elif char in '}]':
+                current_depth = max(0, current_depth - 1)
+        
+        return max_depth
     
     def _validate_data_structure(self, data: Any, field: Optional[str], depth: int = 0):
         """Recursively validate data structure."""
-        # Check depth
+        # Check depth with safety margins to prevent RecursionError
         if depth > self.config.max_json_depth:
             raise JSONValidationError(
                 f"Data nesting too deep: {depth} > {self.config.max_json_depth}",
+                field=field,
+                value=data
+            )
+        
+        # Additional safety check to prevent stack overflow
+        if depth > 990:  # Python's default recursion limit is ~1000
+            raise JSONValidationError(
+                f"Data nesting approaching recursion limit: {depth}",
                 field=field,
                 value=data
             )

@@ -871,12 +871,20 @@ class ProtocolDecoder:
                     message = json_result.sanitized_value
                 except ValidationError as e:
                     raise ValueError(f"JSON validation failed: {e}")
+                # All other exceptions from validate_json_data (including security-related ones)
+                # should be propagated up instead of falling back to unsafe parsing
             else:
                 # Fallback to direct parsing if validation not available
                 message = json.loads(json_str)
                 
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"Failed to decode JSON message: {e}")
+        except ValueError:
+            # Re-raise ValueError exceptions (these are our custom validation errors)
+            raise
+        except Exception as e:
+            # Catch any other unexpected exceptions and provide a meaningful error
+            raise ValueError(f"Unexpected error during JSON message decoding: {e}")
         
         # Check for legacy identity format first
         if "__identity__" in message:
@@ -890,9 +898,15 @@ class ProtocolDecoder:
             # Handle connection_id which might be a number or hex string
             conn_id_data = message.get("__connection_id__", 0)
             if isinstance(conn_id_data, int):
-                # Convert integer to 16-byte representation
-                conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
-                connection_id = ConnectionId(data=conn_id_bytes)
+                # Safe parsing: check if integer fits in 16 bytes
+                try:
+                    if conn_id_data < 0 or conn_id_data >= (1 << 128):
+                        raise OverflowError("Integer too large for 16-byte representation")
+                    conn_id_bytes = conn_id_data.to_bytes(16, byteorder='big')
+                    connection_id = ConnectionId(data=conn_id_bytes)
+                except (OverflowError, ValueError):
+                    # Fallback for invalid integer values
+                    connection_id = ConnectionId(data=b"\x00" * 16)
             elif isinstance(conn_id_data, str):
                 try:
                     if conn_id_data.startswith("0x"):

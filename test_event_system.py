@@ -602,7 +602,7 @@ class TestGlobalEventBus(unittest.TestCase):
 class TestClientIntegration(unittest.TestCase):
     """Test integration with SpacetimeDBClient."""
     
-    @patch('spacetimedb_sdk.modern_client.WebSocketClient')
+    @patch('spacetimedb_sdk.websocket_client.WebSocketClient')
     def setUp(self, mock_ws_client_class):
         """Set up test client."""
         self.mock_ws = Mock()

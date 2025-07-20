@@ -1007,6 +1007,7 @@ class TestAdvancedPatterns:
 @pytest.fixture
 async def spacetimedb_server():
     """Provide a SpacetimeDB server for testing."""
+    require_spacetimedb()  # Skip if SpacetimeDB not available
     config = SpacetimeDBConfig(listen_port=3100)
     server = SpacetimeDBServer(config)
     server.start()
@@ -1026,7 +1027,8 @@ async def wasm_harness(spacetimedb_server):
 @pytest.fixture
 def sdk_test_module():
     """Provide SDK test module."""
-    return WASMModule.from_file(require_sdk_test_module(), "sdk_test")
+    module_path = require_sdk_test_module()  # Skip if module not available
+    return WASMModule.from_file(module_path, "sdk_test")
 
 
 async def main():

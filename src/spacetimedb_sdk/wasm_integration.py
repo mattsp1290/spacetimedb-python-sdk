@@ -392,8 +392,9 @@ def require_spacetimedb() -> None:
     """Skip test if SpacetimeDB is not available."""
     import pytest
     
-    if not shutil.which("spacetimedb"):
-        pytest.skip("SpacetimeDB executable not found in PATH")
+    config = SpacetimeDBConfig()
+    if not config.executable_path:
+        pytest.skip("SpacetimeDB executable not found. Install SpacetimeDB or set SPACETIMEDB_PATH environment variable")
 
 
 def require_sdk_test_module() -> Path:

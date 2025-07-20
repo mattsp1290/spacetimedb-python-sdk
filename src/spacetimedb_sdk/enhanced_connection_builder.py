@@ -196,8 +196,12 @@ class EnhancedConnectionBuilder(SpacetimeDBConnectionBuilder):
             scope=scope or []
         )
         
-        provider = AuthProviderFactory.create(config)
-        self._auth_providers.append(provider)
+        try:
+            provider = AuthProviderFactory.create(config)
+            self._auth_providers.append(provider)
+        except ImportError as e:
+            import warnings
+            warnings.warn(f"Skipping OAuth2 provider: {e}", RuntimeWarning)
         
         return self
     
@@ -232,8 +236,12 @@ class EnhancedConnectionBuilder(SpacetimeDBConnectionBuilder):
             public_key=public_key
         )
         
-        provider = AuthProviderFactory.create(config)
-        self._auth_providers.append(provider)
+        try:
+            provider = AuthProviderFactory.create(config)
+            self._auth_providers.append(provider)
+        except ImportError as e:
+            import warnings
+            warnings.warn(f"Skipping JWT provider: {e}", RuntimeWarning)
         
         return self
     
@@ -298,8 +306,12 @@ class EnhancedConnectionBuilder(SpacetimeDBConnectionBuilder):
             sp_acs_url=sp_acs_url
         )
         
-        provider = AuthProviderFactory.create(config)
-        self._auth_providers.append(provider)
+        try:
+            provider = AuthProviderFactory.create(config)
+            self._auth_providers.append(provider)
+        except ImportError as e:
+            import warnings
+            warnings.warn(f"Skipping SAML provider: {e}", RuntimeWarning)
         
         return self
     

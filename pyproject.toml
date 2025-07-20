@@ -62,6 +62,7 @@ addopts = [
     "--strict-markers",
     "--color=yes",
     "--disable-warnings",
+    "--maxfail=10",
 ]
 
 # Registered markers to avoid warnings
@@ -74,6 +75,7 @@ markers = [
     "asyncio: Asynchronous tests",
     "property: Property-based tests",
     "regression: Regression tests for bug fixes",
+    "wasm: WebAssembly integration tests",
 ]
 
 # Asyncio configuration to fix deprecation warnings
@@ -82,7 +84,8 @@ asyncio_default_fixture_loop_scope = "function"
 
 # Minimum version and timeouts
 minversion = "7.0"
-timeout = 300
+timeout = 120
+timeout_method = "thread"
 
 # Filtering
 filterwarnings = [

@@ -9,7 +9,7 @@ import json
 import logging
 import sys
 import aiohttp
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,7 +19,7 @@ class SpacetimeDBEndpointDiscovery:
     def __init__(self, host: str = "localhost:3000"):
         self.host = host
         self.base_url = f"http://{host}"
-        self.discovered_endpoints = []
+        self.discovered_endpoints = set()
         
     async def discover_http_api(self):
         """Discover HTTP API endpoints that might hint at WebSocket locations."""
@@ -70,7 +70,7 @@ class SpacetimeDBEndpointDiscovery:
             # Try to connect
             async with websockets.connect(url, close_timeout=2) as websocket:
                 logger.info(f"✓ SUCCESS! Connected to: {url}")
-                self.discovered_endpoints.append(url)
+                self.discovered_endpoints.add(url)
                 
                 # Try to receive any initial message
                 try:

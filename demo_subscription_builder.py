@@ -6,8 +6,14 @@ Demonstrates the subscription builder API patterns without requiring an actual
 SpacetimeDB connection. Shows TypeScript SDK compatibility and advanced features.
 """
 
+import os
 import sys
-sys.path.append('src')
+
+# Add the src directory to the path for development
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(script_dir, 'src')
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.subscription_builder import (

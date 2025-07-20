@@ -24,14 +24,14 @@ This guide outlines best practices for using the SpacetimeDB Python SDK effectiv
 - Enable audit logging for security events
 
 ```python
-from spacetimedb_sdk.secure_storage import SecureCredentialManager
+from spacetimedb_sdk.auth import SecureAuthStorage
 
 # Initialize secure storage
-credential_manager = SecureCredentialManager()
-credential_manager.initialize(master_password)
+auth_storage = SecureAuthStorage()
+auth_storage.initialize(master_password)
 
 # Store credentials securely
-credential_manager.store_credential(
+auth_storage.store_credential(
     'spacetimedb_token',
     {'token': token, 'expires_at': expiry},
     expires_at=expiry

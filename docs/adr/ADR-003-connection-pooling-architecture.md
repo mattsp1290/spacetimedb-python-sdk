@@ -95,7 +95,7 @@ class ConnectionPool:
         self.health_check_interval = health_check_interval
         
         # Pool state
-        self.available_connections: asyncio.Queue = asyncio.Queue()
+        self.available_connections: asyncio.Queue = asyncio.Queue(maxsize=max_size)
         self.active_connections: Set[Connection] = set()
         self.connection_info: Dict[Connection, ConnectionInfo] = {}
         

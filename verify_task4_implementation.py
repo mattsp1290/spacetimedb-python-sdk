@@ -10,10 +10,14 @@ This script validates that:
 """
 
 
-import sys
 import os
-# Add src directory to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+import sys
+
+# Add the src directory to the path for development/testing
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(script_dir, 'src')
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 import ast
 import sys
@@ -74,7 +78,7 @@ def check_package_imports():
     """Verify the package can be imported without errors"""
     try:
         # Add src to path
-        sys.path.insert(0, 'src')
+        # Path already set up at module level
         
         # Try importing the package
         import spacetimedb_sdk
@@ -148,7 +152,7 @@ def check_testing_package_structure():
 def check_direct_import():
     """Verify test fixtures can be imported directly"""
     try:
-        sys.path.insert(0, 'src')
+        # Path already set up at module level
         
         # Try importing from test_fixtures package
         from spacetimedb_sdk.test_fixtures import (
@@ -205,7 +209,7 @@ def check_no_circular_imports():
         for module in modules_to_clear:
             del sys.modules[module]
         
-        sys.path.insert(0, 'src')
+        # Path already set up at module level
         
         # Import in the order that would expose circular imports
         import spacetimedb_sdk

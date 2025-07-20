@@ -7,13 +7,14 @@ and provides the same performance benefits as the TypeScript SDK.
 """
 
 
-import sys
 import os
-# Add src directory to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
-
 import sys
-sys.path.append('src')
+
+# Add the src directory to the path for development/testing
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(script_dir, 'src')
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 import pytest
 import time

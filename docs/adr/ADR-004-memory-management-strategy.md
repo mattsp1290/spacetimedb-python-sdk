@@ -235,6 +235,7 @@ class BoundedCache:
 ### Memory Monitoring System
 
 ```python
+from __future__ import annotations
 import psutil
 import gc
 import threading

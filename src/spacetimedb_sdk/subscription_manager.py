@@ -9,6 +9,7 @@ subscription states are not properly maintained, leading to missed updates.
 import time
 import threading
 import logging
+from .utils.error_formatting import ErrorFormatter
 from typing import Dict, Any, Callable, Optional, List, Set
 from dataclasses import dataclass
 from enum import Enum
@@ -155,7 +156,7 @@ class SubscriptionManager:
             return processed_count > 0
             
         except Exception as e:
-            logger.error(f"Error processing subscription update: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Subscription Manager", "subscription update processing", e))
             return False
     
     def _process_table_update(self, table_name: str, table_data: Any, request_id: Optional[int]) -> bool:
@@ -189,7 +190,7 @@ class SubscriptionManager:
                     logger.debug(f"Executed callback for table '{table_name}'")
                     return True
                 except Exception as e:
-                    logger.error(f"Error executing callback for table '{table_name}': {e}")
+                    logger.error(ErrorFormatter.format_generic_error("Subscription Manager", f"callback execution for table '{table_name}'", e))
                     self._handle_callback_error(table_name, str(e))
                     return False
             
@@ -401,7 +402,7 @@ class SubscriptionManager:
             return False
             
         except Exception as e:
-            logger.error(f"Error processing message by type: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Subscription Manager", "message processing by type", e))
             return False
 
 

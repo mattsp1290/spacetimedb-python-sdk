@@ -1,0 +1,333 @@
+# SpacetimeDB v1.1.2 Compatibility Tasks
+# 
+# Context: The SpacetimeDB Python SDK currently uses an outdated WebSocket protocol
+# ("v1.text.spacetimedb") that is rejected by SpacetimeDB server v1.1.2.
+# The server now requires "v1.json.spacetimedb" or "v1.bsatn.spacetimedb".
+# Additionally, v1.1.2 requires database identity (UUID/hash) in connection URLs.
+#
+# Goal: Update the Python SDK to support SpacetimeDB v1.1.2.
+# Note: This is a BREAKING CHANGE - users will need SpacetimeDB v1.1.2+
+#
+# Background Files:
+# - src/spacetimedb_sdk/V1_1_2_COMPATIBILITY_CHANGES.md (detailed analysis)
+# - SPACETIMEDB_V1_1_2_DISCOVERY.md (issue discovery documentation)
+# - src/spacetimedb_sdk/spacetimedb_client.py (legacy client with hardcoded protocol)
+# - src/spacetimedb_sdk/modern_client.py (modern client already using correct protocol)
+# - src/spacetimedb_sdk/protocol.py (defines TEXT_PROTOCOL and BIN_PROTOCOL constants)
+
+v112-1:
+  name: "Immediate Protocol Fix"
+  description: "Update hardcoded protocol string in legacy client to support v1.1.2"
+  priority: "critical"
+  estimated_effort: "small"
+  dependencies: []
+  status: "done"
+  implementation_notes: |
+    URGENT: Users are currently blocked from using SpacetimeDB v1.1.2
+    
+    Required Changes:
+    1. In src/spacetimedb_sdk/spacetimedb_client.py:
+       - Change line ~312: "v1.text.spacetimedb" → "v1.json.spacetimedb"
+       - This is in the connect() method where WebSocketClient is initialized
+    
+    2. Add db_identity parameter support:
+       - Update connect() method signature to accept db_identity parameter
+       - Pass db_identity to WebSocketClient (already supports it)
+    
+    This is a BREAKING CHANGE:
+    - SDK will no longer work with SpacetimeDB versions < v1.1.2
+    - Users must upgrade their SpacetimeDB server
+    
+    Validation:
+    - Test connection to SpacetimeDB v1.1.2 server
+    - Verify "no valid protocol selected" error is resolved
+    
+    Files to modify:
+    - src/spacetimedb_sdk/spacetimedb_client.py
+
+v112-2:
+  name: "Import Protocol Constants"
+  description: "Replace hardcoded protocol strings with imported constants for maintainability"
+  priority: "high"
+  estimated_effort: "small"
+  dependencies: ["v112-1"]
+  status: "done"
+  implementation_notes: |
+    Improve code maintainability by using centralized protocol constants
+    
+    Changes:
+    1. Import from protocol.py:
+       ```python
+       from .protocol import TEXT_PROTOCOL, BIN_PROTOCOL
+       ```
+    
+    2. Replace hardcoded strings:
+       - "v1.json.spacetimedb" → TEXT_PROTOCOL
+       - Ensure consistency across codebase
+    
+    3. Remove any references to old protocol:
+       - Search and remove "v1.text.spacetimedb" references
+       - Update comments/documentation
+    
+    Benefits:
+    - Single source of truth for protocol versions
+    - Easier to update protocols in future
+    - Consistency with modern_client.py approach
+    
+    Files to modify:
+    - src/spacetimedb_sdk/spacetimedb_client.py
+    - Any other files with hardcoded protocol strings
+
+v112-3:
+  name: "Configurable Protocol Support"
+  description: "Add protocol parameter to allow users to choose between JSON and BSATN protocols"
+  priority: "medium"
+  estimated_effort: "medium"
+  dependencies: ["v112-2"]
+  status: "done"
+  implementation_notes: |
+    Allow users to select their preferred protocol (JSON or BSATN)
+    
+    Implementation:
+    1. Add protocol parameter to SpacetimeDBClient.__init__:
+       ```python
+       def __init__(self, autogen_package, protocol="json"):
+           # protocol can be "json" or "bsatn"
+           self.protocol = TEXT_PROTOCOL if protocol == "json" else BIN_PROTOCOL
+       ```
+    
+    2. Update init() class method:
+       ```python
+       @classmethod
+       def init(cls, ..., protocol="json"):
+           client = SpacetimeDBClient(autogen_package, protocol)
+       ```
+    
+    3. Pass protocol to WebSocketClient:
+       ```python
+       self.wsc = WebSocketClient(
+           self.protocol,  # Use configured protocol
+           ...
+       )
+       ```
+    
+    4. Add protocol validation:
+       - Raise ValueError for invalid protocol names
+       - Support case-insensitive protocol names
+       - Clear error messages
+    
+    Note: Both protocols require SpacetimeDB v1.1.2+
+    
+    Files to modify:
+    - src/spacetimedb_sdk/spacetimedb_client.py
+
+v112-4:
+  name: "Database Identity Parameter Support"
+  description: "Add full support for database identity parameter throughout the SDK"
+  priority: "high"
+  estimated_effort: "medium"
+  dependencies: ["v112-1"]
+  status: "done"
+  implementation_notes: |
+    SpacetimeDB v1.1.2 requires database identity (UUID/hash) in WebSocket URLs
+    
+    Required Changes:
+    1. Update SpacetimeDBClient.init() signature:
+       ```python
+       @classmethod
+       def init(cls, ..., db_identity=None):
+       ```
+    
+    2. Update connect() method:
+       ```python
+       def connect(self, ..., db_identity=None):
+           # Pass to WebSocketClient
+       ```
+    
+    3. Update documentation strings:
+       - Explain db_identity parameter is required for v1.1.2
+       - Provide examples of usage
+       - Note this is a breaking change
+    
+    4. Connection URL format:
+       - With identity: /v1/database/{identity}/subscribe
+       - Name-only format no longer supported in v1.1.2
+    
+    Example usage:
+    ```python
+    # Required for v1.1.2+ servers
+    SpacetimeDBClient.init(
+        auth_token=token,
+        host="localhost:3000",
+        address_or_name="my_db",  # Still needed for some operations
+        db_identity="550e8400-e29b-41d4-a716-446655440000",  # Required
+        ...
+    )
+    ```
+    
+    Files to modify:
+    - src/spacetimedb_sdk/spacetimedb_client.py
+    - src/spacetimedb_sdk/spacetime_websocket_client.py (verify implementation)
+
+v112-5:
+  name: "Identity Resolution Helper"
+  description: "Add utility to help users obtain database identity from server"
+  priority: "low"
+  estimated_effort: "medium"
+  dependencies: ["v112-4"]
+  status: "done"
+  implementation_notes: |
+    Helper utility for users who only know database name
+    
+    Implementation:
+    1. Add standalone utility function:
+       ```python
+       def get_database_identity(host, db_name, auth_token=None):
+           """
+           Fetch database identity from SpacetimeDB server.
+           
+           Returns:
+               str: Database identity (UUID/hash)
+           
+           Raises:
+               Exception: If database not found or API unavailable
+           """
+           # Use HTTP API to fetch database info
+           # Extract identity from response
+       ```
+    
+    2. Add to client as convenience method:
+       ```python
+       @staticmethod
+       def resolve_database_identity(host, db_name, auth_token=None):
+           return get_database_identity(host, db_name, auth_token)
+       ```
+    
+    3. Usage example in documentation:
+       ```python
+       # Get identity first
+       db_identity = SpacetimeDBClient.resolve_database_identity(
+           "localhost:3000", "my_db"
+       )
+       
+       # Then connect
+       SpacetimeDBClient.init(
+           ...,
+           db_identity=db_identity
+       )
+       ```
+    
+    Note: This is optional - users can get identity from SpacetimeDB CLI
+    
+    Files to create/modify:
+    - src/spacetimedb_sdk/identity_resolver.py (new)
+    - src/spacetimedb_sdk/spacetimedb_client.py
+
+v112-6:
+  name: "Comprehensive Testing Suite"
+  description: "Create thorough tests for v1.1.2 compatibility"
+  priority: "high"
+  estimated_effort: "large"
+  dependencies: ["v112-1", "v112-2", "v112-3", "v112-4", "v112-5"]
+  status: "pending"
+  implementation_notes: |
+    Ensure all v1.1.2 changes work correctly
+    
+    Test Categories:
+    1. Protocol Tests:
+       - JSON protocol connection
+       - BSATN protocol connection
+       - Protocol configuration
+       - Invalid protocol handling
+    
+    2. Identity Tests:
+       - Connection with db_identity
+       - Missing db_identity error handling
+       - Invalid identity format
+    
+    3. Integration Tests:
+       - Full connection flow
+       - Subscribe to queries
+       - Call reducers
+       - Receive updates
+    
+    4. Error Tests:
+       - Clear error for missing identity
+       - Protocol rejection handling
+       - Connection failure scenarios
+    
+    5. Example Updates:
+       - Update all examples to use db_identity
+       - Add migration notes for users
+    
+    Test Files to Create/Update:
+    - tests/test_v112_protocol.py (new)
+    - tests/test_v112_identity.py (new)
+    - tests/test_spacetimedb_client.py (update)
+    - Update existing connection tests
+    
+    Documentation Updates:
+    - README.md - breaking change notice
+    - Migration guide for v1.1.2
+
+v112-7:
+  name: "End-to-End Validation"
+  description: "Final validation with real SpacetimeDB v1.1.2 instance"
+  priority: "high"
+  estimated_effort: "medium"
+  dependencies: ["v112-6"]
+  status: "pending"
+  implementation_notes: |
+    Real-world validation of all implemented features
+    
+    Validation Steps:
+    1. Test environment setup:
+       - SpacetimeDB v1.1.2 server
+       - Test database with known identity
+    
+    2. Feature validation:
+       - JSON protocol connection
+       - BSATN protocol connection
+       - All SDK operations work correctly
+    
+    3. Example validation:
+       - Update and test quickstart example
+       - Test with real applications (e.g., Blackholio)
+       - Ensure all examples use new API
+    
+    4. Error validation:
+       - Confirm clear errors for common mistakes
+       - Test with missing db_identity
+       - Test with wrong server version
+    
+    5. Performance check:
+       - Connection time
+       - Message throughput
+       - No regressions
+    
+    Deliverables:
+    - Validation report
+    - Updated examples
+    - Any final bug fixes
+
+# Summary
+# Total Tasks: 7
+# Priority Breakdown:
+# - Critical: 1 (v112-1 - Immediate fix)
+# - High: 4 (v112-2, v112-4, v112-6, v112-7)
+# - Medium: 1 (v112-3)
+# - Low: 1 (v112-5)
+#
+# Implementation Order:
+# 1. v112-1: Immediate fix (unblock users) 
+# 2. v112-2: Clean up with constants
+# 3. v112-4: Full identity support
+# 4. v112-3: Protocol configuration
+# 5. v112-6: Testing
+# 6. v112-7: Final validation
+# 7. v112-5: Optional identity helper
+#
+# Breaking Changes:
+# - Requires SpacetimeDB v1.1.2 or later
+# - db_identity parameter required for connections
+# - Old protocol no longer supported

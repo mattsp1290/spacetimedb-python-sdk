@@ -335,7 +335,7 @@ class MockUnifiedEventSystem:
                 correlation_id = self.emit(event_type, data)
             elif len(event_data) == 3:
                 event_type, data, source = event_data
-                correlation_id = self.emit(event_type, data, source)
+                correlation_id = self.emit(event_type, data, source=source)
             else:
                 continue
                 
@@ -654,7 +654,20 @@ class TestUnifiedEventSystem:
         time.sleep(0.1)
         
         # Check middleware was called
-        assert len(middleware_calls) == 6  # 3 middleware x 2 events
+        # Expected: 
+        # - "allowed" event: log_connection_opened, filter_connection_opened, enrich_connection_opened (3 calls)
+        # - "blocked" event: log_connection_opened, filter_connection_opened (2 calls, filtered out before enriching)
+        assert len(middleware_calls) == 5  # 3 middleware for allowed + 2 middleware for blocked
+        
+        # Verify exact middleware call sequence
+        expected_calls = [
+            'log_connection_opened',     # "allowed" event - logging middleware
+            'filter_connection_opened',  # "allowed" event - filtering middleware 
+            'enrich_connection_opened',  # "allowed" event - enriching middleware
+            'log_connection_opened',     # "blocked" event - logging middleware
+            'filter_connection_opened'   # "blocked" event - filtering middleware (then filtered out)
+        ]
+        assert middleware_calls == expected_calls
         
         # Check filtering worked
         assert len(processed_events) == 1

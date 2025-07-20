@@ -464,7 +464,7 @@ class OAuth2Provider(AuthProvider):
             return self._create_token_from_response(response.json())
             
         except Exception as e:
-            self.logger.error(f"Token refresh failed: {e}")
+            self.logger.error("Token refresh failed", extra={"error_type": type(e).__name__})
             return None
     
     def validate_token(self, token: SecureToken) -> bool:
@@ -582,7 +582,7 @@ class JWTProvider(AuthProvider):
             return self.authenticate(claims=payload, scopes=token.scopes)
             
         except Exception as e:
-            self.logger.error(f"JWT refresh failed: {e}")
+            self.logger.error("JWT refresh failed", extra={"error_type": type(e).__name__})
             return None
     
     def validate_token(self, token: SecureToken) -> bool:
@@ -620,7 +620,7 @@ class JWTProvider(AuthProvider):
             self.logger.debug(f"JWT validation failed: {e}")
             return False
         except Exception as e:
-            self.logger.error(f"JWT validation error: {e}")
+            self.logger.error("JWT validation error", extra={"error_type": type(e).__name__})
             return False
     
     def decode_token(self, token: str, verify: bool = True) -> Optional[Dict[str, Any]]:
@@ -649,7 +649,7 @@ class JWTProvider(AuthProvider):
                 leeway=self.config.leeway
             )
         except Exception as e:
-            self.logger.error(f"JWT decode error: {e}")
+            self.logger.error("JWT decode error", extra={"error_type": type(e).__name__})
             return None
 
 
@@ -874,7 +874,7 @@ class MultiAuthProvider:
                 return token
                 
             except Exception as e:
-                self.logger.warning(f"Authentication failed with {provider.config.name}: {e}")
+                self.logger.warning(f"Authentication failed with {provider.config.name}", extra={"error_type": type(e).__name__})
                 errors.append((provider.config.name, str(e)))
                 continue
         
@@ -897,7 +897,7 @@ class MultiAuthProvider:
                     self._current_token = new_token
                     return new_token
             except Exception as e:
-                self.logger.warning(f"Token refresh failed with current provider: {e}")
+                self.logger.warning("Token refresh failed with current provider", extra={"error_type": type(e).__name__})
         
         # Try all providers
         for provider in self.providers:

@@ -215,6 +215,19 @@ class QueryId(DictLikeMixin):
     def __hash__(self) -> int:
         """Make QueryId hashable."""
         return hash(self.id)
+    
+    def to_dict(self) -> dict:
+        """Convert QueryId to dictionary for JSON serialization."""
+        return {"id": self.id}
+    
+    def __json__(self) -> dict:
+        """Support JSON serialization."""
+        return self.to_dict()
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'QueryId':
+        """Create QueryId from dictionary."""
+        return cls(id=data["id"])
 
 
 # Utility functions for converting between legacy and enhanced types
@@ -569,6 +582,19 @@ class OneOffQueryResponse:
     total_host_execution_duration: TimeDuration
 
 
+@dataclass 
+class GenericServerMessage:
+    """
+    Generic container for unknown server message variants.
+    
+    This allows forward compatibility with newer SpaceTimeDB versions
+    that may introduce new message types not yet supported by this SDK.
+    """
+    variant: int
+    payload: Any
+    message_type: str
+
+
 # Server -> Client messages
 ServerMessage = Union[
     InitialSubscription,
@@ -580,7 +606,8 @@ ServerMessage = Union[
     UnsubscribeApplied,
     SubscriptionError,
     SubscribeMultiApplied,
-    UnsubscribeMultiApplied
+    UnsubscribeMultiApplied,
+    GenericServerMessage  # Added for forward compatibility
 ]
 
 
@@ -1222,6 +1249,7 @@ class ProtocolDecoder:
             message_variant = reader.read_enum_header()
             
             # Map variant index to message type (based on server message enum)
+            # Enhanced support for SpaceTimeDB v1.1.2+ message variants
             if message_variant == 0:  # IdentityToken
                 return self._decode_identity_token_bsatn(reader)
             elif message_variant == 1:  # InitialSubscription
@@ -1242,11 +1270,51 @@ class ProtocolDecoder:
                 return self._decode_unsubscribe_multi_applied_bsatn(reader)
             elif message_variant == 9:  # OneOffQueryResponse
                 return self._decode_oneoff_query_response_bsatn(reader)
+            elif message_variant in range(10, 20):  # Future v1.1.2+ message types
+                # Handle unknown but potentially valid future message types
+                # Log warning and attempt graceful degradation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Received unknown message variant {message_variant} - attempting graceful handling")
+                
+                # Try to decode as generic message for forward compatibility
+                return self._decode_generic_message_bsatn(reader, message_variant)
             else:
                 raise ValueError(f"Unknown server message variant: {message_variant}")
                 
         except Exception as e:
             raise ValueError(f"Failed to decode BSATN server message: {e}")
+    
+    def _decode_generic_message_bsatn(self, reader: 'BsatnReader', variant: int) -> 'GenericServerMessage':
+        """
+        Decode unknown message variants for forward compatibility.
+        
+        This allows the SDK to handle new message types from newer SpaceTimeDB versions
+        without breaking completely. The message will be stored as a generic container.
+        """
+        from .bsatn.utils import decode_from_reader
+        
+        try:
+            # Attempt to decode the message payload generically
+            payload = decode_from_reader(reader)
+            
+            # Return a generic message container
+            return GenericServerMessage(
+                variant=variant,
+                payload=payload,
+                message_type=f"unknown_variant_{variant}"
+            )
+        except Exception as e:
+            # If generic decoding fails, create an error message
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to decode unknown message variant {variant}: {e}")
+            
+            return GenericServerMessage(
+                variant=variant,
+                payload={"error": str(e), "raw_data": "decode_failed"},
+                message_type=f"decode_error_variant_{variant}"
+            )
     
     def _decode_identity_token_bsatn(self, reader: 'BsatnReader') -> IdentityToken:
         """Decode IdentityToken from BSATN."""
@@ -1726,3 +1794,24 @@ def validate_protocol_version(protocol: str) -> bool:
         version_part = protocol
     
     return version_part in SUPPORTED_PROTOCOL_VERSIONS
+
+
+# Import BSATN functionality
+from .bsatn import BsatnWriter, BsatnReader, encode, decode
+
+# Create BSATN class for backward compatibility
+class BSATN:
+    """BSATN (Binary SpacetimeDB Algebraic Type Notation) utility class."""
+    
+    Writer = BsatnWriter
+    Reader = BsatnReader
+    
+    @staticmethod
+    def encode(value):
+        """Encode a value to BSATN format."""
+        return encode(value)
+    
+    @staticmethod
+    def decode(data):
+        """Decode a value from BSATN format."""
+        return decode(data)

@@ -1,0 +1,227 @@
+# SpacetimeDB Python SDK v1.1.2 Migration Tasks - UPDATED
+# Last Updated: May 29, 2025
+# This file reflects the ACTUAL state of the SDK after initial migration work
+
+metadata:
+  original_file: spacetimedb-sdk-v1.1.2-migration-tasks.yaml
+  update_reason: "Original yaml contained incorrect assumptions about URL format and referenced deleted files"
+  key_discoveries:
+    - "URL format is /v1/database/{name}/subscribe, NOT /v1/ws/database/{name}/subscribe"
+    - "spacetimedb_client.py has been DELETED - replaced by modern_client.py"
+    - "Protocols are already correct: v1.json.spacetimedb and v1.bsatn.spacetimedb"
+    - "Legacy code has been removed for cleaner architecture"
+
+tasks:
+  - id: sdk-v112-1
+    name: WebSocket URL Structure Update
+    status: COMPLETED
+    completion_date: "2025-05-29"
+    description: Update WebSocket connection URLs to use new v1.1.2 format
+    actual_implementation:
+      - "URL format: /v1/database/{name}/subscribe (NOT /v1/ws/ as originally planned)"
+      - "db_identity passed as query parameter when provided"
+      - "Both spacetime_websocket_client.py and websocket_client.py updated"
+      - "Maintains name_or_address in path, db_identity as optional query param"
+    original_assumptions_corrected:
+      - "Original: Add /v1/ws/ prefix"
+      - "Actual: Use /v1/database/ (no /ws/)"
+      - "Server returns 404 for /v1/ws/ endpoints"
+    files_modified:
+      - src/spacetimedb_sdk/spacetime_websocket_client.py
+      - src/spacetimedb_sdk/websocket_client.py
+    verification: "URL construction tested with test_v112_connection_verification.py"
+    priority: critical (breaking change) - RESOLVED
+
+  - id: sdk-v112-2
+    name: Protocol Header Updates
+    status: COMPLETED/OBSOLETE
+    completion_date: "2025-05-29"
+    description: Update WebSocket subprotocol from v1.text to supported v1.1.2 protocols
+    actual_implementation:
+      - "The referenced spacetimedb_client.py file NO LONGER EXISTS (deleted)"
+      - "Protocols already correct in protocol.py:"
+      - "  TEXT_PROTOCOL = 'v1.json.spacetimedb'"
+      - "  BIN_PROTOCOL = 'v1.bsatn.spacetimedb'"
+      - "No hardcoded 'v1.text.spacetimedb' in source code"
+      - "modern_client.py uses correct protocol constants"
+    original_assumptions_corrected:
+      - "Original: Fix hardcoded protocol in spacetimedb_client.py"
+      - "Actual: File deleted, modern implementation already correct"
+    files_examined:
+      - src/spacetimedb_sdk/protocol.py (already correct)
+      - src/spacetimedb_sdk/modern_client.py (uses correct constants)
+      - Searched entire codebase: v1.text.spacetimedb only in test files
+    verification: "Protocol compatibility verified in tests"
+    priority: critical (connection fails without this) - ALREADY RESOLVED
+
+  - id: sdk-v112-3
+    name: Error Handling Updates
+    status: not-started
+    description: Handle new v1.1.2 error responses and connection failures
+    updated_context:
+      - "Need to update error handling in modern_client.py (not spacetimedb_client.py)"
+      - "Current 404 errors occur because databases aren't published"
+      - "Should detect and provide clear guidance for unpublished databases"
+    subtasks:
+      - Detect v1.1.2 specific errors:
+          - Handle 404 errors when database not published
+          - Parse server error responses correctly
+          - Differentiate between protocol errors and database errors
+      - Update error messages:
+          - Clear message when database not found/not published
+          - Guide users to publish database first
+          - Include spacetime CLI commands in error messages
+      - Connection diagnostics:
+          - Add connection troubleshooting helper
+          - Detect server version if possible
+          - Suggest appropriate fixes based on error type
+    references:
+      - modern_client.py (main client implementation)
+      - websocket_client.py (WebSocket error handling)
+    verification: Clear, actionable error messages for all v1.1.2 scenarios
+    priority: high (user experience)
+
+  - id: sdk-v112-4
+    name: Authentication Updates
+    status: needs-investigation
+    description: Verify authentication works with v1.1.2 protocol
+    updated_context:
+      - "Auth handling in websocket_client.py and modern_client.py"
+      - "Headers include spacetime-identity in responses"
+      - "Need to verify token format compatibility"
+    subtasks:
+      - Verify current auth implementation:
+          - Check if Authorization header format is correct
+          - Test with actual auth tokens
+          - Verify identity token parsing
+      - Update if needed:
+          - Handle new auth response formats
+          - Update token refresh logic if changed
+          - Ensure backward compatibility
+    references:
+      - websocket_client.py (auth header construction)
+      - modern_client.py (auth token handling)
+    verification: Authentication works with v1.1.2 servers
+    priority: high (security critical)
+
+  - id: sdk-v112-5
+    name: Database Publishing Detection
+    status: partially-complete
+    completion_date: "2025-05-30 (partial)"
+    description: Detect and handle unpublished databases gracefully
+    context:
+      - "Current implementation returns 404 for unpublished databases"
+      - "Users need clear guidance to publish first"
+      - "Should provide helpful error messages"
+    completed:
+      - "Database existence detection in connection_diagnostics.py"
+      - "DatabaseNotPublishedError exception with fix commands"
+      - "Pre-connection checks in websocket_client.py"
+      - "Smart 404 error differentiation (published vs unpublished)"
+      - "Clear error messages with spacetime CLI commands"
+    remaining:
+      - "Additional HTTP endpoint probing for better detection"
+      - "Documentation link integration in error messages"
+      - "More sophisticated database state detection"
+    implementation_details:
+      - "Integrated into Task 3 error handling implementation"
+      - "ConnectionDiagnostics.check_database_exists() method"
+      - "Preflight checks before WebSocket connection"
+      - "Confidence scoring for database state detection"
+    priority: high (user experience)
+
+  - id: sdk-v112-6
+    name: Testing and Validation
+    status: partially-complete
+    description: Comprehensive testing of v1.1.2 compatibility
+    completed:
+      - URL format testing (test_v112_url_formats.py)
+      - Connection verification (test_v112_connection_verification.py)
+      - Protocol rejection testing (v1.text.spacetimedb properly rejected)
+    remaining:
+      - Integration tests with published database
+      - Authentication flow testing
+      - Error handling validation
+      - Performance benchmarks
+    new_test_files_created:
+      - test_v112_url_formats.py
+      - test_v112_database_discovery.py
+      - test_v112_connection_verification.py
+    verification: All tests pass for v1.1.2 servers
+    priority: high (quality assurance)
+
+  - id: sdk-v112-7
+    name: Documentation Updates
+    status: partially-complete
+    description: Update SDK documentation for v1.1.2
+    completed:
+      - SDK_V112_TASK_1_COMPLETION_SUMMARY.md created
+      - V1_1_2_PROTOCOL_FIX_SUMMARY.md documents changes
+      - Test scripts include inline documentation
+    remaining:
+      - Update main README.md
+      - Update API documentation
+      - Create migration guide from old SDK versions
+      - Document breaking changes (spacetimedb_client.py removal)
+    breaking_changes_to_document:
+      - "Removed spacetimedb_client.py and legacy classes"
+      - "Changed from SpacetimeDBClient.init() to SpacetimeDBClient.connect()"
+      - "URL format changes"
+      - "Protocol requirements"
+    verification: Users can follow docs to use v1.1.2 features
+    priority: medium (user adoption)
+
+  - id: sdk-v112-8
+    name: Performance Optimization
+    status: not-started
+    description: Ensure no performance regression with v1.1.2
+    updated_context:
+      - "Focus on modern_client.py and websocket_client.py"
+      - "Legacy code removal may have improved performance"
+      - "Need to benchmark current implementation"
+    priority: medium (user experience)
+
+  - id: sdk-v112-9
+    name: Release Preparation
+    status: not-started
+    description: Prepare SDK for v1.1.2 compatible release
+    special_considerations:
+      - "Major breaking changes due to legacy code removal"
+      - "Consider semantic versioning implications"
+      - "Need clear migration guide for existing users"
+    priority: medium (final step)
+
+# Summary of Actual Changes Made
+actual_changes_summary:
+  url_structure:
+    planned: "/v1/ws/database/{name}/subscribe"
+    actual: "/v1/database/{name}/subscribe"
+    reason: "Server doesn't have /v1/ws/ endpoints"
+  
+  architecture:
+    legacy_removed:
+      - spacetimedb_client.py (entire file deleted)
+      - Legacy classes (Identity, DbEvent, ReducerEvent, etc.)
+      - Old connection patterns
+    modern_approach:
+      - Single client: modern_client.py
+      - Clean API: SpacetimeDBClient.connect()
+      - Proper protocol support built-in
+  
+  protocols:
+    old: "v1.text.spacetimedb"
+    new: "v1.json.spacetimedb" (TEXT_PROTOCOL)
+    binary: "v1.bsatn.spacetimedb" (BIN_PROTOCOL)
+    status: "Already implemented correctly"
+  
+  key_lessons:
+    - "Original task list had incorrect assumptions about URL format"
+    - "Referenced files that no longer exist (spacetimedb_client.py)"
+    - "Much of the protocol work was already done"
+    - "Main issue was URL format, not protocol strings"
+
+next_critical_tasks:
+  1: "Test with actual published database"
+  2: "Improve error handling for common issues (unpublished DB)"
+  3: "Complete documentation updates"
+  4: "Create migration guide for breaking changes"

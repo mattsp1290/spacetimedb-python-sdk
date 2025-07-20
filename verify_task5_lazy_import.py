@@ -95,10 +95,10 @@ def test_build_pool_functionality() -> Tuple[bool, str]:
     """Test that build_pool actually works without circular imports."""
     try:
         # Import and test the builder
-        from spacetimedb_sdk import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Create a builder and configure it
-        builder = ModernSpacetimeDBClient.builder() \
+        builder = SpacetimeDBClient.builder() \
             .with_uri("ws://localhost:3000") \
             .with_module_name("test_module") \
             .with_connection_pool(min_connections=2, max_connections=5)

@@ -190,11 +190,11 @@ def test_energy_event_system_missing():
 
 def test_energy_aware_client_missing():
     """Test that energy-aware client features are missing."""
-    from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     
     # Modern client should not have energy-aware features
     try:
-        client = ModernSpacetimeDBClient(start_message_processing=False)
+        client = SpacetimeDBClient(start_message_processing=False)
         
         # Test energy-aware client features
         assert hasattr(client, 'get_current_energy'), "Should provide current energy level"

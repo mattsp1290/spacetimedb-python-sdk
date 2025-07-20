@@ -199,11 +199,11 @@ def test_modern_client_integration_minimal():
     """Test modern client integration with minimal operations."""
     print("Testing Modern Client Integration (minimal)...")
     
-    from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     from spacetimedb_sdk.connection_id import ConnectionState
     
     # Create client without starting any threads
-    client = ModernSpacetimeDBClient(start_message_processing=False)
+    client = SpacetimeDBClient(start_message_processing=False)
     
     try:
         # Just test that methods exist and basic state

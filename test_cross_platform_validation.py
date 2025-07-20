@@ -12,6 +12,12 @@ Tests the cross-platform validation framework to ensure it correctly:
 This validates ts-parity-20: Cross-Platform Integration Validation.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import json
 import os
@@ -23,7 +29,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 import pytest
 
-from src.spacetimedb_sdk.cross_platform_validation import (
+from spacetimedb_sdk.cross_platform_validation import (
     PlatformType, ArchitectureType, EnvironmentType, NetworkCondition,
     SystemInfo, ValidationResult, NetworkSimulator, PlatformValidator,
     CrossPlatformTestSuite

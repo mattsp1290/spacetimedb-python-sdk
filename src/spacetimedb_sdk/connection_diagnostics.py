@@ -183,10 +183,13 @@ class ConnectionDiagnostics:
         
         # Try to check database via HTTP endpoints
         # Note: These endpoints might not exist, but we try common patterns
+        # Include V1.1.2 endpoints as priority
         test_endpoints = [
-            f"http://{host}/database/{database}/info",
-            f"http://{host}/v1/database/{database}",
-            f"http://{host}/api/databases/{database}"
+            f"http://{host}/v1/ws/database/{database}/info",  # V1.1.2 info endpoint
+            f"http://{host}/v1/database/{database}/info",     # V1.1.1 info endpoint
+            f"http://{host}/database/{database}/info",        # Legacy info endpoint
+            f"http://{host}/v1/database/{database}",          # V1.1.1 database endpoint
+            f"http://{host}/api/databases/{database}"         # Alternative API pattern
         ]
         
         for endpoint in test_endpoints:
@@ -437,6 +440,18 @@ class ConnectionDiagnostics:
                         is_likely_unpublished=True
                     )
         
+        # Check 3: V1.1.2 compatibility (if server is available)
+        if server_available:
+            v112_check = self.check_v112_compatibility(host, database)
+            results["v112_check"] = v112_check
+            
+            if v112_check.get("v112_compatible"):
+                results["checks_passed"].append("v112_compatible")
+            else:
+                results["checks_failed"].append("v112_compatible")
+                # Don't fail overall checks for compatibility - just warn
+                results["compatibility_warnings"] = v112_check.get("issues", [])
+        
         return results
     
     def format_diagnostic_report(self, results: Dict[str, Any]) -> str:
@@ -489,7 +504,8 @@ class ConnectionDiagnostics:
                     lines.append(f"  Failed: {', '.join(results['checks_failed'])}")
         
         return "\n".join(lines)
-    
+
+
     def get_database_state(self, host: str, database: str) -> str:
         """
         Get simplified database state.
@@ -536,34 +552,127 @@ class ConnectionDiagnostics:
         }
         
         # We can't actually open a WebSocket here without the full client
-        # But we can try an HTTP request to the WebSocket endpoint
-        ws_url = f"http://{host}/v1/database/{database}/subscribe"
+        # But we can try an HTTP request to the WebSocket endpoints
+        # Test V1.1.2 format first, then fall back to V1.1.1
+        ws_urls = [
+            f"http://{host}/v1/ws/database/{database}/subscribe",  # V1.1.2 format
+            f"http://{host}/v1/database/{database}/subscribe"     # V1.1.1 format
+        ]
+        
+        for ws_url in ws_urls:
+            try:
+                req = urllib.request.Request(ws_url)
+                req.add_header('User-Agent', 'SpaceTimeDB-Python-SDK/1.1.2')
+                
+                with urllib.request.urlopen(req, timeout=3.0) as response:
+                    # If we get here, endpoint exists but wrong protocol
+                    result["exists"] = "likely"
+                    result["published"] = False
+                    result["confidence"] = "medium"
+                    result["evidence"].append(f"WebSocket endpoint exists but requires upgrade ({ws_url})")
+                    break
+                    
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    result["evidence"].append(f"WebSocket endpoint returned 404 ({ws_url})")
+                    continue  # Try next URL
+                elif e.code == 426:  # Upgrade Required
+                    result["exists"] = "likely"
+                    result["published"] = True
+                    result["confidence"] = "high"
+                    result["evidence"].append(f"WebSocket endpoint requires protocol upgrade - database exists ({ws_url})")
+                    break
+                elif e.code == 400:
+                    # V1.1.2 might return 400 for missing parameters
+                    result["exists"] = "likely"
+                    result["published"] = True
+                    result["confidence"] = "medium"
+                    result["evidence"].append(f"WebSocket endpoint returned 400 - likely V1.1.2 format issue ({ws_url})")
+                    break
+            except:
+                # Can't determine from this probe
+                continue
+        
+        # If all probes failed, set default
+        if not result["evidence"]:
+            result["exists"] = False
+            result["published"] = False
+            result["confidence"] = "low"
+            result["evidence"].append("All WebSocket endpoint probes failed")
+        
+        return result
+    
+    def check_v112_compatibility(self, host: str, database: str, db_identity: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Check V1.1.2 protocol compatibility for a database.
+        
+        Args:
+            host: Server host
+            database: Database name
+            db_identity: Optional database identity for V1.1.2
+            
+        Returns:
+            Dict with compatibility information
+        """
+        result = {
+            "v112_compatible": False,
+            "v111_compatible": False,
+            "recommended_format": None,
+            "issues": [],
+            "tested_endpoints": []
+        }
+        
+        # Test V1.1.2 WebSocket endpoint
+        v112_url = f"http://{host}/v1/ws/database/{database}/subscribe"
+        if db_identity:
+            v112_url += f"?db_identity={db_identity}"
         
         try:
-            req = urllib.request.Request(ws_url)
+            req = urllib.request.Request(v112_url)
             req.add_header('User-Agent', 'SpaceTimeDB-Python-SDK/1.1.2')
             
             with urllib.request.urlopen(req, timeout=3.0) as response:
-                # If we get here, endpoint exists but wrong protocol
-                result["exists"] = "likely"
-                result["published"] = False
-                result["confidence"] = "medium"
-                result["evidence"].append(f"WebSocket endpoint exists but requires upgrade")
+                result["v112_compatible"] = True
+                result["tested_endpoints"].append(f"{v112_url} - Success")
                 
         except urllib.error.HTTPError as e:
-            if e.code == 404:
-                result["exists"] = False
-                result["published"] = False
-                result["confidence"] = "high"
-                result["evidence"].append("WebSocket endpoint returned 404")
-            elif e.code == 426:  # Upgrade Required
-                result["exists"] = "likely"
-                result["published"] = True
-                result["confidence"] = "high"
-                result["evidence"].append("WebSocket endpoint requires protocol upgrade (database exists)")
-        except:
-            # Can't determine from this probe
-            pass
+            result["tested_endpoints"].append(f"{v112_url} - HTTP {e.code}")
+            if e.code == 426:  # Upgrade Required - good sign
+                result["v112_compatible"] = True
+            elif e.code == 400:
+                if db_identity:
+                    result["issues"].append("V1.1.2 endpoint exists but has parameter issues")
+                else:
+                    result["issues"].append("V1.1.2 endpoint requires db_identity parameter")
+        except Exception as e:
+            result["tested_endpoints"].append(f"{v112_url} - Error: {str(e)}")
+        
+        # Test V1.1.1 WebSocket endpoint
+        v111_url = f"http://{host}/v1/database/{database}/subscribe"
+        
+        try:
+            req = urllib.request.Request(v111_url)
+            req.add_header('User-Agent', 'SpaceTimeDB-Python-SDK/1.1.1')
+            
+            with urllib.request.urlopen(req, timeout=3.0) as response:
+                result["v111_compatible"] = True
+                result["tested_endpoints"].append(f"{v111_url} - Success")
+                
+        except urllib.error.HTTPError as e:
+            result["tested_endpoints"].append(f"{v111_url} - HTTP {e.code}")
+            if e.code == 426:  # Upgrade Required - good sign
+                result["v111_compatible"] = True
+        except Exception as e:
+            result["tested_endpoints"].append(f"{v111_url} - Error: {str(e)}")
+        
+        # Determine recommended format
+        if result["v112_compatible"]:
+            result["recommended_format"] = "v1.1.2"
+        elif result["v111_compatible"]:
+            result["recommended_format"] = "v1.1.1"
+        else:
+            result["recommended_format"] = "unknown"
+            result["issues"].append("Neither V1.1.2 nor V1.1.1 endpoints are accessible")
         
         return result
     
@@ -580,3 +689,19 @@ class ConnectionDiagnostics:
     def _set_cached(self, key: str, value: Any) -> None:
         """Set cached result."""
         self._cache[key] = (value, time.time())
+
+
+def diagnose_connection(host: str, database: str, raise_on_failure: bool = False) -> Dict[str, Any]:
+    """
+    Convenience function to diagnose connection issues.
+    
+    Args:
+        host: Server host (e.g., "localhost:3000")
+        database: Database name
+        raise_on_failure: Whether to raise exception on failure
+        
+    Returns:
+        Dictionary containing diagnostic results
+    """
+    diagnostics = ConnectionDiagnostics()
+    return diagnostics.run_preflight_checks(host, database, raise_on_failure)

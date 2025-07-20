@@ -8,6 +8,12 @@ The builder pattern provides a modern, type-safe way to configure connections wi
 comprehensive validation and callback support.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import sys
 import os
@@ -17,7 +23,7 @@ from typing import Any
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 # Import the SpacetimeDB SDK
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.protocol import TEXT_PROTOCOL, BIN_PROTOCOL
 
 
@@ -35,7 +41,7 @@ def example_basic_connection():
     print("=== Example 1: Basic Connection ===")
     
     # Create connection using builder pattern
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("my_game")
               .build())
@@ -43,7 +49,7 @@ def example_basic_connection():
     print("✅ Client created successfully with builder pattern!")
     
     # Validate configuration before connecting
-    validation = (ModernSpacetimeDBClient.builder()
+    validation = (SpacetimeDBClient.builder()
                   .with_uri("ws://localhost:3000")
                   .with_module_name("my_game")
                   .validate())
@@ -86,7 +92,7 @@ def example_full_featured_connection():
         print(f"❌ Connection error: {error}")
     
     # Build connection with all features
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("wss://testnet.spacetimedb.com")
               .with_module_name("multiplayer_game")
               .with_token("your_auth_token_here")
@@ -121,7 +127,7 @@ def example_energy_aware_game():
         print("⚠️  Energy running low - consider reducing activity")
     
     # Create energy-optimized game client
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("space_shooter_game")
               .with_protocol("binary")  # Better performance
@@ -153,7 +159,7 @@ def example_development_setup():
     print("\n=== Example 4: Development Setup ===")
     
     # Create builder for development environment
-    builder = (ModernSpacetimeDBClient.builder()
+    builder = (SpacetimeDBClient.builder()
                .with_uri("ws://localhost:3000")
                .with_module_name("dev_database")
                .with_protocol("text")  # Easier debugging
@@ -189,7 +195,7 @@ def example_production_deployment():
     print("\n=== Example 5: Production Deployment ===")
     
     # Production-grade configuration
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("wss://prod.spacetimedb.com")
               .with_module_name("production_app")
               .with_token("PRODUCTION_AUTH_TOKEN")
@@ -218,7 +224,7 @@ def example_error_handling():
     print("\n=== Example 6: Error Handling ===")
     
     # Test invalid configurations
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     
     try:
         # This should fail - missing required parameters
@@ -267,7 +273,7 @@ def example_typescript_comparison():
     
     print("Python SDK equivalent:")
     print("""
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("my_app")
               .with_token("token")
@@ -277,7 +283,7 @@ def example_typescript_comparison():
     """)
     
     # Actually create the client
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("my_app")
               .with_token("token")

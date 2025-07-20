@@ -9,6 +9,12 @@ Demonstrates usage of:
 - Test fixtures
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 from unittest.mock import patch, MagicMock
@@ -26,6 +32,13 @@ from spacetimedb_sdk.testing import (
     performance_test,
     stress_test
 )
+
+# Define the pytest fixture here since the one in testing.py is not properly registered
+@pytest.fixture
+def performance_benchmark():
+    """Pytest fixture providing performance benchmark."""
+    return PerformanceBenchmark()
+
 from spacetimedb_sdk.test_fixtures import (
     TestDatabase,
     TestIsolation,
@@ -559,24 +572,24 @@ async def test_full_integration_example(mock_connection, test_data, benchmark):
 
 
 @performance_test
-async def test_performance_example(benchmark):
+async def test_performance_example(performance_benchmark):
     """Example performance test."""
     conn = MockSpacetimeDBConnection()
     
     # Benchmark different operations
-    await benchmark.benchmark_connection(conn, iterations=10)
-    await benchmark.benchmark_subscriptions(
+    await performance_benchmark.benchmark_connection(conn, iterations=10)
+    await performance_benchmark.benchmark_subscriptions(
         conn, 
         ["SELECT * FROM users", "SELECT * FROM messages"],
         iterations=50
     )
     
     # Get report
-    report = benchmark.get_report()
+    report = performance_benchmark.get_report()
     print("\n" + report)
     
     # Assert performance criteria
-    connect_times = benchmark.results.get("connect", [])
+    connect_times = performance_benchmark.results.get("connect", [])
     if connect_times:
         avg_connect = sum(connect_times) / len(connect_times)
         assert avg_connect < 0.1  # Should connect in < 100ms

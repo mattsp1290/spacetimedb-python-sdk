@@ -1,0 +1,319 @@
+tasks:
+  - id: sdk-v112-1
+    name: WebSocket URL Structure Update
+    status: not-started
+    description: Update WebSocket connection URLs to use new v1.1.2 format
+    subtasks:
+      - Update WebSocketClient URL construction:
+          - Add `/v1/ws/` prefix to all WebSocket URLs
+          - Change from `/database/{name}/subscribe` to `/v1/ws/database/{name}/subscribe`
+          - Add support for `db_identity` query parameter
+          - Maintain backward compatibility with fallback logic
+      - Modify connection parameters:
+          - Add `db_identity` parameter to WebSocketClient.connect()
+          - Update URL building logic in spacetime_websocket_client.py
+          - Ensure query parameters are properly encoded
+          - Handle missing db_identity gracefully
+      - Update SpacetimeDBClient interface:
+          - Add `db_identity` parameter to init() method
+          - Pass through to WebSocketClient
+          - Document new parameter requirements
+          - Add deprecation warnings for old usage
+    references:
+      - spacetime_websocket_client.py line 21-30 (connect method)
+      - MIGRATION_GUIDE_v1.1.2.md (URL structure examples)
+    verification: Connection URLs include /v1/ws/ prefix and db_identity parameter
+    priority: critical (breaking change)
+
+  - id: sdk-v112-2
+    name: Protocol Header Updates
+    status: not-started
+    description: Update WebSocket subprotocol from v1.text to supported v1.1.2 protocols
+    subtasks:
+      - Fix hardcoded protocol string:
+          - Change "v1.text.spacetimedb" to "v1.json.spacetimedb"
+          - Location: spacetimedb_client.py line with WebSocketClient init
+          - Make protocol configurable, not hardcoded
+          - Support both text and binary protocols
+      - Add protocol negotiation:
+          - Support "v1.json.spacetimedb" and "v1.bin.spacetimedb"
+          - Allow protocol selection during client initialization
+          - Handle protocol rejection errors
+          - Fallback to compatible protocols
+      - Update connection headers:
+          - Ensure Sec-WebSocket-Protocol is properly set
+          - Add protocol version to connection metadata
+          - Log negotiated protocol for debugging
+          - Handle protocol mismatch errors
+    references:
+      - spacetimedb_client.py (WebSocketClient initialization)
+      - V1_1_2_COMPATIBILITY_CHANGES.md (protocol analysis)
+    verification: Server accepts connection with new protocol headers
+    priority: critical (connection fails without this)
+
+  - id: sdk-v112-3
+    name: Error Handling Updates
+    status: not-started
+    description: Handle new v1.1.2 error responses and connection failures
+    subtasks:
+      - Detect v1.1.2 protocol rejection:
+          - Handle 404 errors on old endpoints
+          - Parse "no valid protocol selected" errors
+          - Provide clear migration guidance in errors
+          - Add specific v1.1.2 error types
+      - Update error messages:
+          - Clear message when db_identity is missing
+          - Guide users to use new connection format
+          - Include example code in error messages
+          - Add troubleshooting documentation
+      - Connection fallback logic:
+          - Try v1.1.2 format first
+          - Fall back to old format if 404
+          - Log deprecation warnings for old format
+          - Track protocol version for debugging
+      - Error recovery mechanisms:
+          - Automatic retry with correct protocol
+          - Graceful degradation for old servers
+          - Connection state recovery
+          - Better timeout handling
+    references:
+      - MIGRATION_GUIDE_v1.1.2.md (error response formats)
+      - Current error handling in spacetime_websocket_client.py
+    verification: Clear, actionable error messages for all v1.1.2 scenarios
+    priority: high (user experience)
+
+  - id: sdk-v112-4
+    name: Authentication Updates
+    status: not-started
+    description: Update authentication to work with v1.1.2 protocol
+    subtasks:
+      - Update auth token handling:
+          - Ensure Authorization header works with new endpoints
+          - Test Bearer token format compatibility
+          - Handle auth errors specific to v1.1.2
+          - Update token refresh logic if needed
+      - Identity token message handling:
+          - Verify identity token format unchanged
+          - Update parsing if needed for v1.1.2
+          - Handle new identity response fields
+          - Maintain backward compatibility
+      - Connection handshake:
+          - Verify authentication during WebSocket upgrade
+          - Handle auth failures gracefully
+          - Support both old and new auth flows
+          - Add auth state tracking
+    references:
+      - spacetime_websocket_client.py (auth handling)
+      - MIGRATION_GUIDE_v1.1.2.md (auth examples)
+    verification: Authentication works with v1.1.2 servers
+    priority: high (security critical)
+
+  - id: sdk-v112-5
+    name: Backward Compatibility Layer
+    status: not-started
+    description: Ensure SDK works with both old and new server versions
+    subtasks:
+      - Server version detection:
+          - Implement version detection endpoint check
+          - Try /v1/health vs /health endpoints
+          - Cache detected version per connection
+          - Add version info to connection metadata
+      - Dual protocol support:
+          - Maintain both connection methods
+          - Auto-select based on server version
+          - Allow manual version override
+          - Document version compatibility
+      - Configuration options:
+          - Add use_legacy_protocol flag
+          - Allow protocol version override
+          - Environment variable support
+          - Connection string format options
+      - Migration helpers:
+          - Add compatibility warnings
+          - Provide migration utilities
+          - Auto-upgrade connection strings
+          - Legacy connection wrapper
+    references:
+      - MIGRATION_GUIDE_v1.1.2.md (migration strategy)
+      - Current SDK architecture
+    verification: SDK connects to both v1.0.x and v1.1.2 servers
+    priority: high (prevents breaking existing users)
+
+  - id: sdk-v112-6
+    name: Testing and Validation
+    status: not-started
+    description: Comprehensive testing of v1.1.2 compatibility
+    subtasks:
+      - Unit tests:
+          - Test URL construction with new format
+          - Verify protocol header generation
+          - Test error parsing and handling
+          - Mock v1.1.2 server responses
+      - Integration tests:
+          - Test against real v1.1.2 server
+          - Verify end-to-end connection flow
+          - Test all message types
+          - Performance regression tests
+      - Compatibility tests:
+          - Test with v1.0.x servers
+          - Test with v1.1.2 servers
+          - Test version detection logic
+          - Test fallback mechanisms
+      - Edge case testing:
+          - Missing db_identity handling
+          - Invalid protocol responses
+          - Connection recovery scenarios
+          - Concurrent connection handling
+    references:
+      - MIGRATION_GUIDE_v1.1.2.md (validation steps)
+      - Existing SDK test suite
+    verification: All tests pass for both server versions
+    priority: high (quality assurance)
+
+  - id: sdk-v112-7
+    name: Documentation Updates
+    status: not-started
+    description: Update SDK documentation for v1.1.2
+    subtasks:
+      - API documentation:
+          - Document new db_identity parameter
+          - Update connection examples
+          - Add v1.1.2 specific notes
+          - Include migration guide
+      - README updates:
+          - Add v1.1.2 compatibility section
+          - Update quick start examples
+          - Add troubleshooting section
+          - Version compatibility matrix
+      - Code examples:
+          - Update all example code
+          - Add v1.1.2 specific examples
+          - Show both old and new formats
+          - Include error handling examples
+      - Migration guide:
+          - Step-by-step upgrade instructions
+          - Common issues and solutions
+          - Performance considerations
+          - Rollback procedures
+    references:
+      - Current SDK documentation
+      - V1_1_2_COMPATIBILITY_CHANGES.md
+    verification: Users can follow docs to use v1.1.2 features
+    priority: medium (user adoption)
+
+  - id: sdk-v112-8
+    name: Performance Optimization
+    status: not-started
+    description: Ensure no performance regression with v1.1.2
+    subtasks:
+      - Connection performance:
+          - Benchmark connection establishment time
+          - Optimize URL construction
+          - Cache connection metadata
+          - Reduce handshake overhead
+      - Message handling:
+          - Profile message parsing with new protocol
+          - Optimize binary protocol support
+          - Reduce memory allocations
+          - Improve throughput
+      - Error path optimization:
+          - Fast path for common errors
+          - Avoid unnecessary retries
+          - Optimize fallback logic
+          - Reduce error logging overhead
+      - Resource management:
+          - Connection pooling updates
+          - Memory usage profiling
+          - Thread safety review
+          - Resource cleanup validation
+    references:
+      - Current performance benchmarks
+      - v1.1.2 protocol specification
+    verification: No performance degradation vs current version
+    priority: medium (user experience)
+
+  - id: sdk-v112-9
+    name: Release Preparation
+    status: not-started
+    description: Prepare SDK for v1.1.2 compatible release
+    subtasks:
+      - Version management:
+          - Update SDK version number
+          - Create changelog entry
+          - Tag release candidate
+          - Update compatibility matrix
+      - Release testing:
+          - Full regression test suite
+          - User acceptance testing
+          - Performance validation
+          - Security review
+      - Distribution:
+          - Update PyPI package
+          - Update GitHub releases
+          - Update documentation site
+          - Notify users of changes
+      - Post-release:
+          - Monitor issue reports
+          - Gather user feedback
+          - Plan patch releases
+          - Update roadmap
+    references:
+      - SDK release process
+      - Previous release notes
+    verification: Smooth release with minimal user issues
+    priority: medium (final step)
+
+  # Summary task
+  - id: sdk-v112-summary
+    name: SpacetimeDB Python SDK v1.1.2 Migration Summary
+    status: not-started
+    description: Complete migration of Python SDK to support SpacetimeDB v1.1.2
+    current_status:
+      sdk_location: "/Users/punk1290/git/spacetimedb-python-sdk"
+      server_version: "v1.1.2"
+      breaking_changes: "WebSocket URL format, required db_identity, protocol change"
+      current_protocol: "v1.text.spacetimedb (incompatible)"
+      required_protocol: "v1.json.spacetimedb or v1.bin.spacetimedb"
+    key_changes:
+      url_format: "Add /v1/ws/ prefix to WebSocket URLs"
+      db_identity: "Required query parameter for connections"
+      protocol: "Change from v1.text to v1.json/v1.bin"
+      error_handling: "New error formats and codes"
+    implementation_plan:
+      phase1: "URL structure and protocol updates (critical)"
+      phase2: "Error handling and authentication (high)"
+      phase3: "Backward compatibility and testing (high)"
+      phase4: "Documentation and optimization (medium)"
+      phase5: "Release preparation (medium)"
+    risks:
+      - "Breaking existing client applications"
+      - "Performance regression with new protocol"
+      - "Incomplete backward compatibility"
+      - "User adoption challenges"
+    success_criteria:
+      - "SDK connects successfully to v1.1.2 servers"
+      - "Maintains compatibility with older servers"
+      - "Clear migration path for users"
+      - "No performance degradation"
+    estimated_effort:
+      critical_tasks: "16-24 hours (tasks 1-2)"
+      high_priority_tasks: "24-32 hours (tasks 3-5)"
+      medium_priority_tasks: "16-24 hours (tasks 7-9)"
+      testing_effort: "8-12 hours (task 6)"
+      total_estimated_effort: "64-92 hours"
+    dependencies:
+      - "Access to v1.1.2 test server"
+      - "Understanding of new protocol specification"
+      - "User feedback on migration needs"
+      - "Coordination with server team"
+    next_steps:
+      - "Start with URL structure update (sdk-v112-1)"
+      - "Fix protocol string (sdk-v112-2)"
+      - "Test against real v1.1.2 server"
+      - "Gather user requirements"
+    deliverables:
+      updated_sdk: "Python SDK with full v1.1.2 support"
+      migration_guide: "User migration documentation"
+      compatibility_layer: "Support for both old and new servers"
+      test_suite: "Comprehensive tests for both versions"
+    last_updated: "May 29, 2025"

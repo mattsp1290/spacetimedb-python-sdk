@@ -10,6 +10,12 @@ Tests the TypeScript SDK-compatible table interface with:
 - conn.db.table_name.find_by_unique_column(value)
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import unittest
 from unittest.mock import Mock, MagicMock, patch
 from dataclasses import dataclass
@@ -24,7 +30,7 @@ from spacetimedb_sdk.table_interface import (
     CallbackManager,
     create_event_context
 )
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 
 # Sample table row types for testing
@@ -357,15 +363,15 @@ class TestTableEventProcessor(unittest.TestCase):
 
 
 class TestModernClientIntegration(unittest.TestCase):
-    """Test integration with ModernSpacetimeDBClient."""
+    """Test integration with SpacetimeDBClient."""
     
-    @patch('spacetimedb_sdk.modern_client.ModernWebSocketClient')
+    @patch('spacetimedb_sdk.websocket_client.WebSocketClient')
     def setUp(self, mock_ws_client_class):
         """Set up test client."""
         self.mock_ws = Mock()
         mock_ws_client_class.return_value = self.mock_ws
         
-        self.client = ModernSpacetimeDBClient(
+        self.client = SpacetimeDBClient(
             start_message_processing=False  # Disable for testing
         )
         

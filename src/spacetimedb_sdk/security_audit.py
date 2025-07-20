@@ -600,6 +600,9 @@ class SecurityAuditor:
         days: int = 7
     ) -> Dict[str, Any]:
         """Get user activity summary."""
+        # Ensure all buffered events are flushed
+        self._flush_events()
+        
         start_time = datetime.now(timezone.utc) - timedelta(days=days)
         
         user_events = self.get_events(
@@ -612,6 +615,12 @@ class SecurityAuditor:
                 "user_id": user_id,
                 "period_days": days,
                 "total_events": 0,
+                "auth_attempts": 0,
+                "failed_auth_attempts": 0,
+                "auth_success_rate": 0,
+                "unique_ips": 0,
+                "last_activity": None,
+                "event_types": {},
             }
         
         # Calculate summary

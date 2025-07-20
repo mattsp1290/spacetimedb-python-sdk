@@ -10,6 +10,12 @@ Demonstrates the advanced type system features:
 - Type inference and checking
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 from typing import Any, Optional
 from datetime import datetime
 import json

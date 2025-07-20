@@ -16,10 +16,9 @@ Features:
 
 from ._version import __version__
 
-# Modern client (protocol v1.1.1)
-from .modern_client import (
-    ModernSpacetimeDBClient,
-    SpacetimeDBClient,  # Alias for backward compatibility
+# SpacetimeDB client (protocol v1.1.1)
+from .spacetimedb_client import (
+    SpacetimeDBClient,
     ReducerEvent,
     DbEvent
 )
@@ -98,7 +97,7 @@ from .request_tracker import RequestTracker
 
 # WebSocket client
 from .websocket_client import (
-    ModernWebSocketClient,
+    WebSocketClient,
     ConnectionState
 )
 
@@ -576,9 +575,8 @@ __all__ = [
     # Version
     "__version__",
     
-    # Modern client (recommended)
-    "ModernSpacetimeDBClient",
-    "SpacetimeDBClient",  # Alias pointing to modern client
+    # SpacetimeDB client (recommended)
+    "SpacetimeDBClient",
     "ReducerEvent",
     "DbEvent",
     
@@ -630,7 +628,7 @@ __all__ = [
     "ConnectionEventListener",
     
     # WebSocket
-    "ModernWebSocketClient",
+    "WebSocketClient",
     "ConnectionState",
     
 
@@ -1026,9 +1024,11 @@ __all__ = [
     "ensure_dict_compatible",
     "validate_serialization",
     "ClientCompatibilityWrapper",
-    "wrap_for_client_compatibility"
+    "wrap_for_client_compatibility",
+    
 ]
 
-# Default to modern client
+# Default to SpacetimeDB client
 # Users can import as: from spacetimedb_sdk import SpacetimeDBClient
-# Or explicitly: from spacetimedb_sdk import ModernSpacetimeDBClient
+
+# No backward compatibility - use the new class names directly

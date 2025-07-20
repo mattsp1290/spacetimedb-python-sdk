@@ -41,7 +41,7 @@ class TestBreakingChanges:
             SpacetimeDBClient.init(None, None, "localhost", "db")
         except AttributeError as e:
             # Standard Python error is clear enough
-            assert "type object 'ModernSpacetimeDBClient' has no attribute 'init'" in str(e)
+            assert "type object 'SpacetimeDBClient' has no attribute 'init'" in str(e)
             
     def test_instance_connect_renamed(self):
         """Test that instance connect() method is now internal"""
@@ -273,7 +273,7 @@ class TestAsyncClientMigration:
         # It should call client._connect_internal not client.connect
         async_client = SpacetimeDBAsyncClient(autogen_package=None)
         
-        # The async client's client instance should be ModernSpacetimeDBClient
+        # The async client's client instance should be SpacetimeDBClient
         assert hasattr(async_client.client, '_connect_internal')
         
     def test_async_client_method_updates(self):

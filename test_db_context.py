@@ -4,13 +4,19 @@ Tests for DbContext Interface Implementation.
 Tests the structured database context interface for table and reducer access.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import asyncio
 from typing import Optional, Dict, Any, List
 from unittest.mock import Mock, MagicMock, AsyncMock, patch
 
 from spacetimedb_sdk import (
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     DbContext,
     DbView,
     Reducers,
@@ -31,7 +37,7 @@ class TestDbContext:
     @pytest.fixture
     def mock_client(self):
         """Create a mock client for testing."""
-        client = Mock(spec=ModernSpacetimeDBClient)
+        client = Mock(spec=SpacetimeDBClient)
         client.connected = True
         client.call_reducer = AsyncMock(return_value="request_123")
         return client
@@ -192,7 +198,7 @@ class TestTableAccessor:
     @pytest.fixture
     def table_accessor(self):
         """Create a table accessor for testing."""
-        mock_client = Mock(spec=ModernSpacetimeDBClient)
+        mock_client = Mock(spec=SpacetimeDBClient)
         return TableAccessor(mock_client, "users")
     
     def test_table_name(self, table_accessor):
@@ -337,10 +343,10 @@ class TestTypedDbContext:
 class TestConnectionBuilderIntegration:
     """Test DbContext integration with connection builder."""
     
-    @patch('spacetimedb_sdk.modern_client.ModernSpacetimeDBClient')
+    @patch('spacetimedb_sdk.modern_client.SpacetimeDBClient')
     def test_build_with_context(self, MockClient):
         """Test building client with context."""
-        from spacetimedb_sdk import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Mock client instance
         mock_instance = Mock()
@@ -348,7 +354,7 @@ class TestConnectionBuilderIntegration:
         MockClient.return_value = mock_instance
         
         # Build with context
-        client, ctx = (ModernSpacetimeDBClient.builder()
+        client, ctx = (SpacetimeDBClient.builder()
                       .with_uri("ws://localhost:3000")
                       .with_module_name("test_module")
                       .with_context()
@@ -358,10 +364,10 @@ class TestConnectionBuilderIntegration:
         assert ctx == mock_instance.get_context.return_value
         mock_instance.get_context.assert_called_once()
     
-    @patch('spacetimedb_sdk.modern_client.ModernSpacetimeDBClient')
+    @patch('spacetimedb_sdk.modern_client.SpacetimeDBClient')
     def test_connect_with_context(self, MockClient):
         """Test connecting with context."""
-        from spacetimedb_sdk import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Mock client instance
         mock_instance = Mock()
@@ -370,7 +376,7 @@ class TestConnectionBuilderIntegration:
         MockClient.return_value = mock_instance
         
         # Connect with context
-        client, ctx = (ModernSpacetimeDBClient.builder()
+        client, ctx = (SpacetimeDBClient.builder()
                       .with_uri("ws://localhost:3000")
                       .with_module_name("test_module")
                       .with_token("test_token")
@@ -387,7 +393,7 @@ async def test_end_to_end_example():
     # This is a documentation test showing the API
     
     # Mock client
-    client = Mock(spec=ModernSpacetimeDBClient)
+    client = Mock(spec=SpacetimeDBClient)
     client.connected = True
     client.call_reducer = AsyncMock(return_value="req_123")
     

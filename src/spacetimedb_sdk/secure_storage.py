@@ -13,6 +13,7 @@ import os
 import json
 import base64
 import logging
+from .utils.error_formatting import ErrorFormatter
 import threading
 import secrets
 from typing import Dict, Optional, Any, List, Tuple, Callable
@@ -472,7 +473,7 @@ class SecureStorage:
             return SecureToken.from_dict(token_dict)
             
         except Exception as e:
-            self.logger.error(f"Failed to retrieve from keyring: {e}")
+            self.logger.error(ErrorFormatter.format_generic_error("Secure Storage", "keyring retrieval", e))
             return None
     
     def _delete_keyring(self, key: str) -> bool:
@@ -520,7 +521,7 @@ class SecureStorage:
             return SecureToken.from_dict(token_dict)
             
         except Exception as e:
-            self.logger.error(f"Failed to retrieve from file: {e}")
+            self.logger.error(ErrorFormatter.format_generic_error("Secure Storage", "file retrieval", e))
             return None
     
     def _delete_file(self, key: str) -> bool:
@@ -572,7 +573,7 @@ class SecureStorage:
                             self._perform_refresh(key, token)
                             
             except Exception as e:
-                self.logger.error(f"Refresh loop error: {e}")
+                self.logger.error(ErrorFormatter.format_generic_error("Secure Storage", "refresh loop", e))
     
     def _schedule_refresh(self, key: str, token: SecureToken) -> None:
         """Schedule a token for refresh."""
@@ -599,7 +600,7 @@ class SecureStorage:
                 self.logger.warning(f"Token refresh failed: {key}")
                 
         except Exception as e:
-            self.logger.error(f"Token refresh error: {e}")
+            self.logger.error(ErrorFormatter.format_generic_error("Secure Storage", "token refresh", e))
     
     # Audit and monitoring
     def _audit(self, action: str, key: str, details: Dict[str, Any]) -> None:

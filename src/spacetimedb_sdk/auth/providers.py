@@ -156,7 +156,7 @@ class JWTAuthProvider(AuthProvider):
         
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         
-        self.logger.debug(f"Created JWT token for identity {identity[:8]}...")
+        self.logger.debug("Created JWT token for authentication")
         return token
     
     def validate_token(
@@ -343,7 +343,7 @@ class IdentityAuthProvider(AuthProvider):
         # We'll track when it was created for expiration purposes
         self._token_timestamps[identity] = time.time()
         
-        self.logger.debug(f"Created identity token for {identity[:8]}...")
+        self.logger.debug("Created identity token for authentication")
         return identity
     
     def validate_token(self, token: str, **kwargs) -> bool:

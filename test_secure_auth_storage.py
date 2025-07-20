@@ -6,6 +6,12 @@ This script tests the new secure authentication storage system,
 including migration from plaintext storage and various security features.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import json
 import tempfile
 import time

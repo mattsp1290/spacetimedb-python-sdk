@@ -170,9 +170,9 @@ def test_enhanced_one_off_query_response_error_handling_fails():
 def test_enhanced_websocket_client_integration_fails():
     """Test enhanced WebSocket client OneOffQuery integration - this will fail initially."""
     try:
-        from spacetimedb_sdk.websocket_client import ModernWebSocketClient
+        from spacetimedb_sdk.websocket_client import WebSocketClient
         
-        client = ModernWebSocketClient()
+        client = WebSocketClient()
         
         # Test that client has enhanced execute_one_off_query method
         result = client.execute_one_off_query("SELECT * FROM products")

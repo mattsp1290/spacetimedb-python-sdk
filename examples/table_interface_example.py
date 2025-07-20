@@ -4,6 +4,12 @@ Example: Enhanced Table Interface for SpacetimeDB Python SDK
 Demonstrates TypeScript SDK-compatible table interface patterns.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 from dataclasses import dataclass
 from typing import List, Optional
 import time

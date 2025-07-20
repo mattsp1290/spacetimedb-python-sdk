@@ -33,6 +33,8 @@ except ImportError:
 
 from ..events.enhanced_event_system import Event, EventType, EventPriority
 from ..exceptions import AuthenticationError
+from ..utils.error_formatting import ErrorFormatter
+from ..monitoring import get_global_monitor, monitor_performance
 
 
 class AuthenticationState(Enum):
@@ -178,7 +180,7 @@ class AuthenticationHandler:
             try:
                 self.event_handler(event)
             except Exception as e:
-                self.logger.error(f"Error in authentication event handler: {e}")
+                self.logger.error(ErrorFormatter.format_auth_error("event handling", e))
     
     def _schedule_token_refresh(self, credentials: AuthenticationCredentials) -> None:
         """Schedule automatic token refresh."""
@@ -209,7 +211,7 @@ class AuthenticationHandler:
                 try:
                     callback(credentials)
                 except Exception as e:
-                    self.logger.error(f"Token refresh callback error: {e}")
+                    self.logger.error(ErrorFormatter.format_auth_error("token refresh callback", e))
             
             # Re-authenticate if still current
             with self._lock:
@@ -223,7 +225,7 @@ class AuthenticationHandler:
                         data={"reason": "automatic_refresh"}
                     ))
         except Exception as e:
-            self.logger.error(f"Background token refresh failed: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("background token refresh", e))
     
     @contextmanager
     def _authentication_context(self, host: str, database: str):
@@ -252,6 +254,16 @@ class AuthenticationHandler:
                 ))
                 raise
     
+    @monitor_performance("authentication_legacy_token")
+    def authenticate(
+        self,
+        auth_token: str,
+        host: str,
+        database: str
+    ) -> Dict[str, str]:
+        """Generic authenticate method for compatibility."""
+        return self.authenticate_with_legacy_token(auth_token, host, database)
+    
     def authenticate_with_legacy_token(
         self,
         auth_token: str,
@@ -270,13 +282,26 @@ class AuthenticationHandler:
             Authentication headers
         """
         with self._authentication_context(host, database):
-            token_bytes = f"token:{auth_token}".encode('utf-8')
-            base64_str = base64.b64encode(token_bytes).decode('utf-8')
+            start_time = time.time()
             
-            headers = {"Authorization": f"Basic {base64_str}"}
-            
-            self.logger.debug(f"Prepared legacy token authentication for {host}/{database}")
-            return headers
+            try:
+                token_bytes = f"token:{auth_token}".encode('utf-8')
+                base64_str = base64.b64encode(token_bytes).decode('utf-8')
+                
+                headers = {"Authorization": f"Basic {base64_str}"}
+                
+                # Record successful authentication
+                monitor = get_global_monitor()
+                monitor.record_connection_setup(time.time() - start_time, success=True)
+                
+                self.logger.debug(f"Prepared legacy token authentication for {host}/{database}")
+                return headers
+                
+            except Exception as e:
+                # Record failed authentication
+                monitor = get_global_monitor()
+                monitor.record_connection_setup(time.time() - start_time, success=False)
+                raise
     
     def get_stored_credentials(
         self,
@@ -314,7 +339,7 @@ class AuthenticationHandler:
                 return credentials
             
         except Exception as e:
-            self.logger.error(f"Failed to get stored credentials: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("credential retrieval", e))
         
         return None
     
@@ -365,10 +390,10 @@ class AuthenticationHandler:
                     data={"stored": True}
                 ))
                 
-                self.logger.info(f"Stored credentials for {host}/{database} (identity: {identity[:8]}...)")
+                self.logger.info(f"Stored credentials for {host}/{database}")
         
         except Exception as e:
-            self.logger.error(f"Failed to store credentials: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("credential storage", e))
             raise
     
     def prepare_jwt_headers(
@@ -413,7 +438,7 @@ class AuthenticationHandler:
                 return headers
         
         except Exception as e:
-            self.logger.error(f"Failed to prepare JWT headers: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("JWT header preparation", e))
             return None
     
     def handle_authentication_handshake(
@@ -446,7 +471,7 @@ class AuthenticationHandler:
                     return False
                 
                 self.logger.info(f"Handling authentication handshake for {host}/{database}")
-                self.logger.debug(f"Received identity: {identity[:8]}...")
+                self.logger.debug("Received identity for authentication")
                 
                 # Store credentials
                 self.store_credentials(identity, token, host, database)
@@ -457,7 +482,7 @@ class AuthenticationHandler:
                 return True
         
         except Exception as e:
-            self.logger.error(f"Failed to handle authentication handshake: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("handshake", e))
             return False
     
     def _parse_handshake_headers(self, error_message: str) -> Dict[str, str]:
@@ -539,7 +564,7 @@ class AuthenticationHandler:
                 self.logger.info(f"Cleared credentials for {host}/{database}")
         
         except Exception as e:
-            self.logger.error(f"Failed to clear credentials: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("credential clearing", e))
     
     def get_authentication_state(self) -> AuthenticationState:
         """Get current authentication state."""
@@ -627,7 +652,7 @@ class AuthenticationHandler:
                 self.logger.info("Authentication handler shutdown complete")
         
         except Exception as e:
-            self.logger.error(f"Error during authentication handler shutdown: {e}")
+            self.logger.error(ErrorFormatter.format_auth_error("shutdown", e))
     
     def __enter__(self):
         """Context manager entry."""

@@ -47,3 +47,49 @@ secure-storage = [
     "cryptography>=3.4.0",   # Encryption for fallback file storage
     "PyJWT>=2.4.0",          # JWT token handling and validation
 ]
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Output and execution options
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--color=yes",
+    "--disable-warnings",
+    "--maxfail=10",
+]
+
+# Registered markers to avoid warnings
+markers = [
+    "integration: Integration tests requiring external services",
+    "unit: Fast unit tests",
+    "slow: Slow running tests",
+    "security: Security-related tests",
+    "performance: Performance benchmarking tests",
+    "asyncio: Asynchronous tests",
+    "property: Property-based tests",
+    "regression: Regression tests for bug fixes",
+    "wasm: WebAssembly integration tests",
+]
+
+# Asyncio configuration to fix deprecation warnings
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+# Minimum version and timeouts
+minversion = "7.0"
+timeout = 120
+timeout_method = "thread"
+
+# Filtering
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::RuntimeWarning",
+    "ignore::UserWarning",
+]

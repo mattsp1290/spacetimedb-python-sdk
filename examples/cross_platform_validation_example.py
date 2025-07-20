@@ -11,6 +11,12 @@ Demonstrates how to use the cross-platform validation framework to:
 This showcases ts-parity-20: Cross-Platform Integration Validation.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import json
 import sys

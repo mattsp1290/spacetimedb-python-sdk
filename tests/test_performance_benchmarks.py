@@ -14,7 +14,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import List, Dict, Any
 
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, SubscriptionMetrics
+from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetrics
 from spacetimedb_sdk.message_validator import SpacetimeDBMessageValidator
 from spacetimedb_sdk.large_message_handler import LargeMessageHandler
 from spacetimedb_sdk.protocol import TEXT_PROTOCOL
@@ -276,7 +276,7 @@ class TestConcurrentClientSimulation:
             """Simulate a client's message processing."""
             try:
                 # Create client with unique protocol
-                client = ModernWebSocketClient(protocol=TEXT_PROTOCOL)
+                client = WebSocketClient(protocol=TEXT_PROTOCOL)
                 
                 # Process messages
                 for i in range(100):

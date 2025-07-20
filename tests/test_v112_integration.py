@@ -15,7 +15,7 @@ from typing import List, Dict, Any
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk.spacetimedb_client import SpacetimeDBClient
 from spacetimedb_sdk.exceptions import (
     DatabaseNotFoundError,
     AuthenticationError,
@@ -51,7 +51,7 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
     def test_complete_connection_workflow(self):
         """Test complete connection, query, and subscription workflow."""
         # Connect to mock server
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         # Track events
         identity_events = []
@@ -98,7 +98,7 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
         
     def test_query_execution(self):
         """Test query execution through mock server."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         query_results = []
         
@@ -133,7 +133,7 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
         
     def test_reducer_execution(self):
         """Test reducer execution through mock server."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         # Connect
         self.client._connect_internal(
@@ -182,7 +182,7 @@ class TestUnpublishedDatabaseScenarios(unittest.TestCase):
         
     def test_unpublished_database_error(self):
         """Test proper error when connecting to unpublished database."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         with self.assertRaises(DatabaseNotFoundError) as cm:
             self.client._connect_internal(
@@ -223,7 +223,7 @@ class TestAuthenticationScenarios(unittest.TestCase):
         
     def test_valid_token_authentication(self):
         """Test successful authentication with valid token."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         # Connect with valid token
         self.client._connect_internal(
@@ -241,7 +241,7 @@ class TestAuthenticationScenarios(unittest.TestCase):
         
     def test_invalid_token_rejection(self):
         """Test rejection with invalid token."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         with self.assertRaises(AuthenticationError) as cm:
             self.client._connect_internal(
@@ -261,7 +261,7 @@ class TestAuthenticationScenarios(unittest.TestCase):
         
     def test_missing_token_rejection(self):
         """Test rejection when token required but not provided."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         with self.assertRaises(AuthenticationError) as cm:
             self.client._connect_internal(
@@ -287,7 +287,7 @@ class TestNetworkFailureScenarios(unittest.TestCase):
         server.start()
         
         try:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             # Set a short timeout (if supported)
             start_time = time.time()
@@ -320,7 +320,7 @@ class TestNetworkFailureScenarios(unittest.TestCase):
         server.start()
         
         try:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             # Connect
             client._connect_internal(
@@ -347,7 +347,7 @@ class TestNetworkFailureScenarios(unittest.TestCase):
         server.start()
         
         try:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             # Track reconnection attempts
             reconnect_attempts = []
@@ -399,7 +399,7 @@ class TestErrorInjectionScenarios(unittest.TestCase):
         server.start()
         
         try:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             errors_received = []
             
@@ -439,7 +439,7 @@ class TestBinaryProtocol(unittest.TestCase):
         server.start()
         
         try:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             # Connect with binary protocol
             # (Requires client support for protocol selection)
@@ -474,7 +474,7 @@ class TestConcurrentConnections(unittest.TestCase):
         try:
             # Create multiple clients
             for i in range(5):
-                client = ModernSpacetimeDBClient()
+                client = SpacetimeDBClient()
                 client._connect_internal(
                     auth_token=None,
                     host="localhost:3010",

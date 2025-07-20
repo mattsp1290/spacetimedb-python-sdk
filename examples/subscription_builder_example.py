@@ -13,6 +13,12 @@ The subscription builder provides advanced features like:
 - State management and lifecycle tracking
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 import os
 import time
@@ -22,7 +28,7 @@ import threading
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 # Import the SpacetimeDB SDK
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.subscription_builder import (
     SubscriptionState,
     SubscriptionStrategy,
@@ -45,7 +51,7 @@ def example_basic_subscription():
     print("=== Example 1: Basic Subscription ===")
     
     # Create client (using builder from previous task)
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("chat_app")
               .build())
@@ -74,7 +80,7 @@ def example_advanced_subscription():
     print("\n=== Example 2: Advanced Subscription ===")
     
     # Create client
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("multiplayer_game")
               .with_protocol("binary")
@@ -141,7 +147,7 @@ def example_subscription_strategies():
     """
     print("\n=== Example 3: Subscription Strategies ===")
     
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("strategy_demo")
               .build())
@@ -191,7 +197,7 @@ def example_error_handling():
     """
     print("\n=== Example 4: Error Handling & Retry Policies ===")
     
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("error_demo")
               .build())
@@ -242,7 +248,7 @@ def example_subscription_metrics():
     """
     print("\n=== Example 5: Subscription Metrics & Monitoring ===")
     
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("metrics_demo")
               .build())
@@ -287,7 +293,7 @@ def example_query_validation():
     """
     print("\n=== Example 6: Query Validation & Security ===")
     
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("validation_demo")
               .build())
@@ -344,7 +350,7 @@ def example_subscription_lifecycle():
     """
     print("\n=== Example 7: Subscription Lifecycle Management ===")
     
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("lifecycle_demo")
               .build())
@@ -428,7 +434,7 @@ def example_typescript_compatibility():
     """)
     
     # Actually create the subscription
-    client = (ModernSpacetimeDBClient.builder()
+    client = (SpacetimeDBClient.builder()
               .with_uri("ws://localhost:3000")
               .with_module_name("compatibility_demo")
               .build())

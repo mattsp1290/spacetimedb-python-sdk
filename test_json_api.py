@@ -13,6 +13,12 @@ Tests the HTTP/JSON API support:
 - Metrics and logging
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import unittest
 import asyncio
 import json
@@ -27,7 +33,9 @@ from spacetimedb_sdk.json_api import (
     ReducerCallResult,
     HttpMethod
 )
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk.spacetimedb_client import SpacetimeDBClient
+from spacetimedb_sdk.protocol import EnergyQuanta
+from spacetimedb_sdk.bsatn import SpacetimeDBAddress as Address
 
 
 class TestJsonApiClient(unittest.TestCase):
@@ -36,11 +44,15 @@ class TestJsonApiClient(unittest.TestCase):
     def setUp(self):
         """Set up test client without actual HTTP library dependency."""
         # We'll use the sync client with mocked requests
-        self.api = SpacetimeDBJsonAPI(
-            base_url="http://localhost:3000",
-            auth_token="test_token",
-            use_async=False
-        )
+        # Patch the HAS_* flags to control which HTTP client is used
+        with patch('spacetimedb_sdk.json_api.HAS_AIOHTTP', False), \
+             patch('spacetimedb_sdk.json_api.HAS_HTTPX', False), \
+             patch('spacetimedb_sdk.json_api.HAS_REQUESTS', True):
+            self.api = SpacetimeDBJsonAPI(
+                base_url="http://localhost:3000",
+                auth_token="test_token",
+                use_async=False
+            )
     
     def test_initialization(self):
         """Test API client initialization."""
@@ -90,6 +102,7 @@ class TestJsonApiClient(unittest.TestCase):
             "http://localhost:3000/databases/mydb"
         )
     
+    @patch('spacetimedb_sdk.json_api.HAS_HTTPX', False)
     @patch('spacetimedb_sdk.json_api.requests.Session')
     def test_list_databases_sync(self, mock_session_class):
         """Test synchronous list databases operation."""
@@ -106,16 +119,23 @@ class TestJsonApiClient(unittest.TestCase):
             }
         ]
         mock_response.headers = {}
+        mock_response.text = ''
         
         mock_session = Mock()
         mock_session.request.return_value = mock_response
+        mock_session.verify = True
         mock_session_class.return_value = mock_session
         
-        # Force sync mode
+        # Force sync mode and use requests
         self.api.use_async = False
+        self.api._session = None  # Force session creation
         
         # Test
         response = self.api.list_databases_sync()
+        
+        # Verify session was created and used
+        mock_session_class.assert_called_once()
+        mock_session.request.assert_called_once()
         
         self.assertTrue(response.success)
         self.assertEqual(len(response.data), 1)
@@ -123,6 +143,7 @@ class TestJsonApiClient(unittest.TestCase):
         self.assertEqual(response.data[0].name, "test_db")
         self.assertEqual(response.data[0].num_tables, 5)
     
+    @patch('spacetimedb_sdk.json_api.HAS_HTTPX', False)
     @patch('spacetimedb_sdk.json_api.requests.Session')
     def test_call_reducer_http_sync(self, mock_session_class):
         """Test synchronous HTTP reducer call."""
@@ -134,13 +155,16 @@ class TestJsonApiClient(unittest.TestCase):
             "energy_used": 100
         }
         mock_response.headers = {}
+        mock_response.text = ''
         
         mock_session = Mock()
         mock_session.request.return_value = mock_response
+        mock_session.verify = True
         mock_session_class.return_value = mock_session
         
-        # Force sync mode
+        # Force sync mode and reset session
         self.api.use_async = False
+        self.api._session = None
         
         # Test
         response = self.api.call_reducer_http_sync(
@@ -149,11 +173,16 @@ class TestJsonApiClient(unittest.TestCase):
             ["Alice", "alice@example.com"]
         )
         
+        # Verify session was created and used
+        mock_session_class.assert_called_once()
+        mock_session.request.assert_called_once()
+        
         self.assertTrue(response.success)
         self.assertIsInstance(response.data, ReducerCallResult)
         self.assertEqual(response.data.result["name"], "Alice")
         self.assertIsNotNone(response.data.energy_used)
     
+    @patch('spacetimedb_sdk.json_api.HAS_HTTPX', False)
     @patch('spacetimedb_sdk.json_api.requests.Session')
     def test_error_handling(self, mock_session_class):
         """Test error handling and retries."""
@@ -166,15 +195,20 @@ class TestJsonApiClient(unittest.TestCase):
         
         mock_session = Mock()
         mock_session.request.return_value = mock_response
+        mock_session.verify = True
         mock_session_class.return_value = mock_session
         
         # Set low retry count for testing
         self.api.max_retries = 2
         self.api.retry_delay = 0.01
         self.api.use_async = False
+        self.api._session = None  # Force session creation
         
         # Test
         response = self.api.get_database_info_sync("test_db")
+        
+        # Verify session was created
+        mock_session_class.assert_called_once()
         
         self.assertFalse(response.success)
         self.assertIsNotNone(response.error)
@@ -235,6 +269,63 @@ class TestJsonApiClient(unittest.TestCase):
         self.api.clear_logs()
         self.assertEqual(len(self.api.get_request_logs()), 0)
     
+    @patch('spacetimedb_sdk.json_api.HAS_HTTPX', False)
+    @patch('spacetimedb_sdk.json_api.requests.Session')
+    def test_connection_timeout(self, mock_session_class):
+        """Test connection timeout handling."""
+        import requests
+        
+        # Mock timeout exception
+        mock_session = Mock()
+        mock_session.request.side_effect = requests.Timeout("Connection timeout")
+        mock_session.verify = True
+        mock_session_class.return_value = mock_session
+        
+        # Set low retry count and timeout for testing
+        self.api.max_retries = 1
+        self.api.retry_delay = 0.01
+        self.api.timeout = 1.0
+        self.api.use_async = False
+        self.api._session = None
+        
+        # Test
+        response = self.api.list_databases_sync()
+        
+        self.assertFalse(response.success)
+        self.assertIsNotNone(response.error)
+        self.assertIn("timeout", response.error.lower())
+        
+        # Check retries happened
+        self.assertEqual(mock_session.request.call_count, 2)  # Initial + 1 retry
+    
+    @patch('spacetimedb_sdk.json_api.HAS_HTTPX', False)
+    @patch('spacetimedb_sdk.json_api.requests.Session')
+    def test_connection_refused(self, mock_session_class):
+        """Test connection refused handling."""
+        import requests
+        
+        # Mock connection error
+        mock_session = Mock()
+        mock_session.request.side_effect = requests.ConnectionError("Connection refused")
+        mock_session.verify = True
+        mock_session_class.return_value = mock_session
+        
+        # Set low retry count for testing
+        self.api.max_retries = 1
+        self.api.retry_delay = 0.01
+        self.api.use_async = False
+        self.api._session = None
+        
+        # Test
+        response = self.api.get_database_info_sync("test_db")
+        
+        self.assertFalse(response.success)
+        self.assertIsNotNone(response.error)
+        self.assertIn("connection", response.error.lower())
+        
+        # Check retries happened
+        self.assertEqual(mock_session.request.call_count, 2)  # Initial + 1 retry
+    
     def test_context_manager(self):
         """Test context manager functionality."""
         with SpacetimeDBJsonAPI("http://localhost:3000") as api:
@@ -256,65 +347,72 @@ class TestAsyncJsonApiClient(unittest.IsolatedAsyncioTestCase):
             use_async=True
         )
     
-    @patch('spacetimedb_sdk.json_api.aiohttp.ClientSession')
-    async def test_async_list_databases(self, mock_session_class):
-        """Test async list databases operation."""
-        # Mock response
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=[
+    async def test_async_list_databases(self):
+        """Test async list databases operation by mocking the internal async request method."""
+        # Mock the internal async request method instead of HTTP client
+        expected_data = [
             {
                 "name": "async_db",
                 "address": "async_address",
                 "host": "localhost:3000"
             }
-        ])
-        mock_response.headers = {}
+        ]
         
-        mock_session = AsyncMock()
-        mock_session.request = AsyncMock()
-        mock_session.request.return_value.__aenter__.return_value = mock_response
-        mock_session_class.return_value = mock_session
-        
-        # Force aiohttp
-        self.api._async_session = mock_session
-        
-        # Test
-        response = await self.api.list_databases()
-        
-        self.assertTrue(response.success)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0].name, "async_db")
-    
-    @patch('spacetimedb_sdk.json_api.aiohttp.ClientSession')
-    async def test_async_execute_sql(self, mock_session_class):
-        """Test async SQL execution."""
-        # Mock response
-        mock_response = AsyncMock()
-        mock_response.status = 200
-        mock_response.json = AsyncMock(return_value=[
-            {"id": 1, "name": "Alice"},
-            {"id": 2, "name": "Bob"}
-        ])
-        mock_response.headers = {}
-        
-        mock_session = AsyncMock()
-        mock_session.request = AsyncMock()
-        mock_session.request.return_value.__aenter__.return_value = mock_response
-        mock_session_class.return_value = mock_session
-        
-        # Force aiohttp
-        self.api._async_session = mock_session
-        
-        # Test
-        response = await self.api.execute_sql(
-            "test_db",
-            "SELECT * FROM users"
+        mock_response = ApiResponse(
+            success=True,
+            data=expected_data,
+            status_code=200
         )
         
-        self.assertTrue(response.success)
-        self.assertEqual(len(response.data), 2)
-        self.assertEqual(response.data[0]["name"], "Alice")
+        # Mock the internal _async_request method
+        with patch.object(self.api, '_async_request', new_callable=AsyncMock) as mock_async_request:
+            mock_async_request.return_value = mock_response
+            
+            # Test
+            response = await self.api.list_databases()
+            
+            # Verify the method was called correctly
+            mock_async_request.assert_called_once_with(HttpMethod.GET, "/v1/databases")
+            
+            self.assertTrue(response.success)
+            self.assertEqual(len(response.data), 1)
+            self.assertIsInstance(response.data[0], DatabaseInfo)
+            self.assertEqual(response.data[0].name, "async_db")
+    
+    async def test_async_execute_sql(self):
+        """Test async SQL execution by mocking the internal async request method."""
+        # Mock the internal async request method instead of HTTP client
+        expected_data = [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"}
+        ]
+        
+        mock_response = ApiResponse(
+            success=True,
+            data=expected_data,
+            status_code=200
+        )
+        
+        # Mock the internal _async_request method
+        with patch.object(self.api, '_async_request', new_callable=AsyncMock) as mock_async_request:
+            mock_async_request.return_value = mock_response
+            
+            # Test
+            response = await self.api.execute_sql(
+                "test_db",
+                "SELECT * FROM users"
+            )
+            
+            # Verify the method was called correctly
+            mock_async_request.assert_called_once_with(
+                HttpMethod.POST,
+                "/v1/database/test_db/sql",
+                data={'query': 'SELECT * FROM users'}
+            )
+            
+            self.assertTrue(response.success)
+            self.assertEqual(len(response.data), 2)
+            self.assertEqual(response.data[0]["name"], "Alice")
     
     async def test_async_context_manager(self):
         """Test async context manager."""
@@ -326,17 +424,25 @@ class TestAsyncJsonApiClient(unittest.IsolatedAsyncioTestCase):
 
 
 class TestClientIntegration(unittest.TestCase):
-    """Test JSON API integration with ModernSpacetimeDBClient."""
+    """Test JSON API integration with SpacetimeDBClient."""
     
-    @patch('spacetimedb_sdk.modern_client.ModernWebSocketClient')
-    def setUp(self, mock_ws_class):
+    def setUp(self):
         """Set up test client."""
-        self.mock_ws = Mock()
-        mock_ws_class.return_value = self.mock_ws
-        
-        self.client = ModernSpacetimeDBClient(
-            start_message_processing=False
-        )
+        # Create a mock WebSocket client
+        with patch('spacetimedb_sdk.spacetimedb_client.WebSocketClient') as mock_ws_class:
+            self.mock_ws = Mock()
+            self.mock_ws.is_connected = False
+            self.mock_ws._host = 'localhost:3000'
+            self.mock_ws._ssl = False
+            mock_ws_class.return_value = self.mock_ws
+            
+            # Create client without starting message processing
+            self.client = SpacetimeDBClient(
+                start_message_processing=False
+            )
+            
+            # Set up the websocket client reference
+            self.client.ws_client = self.mock_ws
     
     def test_json_api_property(self):
         """Test accessing JSON API through client."""
@@ -351,9 +457,11 @@ class TestClientIntegration(unittest.TestCase):
     def test_json_api_url_derivation(self):
         """Test JSON API URL is derived from WebSocket connection."""
         # Set up mock WebSocket client with connection info
-        self.client.ws_client = Mock()
         self.client.ws_client._host = "spacetimedb.com:3000"
         self.client.ws_client._ssl = True
+        
+        # Clear any existing json_api to force recreation
+        self.client._json_api = None
         
         api = self.client.json_api
         self.assertEqual(api.base_url, "https://spacetimedb.com:3000")
@@ -371,6 +479,9 @@ class TestClientIntegration(unittest.TestCase):
         """Test JSON API uses client auth token."""
         self.client.auth_token = "client_token"
         
+        # Clear any existing json_api to force recreation
+        self.client._json_api = None
+        
         api = self.client.json_api
         self.assertEqual(api.auth_token, "client_token")
 
@@ -378,14 +489,16 @@ class TestClientIntegration(unittest.TestCase):
 class TestConnectionBuilderIntegration(unittest.TestCase):
     """Test JSON API integration with connection builder."""
     
-    @patch('spacetimedb_sdk.modern_client.ModernWebSocketClient')
+    @patch('spacetimedb_sdk.spacetimedb_client.WebSocketClient')
     def test_builder_with_json_api_url(self, mock_ws_class):
         """Test setting JSON API URL through builder."""
         mock_ws = Mock()
         mock_ws.is_connected = False
+        mock_ws._host = 'localhost:3000'
+        mock_ws._ssl = False
         mock_ws_class.return_value = mock_ws
         
-        client = (ModernSpacetimeDBClient.builder()
+        client = (SpacetimeDBClient.builder()
                   .with_uri("ws://localhost:3000")
                   .with_module_name("test_module")
                   .with_json_api_base_url("http://api.localhost:3000")

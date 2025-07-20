@@ -10,14 +10,14 @@ import time
 from unittest.mock import Mock, patch
 from typing import Dict, Any, List, Callable
 
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, SubscriptionMetrics, ConnectionState
+from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetrics, ConnectionState
 
 
 class TestAPICompatibility:
     """Test API backward compatibility"""
     
     def test_websocket_client_public_interface(self):
-        """Test that ModernWebSocketClient maintains its public interface"""
+        """Test that WebSocketClient maintains its public interface"""
         # Define expected public methods and attributes
         expected_methods = {
             'connect',
@@ -62,7 +62,7 @@ class TestAPICompatibility:
         }
         
         # Create client instance
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -83,7 +83,7 @@ class TestAPICompatibility:
             
     def test_websocket_client_method_signatures(self):
         """Test that method signatures remain unchanged"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -164,7 +164,7 @@ class TestAPICompatibility:
     def test_client_initialization_compatibility(self):
         """Test that client initialization remains backward compatible"""
         # Test with minimal parameters
-        client1 = ModernWebSocketClient(
+        client1 = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -175,7 +175,7 @@ class TestAPICompatibility:
         assert client1.ssl_enabled is False
         
         # Test with all parameters
-        client2 = ModernWebSocketClient(
+        client2 = WebSocketClient(
             host="localhost:3000",
             database_address="test-db",
             auth_token="test_token",
@@ -189,7 +189,7 @@ class TestAPICompatibility:
         
     def test_callback_assignment_compatibility(self):
         """Test that callback assignment remains backward compatible"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -225,7 +225,7 @@ class TestAPICompatibility:
         
     def test_subscription_management_compatibility(self):
         """Test that subscription management API remains compatible"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -244,7 +244,7 @@ class TestAPICompatibility:
         
     def test_protocol_compatibility(self):
         """Test that protocol handling remains compatible"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -259,7 +259,7 @@ class TestAPICompatibility:
         
     def test_message_sending_compatibility(self):
         """Test that message sending API remains compatible"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -272,7 +272,7 @@ class TestAPICompatibility:
         
     def test_connection_management_compatibility(self):
         """Test that connection management API remains compatible"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -292,7 +292,7 @@ class TestAPICompatibility:
         
     def test_metrics_compatibility(self):
         """Test that metrics API remains compatible"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -316,7 +316,7 @@ class TestAPIUsagePatterns:
     def test_basic_usage_pattern(self):
         """Test basic usage pattern remains supported"""
         # This is a common usage pattern that should remain supported
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -342,7 +342,7 @@ class TestAPIUsagePatterns:
         
     def test_subscription_usage_pattern(self):
         """Test subscription usage pattern remains supported"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -364,7 +364,7 @@ class TestAPIUsagePatterns:
             
     def test_reducer_calling_pattern(self):
         """Test reducer calling pattern remains supported"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -386,7 +386,7 @@ class TestAPIUsagePatterns:
             
     def test_query_usage_pattern(self):
         """Test one-off query usage pattern remains supported"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -408,7 +408,7 @@ class TestAPIUsagePatterns:
             
     def test_metrics_usage_pattern(self):
         """Test metrics usage pattern remains supported"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )
@@ -428,7 +428,7 @@ class TestAPIUsagePatterns:
         
     def test_connection_lifecycle_pattern(self):
         """Test connection lifecycle pattern remains supported"""
-        client = ModernWebSocketClient(
+        client = WebSocketClient(
             host="localhost:3000",
             database_address="test-db"
         )

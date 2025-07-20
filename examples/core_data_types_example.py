@@ -7,6 +7,12 @@ Demonstrates all primitive and complex data types supported by SpacetimeDB:
 - Complex types: structs (products), enums (sums), arrays, options
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import time
 from datetime import datetime
 

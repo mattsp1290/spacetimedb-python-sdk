@@ -24,7 +24,7 @@ from .bsatn.exceptions import BsatnError
 from .bsatn.constants import (
     TAG_BOOL_FALSE, TAG_BOOL_TRUE, TAG_U8, TAG_I8, TAG_U16, TAG_I16,
     TAG_U32, TAG_I32, TAG_U64, TAG_I64, TAG_F32, TAG_F64,
-    TAG_STRING, TAG_BYTES
+    TAG_STRING, TAG_BYTES, TAG_OPTION_NONE, TAG_OPTION_SOME
 )
 
 
@@ -486,16 +486,22 @@ class OptionType(AlgebraicType):
     
     def serialize(self, value: Any, writer: BsatnWriter) -> None:
         if value is None:
-            writer.write_u8(0)
+            writer.write_option_none()
         else:
-            writer.write_u8(1)
+            writer.write_option_some_tag()
+            # For embedded serialization, we need to write content without the inner type's tag
+            # This is a design issue - inner types assume they write their own tags
+            # For now, we'll handle this by calling serialize which includes tags
             self.inner_type.serialize(value, writer)
     
     def deserialize(self, reader: BsatnReader) -> Optional[Any]:
-        tag = reader.read_u8()
-        if tag == 0:
+        tag = reader.read_tag()
+        if tag == TAG_OPTION_NONE:
             return None
-        return self.inner_type.deserialize(reader)
+        elif tag == TAG_OPTION_SOME:
+            return self.inner_type.deserialize(reader)
+        else:
+            raise BsatnError(f"Expected option tag, got {tag}")
     
     def python_type(self) -> Type:
         return Optional[self.inner_type.python_type()]

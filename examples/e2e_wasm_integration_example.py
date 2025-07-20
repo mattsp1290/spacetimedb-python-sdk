@@ -9,6 +9,12 @@ Demonstrates real-world usage patterns with actual WASM modules:
 - Error handling and recovery
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import time
 from typing import List, Dict, Any

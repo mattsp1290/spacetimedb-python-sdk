@@ -12,7 +12,7 @@ import os
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 
 
 def demonstrate_lazy_import():
@@ -22,7 +22,7 @@ def demonstrate_lazy_import():
     
     # 1. Create a builder
     print("1. Creating builder...")
-    builder = ModernSpacetimeDBClient.builder()
+    builder = SpacetimeDBClient.builder()
     print("   ✓ Builder created successfully\n")
     
     # 2. Configure the builder for connection pooling
@@ -71,7 +71,7 @@ def demonstrate_lazy_import():
         print("   ✗ build_pool method not found")
     
     print("\n5. Demonstrating no circular import issues:")
-    print("   ✓ Successfully imported ModernSpacetimeDBClient")
+    print("   ✓ Successfully imported SpacetimeDBClient")
     print("   ✓ Created and configured builder")
     print("   ✓ No import errors encountered")
     

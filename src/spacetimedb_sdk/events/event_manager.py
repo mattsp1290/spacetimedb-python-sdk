@@ -7,6 +7,7 @@ all previous event managers into a single, powerful system.
 
 import asyncio
 import logging
+from ..utils.error_formatting import ErrorFormatter
 import threading
 import time
 import uuid
@@ -20,6 +21,7 @@ from dataclasses import dataclass, field
 from .core_events import Event, EventType, EventPriority, EventMetadata
 from .event_context import EventContext
 from .event_filters import EventFilter
+from ..monitoring import get_global_monitor, monitor_performance
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +66,7 @@ class EventMetrics:
     def record_published_event(self, event: Event):
         """Record an event being published."""
         self.events_published += 1
-        self.events_by_type[event.type.value] += 1
+        self.events_by_type[event.event_type.value] += 1
         self.events_by_priority[event.priority.value] += 1
     
     def record_processed_event(self, event: Event, processing_time: float):
@@ -201,7 +203,11 @@ class UnifiedEventManager:
         
         if self._processing_task is None or self._processing_task.done():
             try:
-                loop = asyncio.get_event_loop()
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
                 self._processing_task = loop.create_task(self._process_events())
             except RuntimeError:
                 # No event loop running, will start when one is available
@@ -231,7 +237,7 @@ class UnifiedEventManager:
                     continue
                     
             except Exception as e:
-                self.logger.error(f"Error in event processing loop: {e}", exc_info=True)
+                self.logger.error(ErrorFormatter.format_event_error("event processing loop", e), exc_info=True)
                 await asyncio.sleep(0.1)
         
         self.logger.info("Event processing stopped")
@@ -256,7 +262,7 @@ class UnifiedEventManager:
                         self.logger.debug(f"Event {event.metadata.event_id} transformed to None")
                         return
                 except Exception as e:
-                    self.logger.error(f"Error in transformer: {e}")
+                    self.logger.error(ErrorFormatter.format_event_error("transformer", e))
             
             # Apply filters
             for event_filter in self._filters:
@@ -267,7 +273,7 @@ class UnifiedEventManager:
                             self._metrics.record_filtered_event(processed_event)
                         return
                 except Exception as e:
-                    self.logger.error(f"Error in filter: {e}")
+                    self.logger.error(ErrorFormatter.format_event_error("filter", e))
             
             # Check if event has expired
             if processed_event.is_expired(self.default_event_ttl):
@@ -297,7 +303,7 @@ class UnifiedEventManager:
                 await self.emit_async(triggered_event)
                 
         except Exception as e:
-            self.logger.error(f"Error handling event {event.metadata.event_id}: {e}", exc_info=True)
+            self.logger.error(ErrorFormatter.format_event_error(f"handling event {event.metadata.event_id}", e), exc_info=True)
             if self._metrics:
                 self._metrics.record_failed_event(event)
     
@@ -307,7 +313,7 @@ class UnifiedEventManager:
         
         with self._lock:
             # Get specific handlers
-            event_key = event.type.value
+            event_key = event.event_type.value
             if event_key in self._handlers:
                 for priority in sorted(self._handlers[event_key].keys(), reverse=True):
                     handlers.extend(self._handlers[event_key][priority])
@@ -330,7 +336,11 @@ class UnifiedEventManager:
                 else:
                     # Run sync handler in thread pool
                     if self._thread_pool:
-                        loop = asyncio.get_event_loop()
+                        try:
+                            loop = asyncio.get_running_loop()
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
                         await loop.run_in_executor(
                             self._thread_pool,
                             handler_info.handler,
@@ -349,7 +359,7 @@ class UnifiedEventManager:
                     self._remove_handler_info(handler_info)
                 
             except Exception as e:
-                self.logger.error(f"Error in handler {handler_info.handler_id}: {e}", exc_info=True)
+                self.logger.error(ErrorFormatter.format_event_error(f"handler {handler_info.handler_id}", e), exc_info=True)
                 context.set_response('error', str(e))
                 
                 if self._metrics:
@@ -413,6 +423,25 @@ class UnifiedEventManager:
             
             self.logger.debug(f"Registered handler {handler_id} for {event_type} at priority {priority}")
             return handler_id
+    
+    def subscribe(
+        self,
+        event_type: Union[EventType, str],
+        handler: HandlerFunction,
+        priority: int = 0
+    ) -> str:
+        """
+        Subscribe to events (alias for on method).
+        
+        Args:
+            event_type: Type of event to handle
+            handler: Function to handle the event
+            priority: Handler priority
+            
+        Returns:
+            Handler ID
+        """
+        return self.on(event_type, handler, priority)
     
     def once(
         self,
@@ -488,6 +517,7 @@ class UnifiedEventManager:
             
             return removed
     
+    @monitor_performance("event_emit")
     def emit(self, event: Event, **context_kwargs) -> EventContext:
         """
         Emit an event synchronously.
@@ -499,6 +529,8 @@ class UnifiedEventManager:
         Returns:
             EventContext with results
         """
+        start_time = time.time()
+        
         # Record published event
         if self._metrics:
             self._metrics.record_published_event(event)
@@ -558,13 +590,19 @@ class UnifiedEventManager:
                     self._remove_handler_info(handler_info)
                 
             except Exception as e:
-                self.logger.error(f"Error in handler {handler_info.handler_id}: {e}", exc_info=True)
+                self.logger.error(ErrorFormatter.format_event_error(f"handler {handler_info.handler_id}", e), exc_info=True)
                 context.set_response('error', str(e))
                 
                 if self._metrics:
                     self._metrics.record_handler_execution(False)
         
         context.complete()
+        
+        # Record event processing performance
+        processing_time = time.time() - start_time
+        monitor = get_global_monitor()
+        monitor.record_event_processing(processing_time, event.event_type, success=True)
+        
         return context
     
     async def emit_async(self, event: Event, priority: bool = False) -> bool:
@@ -600,7 +638,7 @@ class UnifiedEventManager:
             return True
             
         except Exception as e:
-            self.logger.error(f"Error emitting event {event.metadata.event_id}: {e}")
+            self.logger.error(ErrorFormatter.format_event_error(f"emitting event {event.metadata.event_id}", e))
             return False
     
     def add_filter(self, event_filter: EventFilter) -> None:
@@ -756,3 +794,13 @@ def subscribe_to_events(
             handler_id = manager.on(event_type, callback, priority, handler_name)
             handler_ids.append(handler_id)
         return ",".join(handler_ids)  # Return comma-separated IDs
+
+
+def event_context(event: Event, **kwargs) -> EventContext:
+    """Create an event context."""
+    return EventContext(event, **kwargs)
+
+
+def publish_event(event: Event, **context_kwargs) -> EventContext:
+    """Publish an event (alias for emit_event)."""
+    return emit_event(event, **context_kwargs)

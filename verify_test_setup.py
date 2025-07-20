@@ -6,6 +6,12 @@ Verifies that the integration test suite can be imported and basic
 functionality works before running the full test suite.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 import traceback
 from pathlib import Path
@@ -22,7 +28,7 @@ def verify_imports():
     
     try:
         # Core SDK imports
-        from spacetimedb_sdk.websocket_client import ModernWebSocketClient, SubscriptionMetrics
+        from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetrics
         from spacetimedb_sdk.message_validator import SpacetimeDBMessageValidator, MessageValidationError
         from spacetimedb_sdk.large_message_handler import LargeMessageHandler
         from spacetimedb_sdk.connection_recovery import RobustConnectionManager
@@ -71,10 +77,10 @@ def verify_basic_functionality():
         print("✅ Subscription metrics working")
         
         # Test WebSocket client creation
-        from spacetimedb_sdk.websocket_client import ModernWebSocketClient
+        from spacetimedb_sdk.websocket_client import WebSocketClient
         from spacetimedb_sdk.protocol import TEXT_PROTOCOL
         
-        client = ModernWebSocketClient(protocol=TEXT_PROTOCOL)
+        client = WebSocketClient(protocol=TEXT_PROTOCOL)
         assert client.protocol == TEXT_PROTOCOL
         assert client.use_binary == False
         print("✅ WebSocket client creation working")

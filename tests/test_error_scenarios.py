@@ -14,7 +14,7 @@ import threading
 from unittest.mock import Mock, patch, MagicMock
 from typing import Dict, List, Any, Optional
 
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, SubscriptionMetrics
+from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetrics
 from spacetimedb_sdk.message_validator import (
     SpacetimeDBMessageValidator, 
     MessageValidationError,
@@ -382,7 +382,7 @@ class TestWebSocketClientErrors:
     def test_send_message_when_disconnected(self):
         """Test sending message when not connected."""
         
-        client = ModernWebSocketClient()
+        client = WebSocketClient()
         # Client starts disconnected
         assert client.state.value == "disconnected"
         
@@ -403,7 +403,7 @@ class TestWebSocketClientErrors:
     def test_callback_errors_dont_break_processing(self):
         """Test that errors in callbacks don't break message processing."""
         
-        client = ModernWebSocketClient()
+        client = WebSocketClient()
         
         def failing_callback(event_type: str, data: Any):
             raise Exception("Callback error")
@@ -420,7 +420,7 @@ class TestWebSocketClientErrors:
     def test_protocol_mismatch_detection(self):
         """Test detection and warning of protocol mismatches."""
         
-        client = ModernWebSocketClient(protocol="v1.bsatn.spacetimedb")  # Binary protocol
+        client = WebSocketClient(protocol="v1.bsatn.spacetimedb")  # Binary protocol
         
         # Simulate receiving text message when binary expected
         with patch.object(client.logger, 'warning') as mock_warning:
@@ -471,7 +471,7 @@ class TestEdgeCases:
     def test_rapid_connect_disconnect_cycles(self):
         """Test rapid connect/disconnect cycles."""
         
-        client = ModernWebSocketClient()
+        client = WebSocketClient()
         
         # Simulate rapid state changes
         for i in range(10):
@@ -485,7 +485,7 @@ class TestEdgeCases:
     def test_large_number_of_subscription_callbacks(self):
         """Test performance with large number of subscription callbacks."""
         
-        client = ModernWebSocketClient()
+        client = WebSocketClient()
         
         # Add many callbacks
         callbacks = []

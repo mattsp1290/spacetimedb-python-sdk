@@ -4,6 +4,12 @@ Tests for RemoteModule System Implementation.
 Tests runtime type information and module metadata functionality.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import asyncio
 from typing import Optional, Dict, Any, List, Type
@@ -11,7 +17,7 @@ from unittest.mock import Mock, AsyncMock
 from dataclasses import dataclass
 
 from spacetimedb_sdk import (
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     RemoteModule,
     TableMetadata,
     ReducerMetadata,
@@ -371,7 +377,7 @@ class TestDbContextIntegration:
     async def test_context_with_module(self):
         """Test creating DbContext with module metadata."""
         # Create mock client
-        client = Mock(spec=ModernSpacetimeDBClient)
+        client = Mock(spec=SpacetimeDBClient)
         client.call_reducer = AsyncMock(return_value="req_123")
         
         # Create module with metadata

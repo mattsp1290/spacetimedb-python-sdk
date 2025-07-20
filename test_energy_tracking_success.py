@@ -300,10 +300,10 @@ def test_energy_event_system():
 def test_energy_aware_client():
     """Test that energy-aware client features work correctly."""
     try:
-        from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Create client with energy settings but without background threads to avoid hanging
-        client = ModernSpacetimeDBClient(
+        client = SpacetimeDBClient(
             start_message_processing=False,  # Disable to prevent hanging
             initial_energy=500,
             max_energy=1000,

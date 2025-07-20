@@ -7,6 +7,7 @@ accounting for Python-specific performance characteristics and limitations.
 
 from typing import Dict, Any, Optional
 import logging
+from ..utils.error_formatting import ErrorFormatter
 
 from .base import (
     SpacetimeDBClientFactoryBase,
@@ -187,7 +188,7 @@ class PythonOptimizedFactory(SpacetimeDBClientFactoryBase):
         try:
             # Check if text protocol is available (should always be)
             if TEXT_PROTOCOL not in self.supported_protocols:
-                logger.error("Text protocol not available for Python server")
+                logger.error(ErrorFormatter.format_generic_error("Python Factory", "text protocol selection", Exception("Text protocol not available for Python server")))
                 return False
             
             # Python servers should support basic compression
@@ -202,5 +203,5 @@ class PythonOptimizedFactory(SpacetimeDBClientFactoryBase):
             return True
             
         except Exception as e:
-            logger.error(f"Python server compatibility check failed: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Python Factory", "compatibility check", e))
             return False

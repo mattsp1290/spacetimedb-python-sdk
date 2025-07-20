@@ -5,6 +5,12 @@ Tests real-time features including subscriptions, reducers, and event streaming
 using actual SpacetimeDB WASM modules.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 import time
@@ -13,7 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from spacetimedb_sdk import (
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     configure_default_logging,
     get_logger,
     
@@ -83,7 +89,7 @@ class TestRealTimeFeatures:
         events = []
         
         # Create client with event tracking
-        client = (ModernSpacetimeDBClient.builder()
+        client = (SpacetimeDBClient.builder()
                   .with_uri(f"ws://localhost:{wasm_harness.server.config.listen_port}")
                   .with_db_name(address)
                   .with_module_name("subscription_test")
@@ -654,6 +660,7 @@ class TestErrorHandling:
 @pytest.fixture
 async def spacetimedb_server():
     """Provide a SpacetimeDB server for testing."""
+    require_spacetimedb()  # Skip if SpacetimeDB not available
     config = SpacetimeDBConfig(listen_port=3100)
     server = SpacetimeDBServer(config)
     server.start()
@@ -673,7 +680,8 @@ async def wasm_harness(spacetimedb_server):
 @pytest.fixture
 def sdk_test_module():
     """Provide SDK test module."""
-    return WASMModule.from_file(require_sdk_test_module(), "sdk_test")
+    module_path = require_sdk_test_module()  # Skip if module not available
+    return WASMModule.from_file(module_path, "sdk_test")
 
 
 async def main():

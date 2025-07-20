@@ -5,6 +5,12 @@ Tests all utility functions including identity formatting, URI parsing,
 request ID generation, and other helper functions.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import pytest
 import json
 import time
@@ -12,7 +18,7 @@ from pathlib import Path
 import tempfile
 import secrets
 
-from src.spacetimedb_sdk.utils import (
+from spacetimedb_sdk.utils import (
     # Classes
     IdentityFormat, URIScheme, ParsedURI, RequestIdGenerator,
     IdentityFormatter, ConnectionIdFormatter, URIParser,
@@ -22,7 +28,7 @@ from src.spacetimedb_sdk.utils import (
     # Convenience functions
     format_identity, parse_identity, format_connection_id, parse_connection_id,
     parse_uri, validate_spacetimedb_uri, normalize_uri, generate_request_id,
-    bytes_to_human_readable, duration_to_human_readable, test_connection_latency,
+    bytes_to_human_readable, duration_to_human_readable,
     get_system_info,
     
     # Global instances

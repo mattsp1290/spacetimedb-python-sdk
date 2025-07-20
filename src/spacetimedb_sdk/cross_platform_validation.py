@@ -32,7 +32,7 @@ import threading
 import concurrent.futures
 from urllib.parse import urlparse
 
-from .modern_client import ModernSpacetimeDBClient
+from .spacetimedb_client import SpacetimeDBClient
 from .wasm_integration import SpacetimeDBServer, SpacetimeDBConfig, WASMModule, WASMTestHarness
 from .logger import get_logger, LogLevel
 from .testing import PerformanceBenchmark, TestDataGenerator
@@ -223,7 +223,7 @@ class PlatformValidator:
         
         try:
             # Test basic imports
-            from . import ModernSpacetimeDBClient, ConnectionBuilder
+            from . import SpacetimeDBClient, ConnectionBuilder
             from .bsatn import BsatnWriter, BsatnReader
             from .compression import CompressionManager
             
@@ -383,7 +383,7 @@ class PlatformValidator:
         try:
             with self.network_sim.simulate_condition(condition):
                 # Test basic connection
-                client = (ModernSpacetimeDBClient.builder()
+                client = (SpacetimeDBClient.builder()
                          .with_uri("ws://localhost:3000")
                          .with_module_name("test_module")
                          .build())
@@ -649,7 +649,7 @@ class PlatformValidator:
             "auto_scaling": True
         }
     
-    async def _test_connection_under_condition(self, client: ModernSpacetimeDBClient, 
+    async def _test_connection_under_condition(self, client: SpacetimeDBClient, 
                                              condition: NetworkCondition) -> bool:
         """Test connection under specific network condition."""
         try:
@@ -662,7 +662,7 @@ class PlatformValidator:
         except Exception:
             return False
     
-    async def _test_subscription_under_condition(self, client: ModernSpacetimeDBClient,
+    async def _test_subscription_under_condition(self, client: SpacetimeDBClient,
                                                 condition: NetworkCondition) -> bool:
         """Test subscriptions under specific network condition."""
         try:
@@ -675,7 +675,7 @@ class PlatformValidator:
         except Exception:
             return False
     
-    async def _test_reducer_under_condition(self, client: ModernSpacetimeDBClient,
+    async def _test_reducer_under_condition(self, client: SpacetimeDBClient,
                                           condition: NetworkCondition) -> bool:
         """Test reducer calls under specific network condition."""
         try:

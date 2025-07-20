@@ -81,11 +81,11 @@ def test_connection_pool_fix():
     print("[DEBUG] Starting test_connection_pool_fix")
     
     try:
-        from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+        from spacetimedb_sdk import SpacetimeDBClient
         
         # Create builder with test mode enabled
         print("[DEBUG] Creating connection builder with test mode")
-        builder = (ModernSpacetimeDBClient.builder()
+        builder = (SpacetimeDBClient.builder()
                   .with_uri("ws://localhost:3000")
                   .with_module_name("test_module")
                   .with_test_mode(True)  # Enable test mode

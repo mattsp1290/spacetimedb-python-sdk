@@ -5,6 +5,12 @@ Tests all primitive and complex data types against real SpacetimeDB
 instances to ensure correct serialization, storage, and retrieval.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import pytest
 import time
@@ -12,7 +18,7 @@ from datetime import datetime, timezone
 from typing import List, Dict, Optional, Any
 
 from spacetimedb_sdk import (
-    ModernSpacetimeDBClient,
+    SpacetimeDBClient,
     configure_default_logging,
     SpacetimeDBServer,
     SpacetimeDBConfig,
@@ -769,6 +775,7 @@ class TestBSATNCompatibility:
 @pytest.fixture
 async def spacetimedb_server():
     """Provide a SpacetimeDB server for testing."""
+    require_spacetimedb()  # Skip if SpacetimeDB not available
     config = SpacetimeDBConfig(listen_port=3100)
     server = SpacetimeDBServer(config)
     server.start()
@@ -788,7 +795,8 @@ async def wasm_harness(spacetimedb_server):
 @pytest.fixture
 def sdk_test_module():
     """Provide SDK test module."""
-    return WASMModule.from_file(require_sdk_test_module(), "sdk_test")
+    module_path = require_sdk_test_module()  # Skip if module not available
+    return WASMModule.from_file(module_path, "sdk_test")
 
 
 async def main():

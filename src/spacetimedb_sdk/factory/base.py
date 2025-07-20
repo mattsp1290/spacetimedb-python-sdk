@@ -8,9 +8,10 @@ creating SpacetimeDB clients optimized for different server languages.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, Type
 import logging
+from ..utils.error_formatting import ErrorFormatter
 from enum import Enum
 
-from ..modern_client import ModernSpacetimeDBClient
+from ..spacetimedb_client import SpacetimeDBClient
 from ..connection_builder import SpacetimeDBConnectionBuilder
 from ..protocol import TEXT_PROTOCOL, BIN_PROTOCOL
 from ..compression import CompressionType
@@ -57,7 +58,7 @@ class SpacetimeDBClientFactory(ABC):
         auth_token: Optional[str] = None,
         optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
         **kwargs: Any
-    ) -> ModernSpacetimeDBClient:
+    ) -> SpacetimeDBClient:
         """
         Create a SpacetimeDB client optimized for the specific server language.
         
@@ -69,7 +70,7 @@ class SpacetimeDBClientFactory(ABC):
             **kwargs: Additional configuration options
             
         Returns:
-            ModernSpacetimeDBClient: Configured client instance
+            SpacetimeDBClient: Configured client instance
             
         Raises:
             SpacetimeDBConnectionError: If client creation fails
@@ -190,7 +191,7 @@ class SpacetimeDBClientFactoryBase(SpacetimeDBClientFactory):
         auth_token: Optional[str] = None,
         optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
         **kwargs: Any
-    ) -> ModernSpacetimeDBClient:
+    ) -> SpacetimeDBClient:
         """
         Create a SpacetimeDB client optimized for the specific server language.
         """
@@ -227,7 +228,7 @@ class SpacetimeDBClientFactoryBase(SpacetimeDBClientFactory):
             return client
             
         except Exception as e:
-            logger.error(f"Failed to create client: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Factory", "create client", e))
             raise SpacetimeDBConnectionError(
                 f"Cannot create client for {self.server_language.value} server: {str(e)}"
             )
@@ -262,7 +263,7 @@ class SpacetimeDBClientFactoryBase(SpacetimeDBClientFactory):
             return builder
             
         except Exception as e:
-            logger.error(f"Failed to create connection builder: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Factory", "create connection builder", e))
             raise SpacetimeDBError(
                 f"Cannot create connection builder: {str(e)}"
             )
@@ -290,7 +291,7 @@ class SpacetimeDBClientFactoryBase(SpacetimeDBClientFactory):
             return True
             
         except Exception as e:
-            logger.error(f"Compatibility validation failed: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Factory", "compatibility validation", e))
             return False
     
     @property

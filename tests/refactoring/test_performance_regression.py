@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 from dataclasses import dataclass
 import statistics
 
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, ConnectionState
+from spacetimedb_sdk.websocket_client import WebSocketClient, ConnectionState
 from .mock_infrastructure import create_test_server, MockServerBehavior
 from .test_fixtures import TestDataFactory, PerformanceBaseline
 
@@ -118,9 +118,12 @@ class TestPerformanceRegression:
         connection_times = []
         
         for i in range(10):
-            client = ModernWebSocketClient(
+            client = WebSocketClient()
+            client.connect(
                 host=refactoring_test_params["host"],
-                database_address=refactoring_test_params["database_address"]
+                database_address=refactoring_test_params["database_address"],
+                auth_token=None,
+                ssl_enabled=False
             )
             
             start_data = monitor.start_monitoring(f"connection_{i}")
@@ -159,9 +162,12 @@ class TestPerformanceRegression:
         """Test subscription performance remains acceptable"""
         monitor = PerformanceMonitor()
         
-        client = ModernWebSocketClient(
+        client = WebSocketClient()
+        client.connect(
             host=refactoring_test_params["host"],
-            database_address=refactoring_test_params["database_address"]
+            database_address=refactoring_test_params["database_address"],
+            auth_token=None,
+            ssl_enabled=False
         )
         
         with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
@@ -182,9 +188,14 @@ class TestPerformanceRegression:
                 # Simulate subscription applied
                 if hasattr(client.ws_app, 'on_message'):
                     import json
+                    from spacetimedb_sdk.query_id import QueryId
+                    
+                    # Convert QueryId to JSON-serializable format
+                    serializable_query_id = query_id.id if isinstance(query_id, QueryId) else (query_id or f"query_{i}")
+                    
                     sub_msg = json.dumps({
                         "SubscriptionApplied": {
-                            "query_id": query_id or f"query_{i}",
+                            "query_id": serializable_query_id,
                             "table_name": f"table_{i}"
                         }
                     })
@@ -211,9 +222,12 @@ class TestPerformanceRegression:
         """Test message processing performance remains acceptable"""
         monitor = PerformanceMonitor()
         
-        client = ModernWebSocketClient(
+        client = WebSocketClient()
+        client.connect(
             host=refactoring_test_params["host"],
-            database_address=refactoring_test_params["database_address"]
+            database_address=refactoring_test_params["database_address"],
+            auth_token=None,
+            ssl_enabled=False
         )
         
         # Track processed messages
@@ -277,9 +291,12 @@ class TestPerformanceRegression:
         
         def create_and_test_client(client_id):
             try:
-                client = ModernWebSocketClient(
+                client = WebSocketClient()
+                client.connect(
                     host=refactoring_test_params["host"],
-                    database_address=refactoring_test_params["database_address"]
+                    database_address=refactoring_test_params["database_address"],
+                    auth_token=None,
+                    ssl_enabled=False
                 )
                 
                 with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
@@ -349,9 +366,12 @@ class TestPerformanceRegression:
         """Test memory efficiency during extended operations"""
         monitor = PerformanceMonitor()
         
-        client = ModernWebSocketClient(
+        client = WebSocketClient()
+        client.connect(
             host=refactoring_test_params["host"],
-            database_address=refactoring_test_params["database_address"]
+            database_address=refactoring_test_params["database_address"],
+            auth_token=None,
+            ssl_enabled=False
         )
         
         with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
@@ -416,9 +436,12 @@ class TestPerformanceRegression:
         """Test CPU usage remains within acceptable limits"""
         monitor = PerformanceMonitor()
         
-        client = ModernWebSocketClient(
+        client = WebSocketClient()
+        client.connect(
             host=refactoring_test_params["host"],
-            database_address=refactoring_test_params["database_address"]
+            database_address=refactoring_test_params["database_address"],
+            auth_token=None,
+            ssl_enabled=False
         )
         
         with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
@@ -472,9 +495,12 @@ class TestPerformanceRegression:
         performance_results = []
         
         for scale in scale_factors:
-            client = ModernWebSocketClient(
+            client = WebSocketClient()
+            client.connect(
                 host=refactoring_test_params["host"],
-                database_address=refactoring_test_params["database_address"]
+                database_address=refactoring_test_params["database_address"],
+                auth_token=None,
+                ssl_enabled=False
             )
             
             with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:

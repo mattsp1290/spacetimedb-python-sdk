@@ -7,6 +7,7 @@ taking advantage of Go-specific performance characteristics and features.
 
 from typing import Dict, Any, Optional
 import logging
+from ..utils.error_formatting import ErrorFormatter
 
 from .base import (
     SpacetimeDBClientFactoryBase,
@@ -211,5 +212,5 @@ class GoOptimizedFactory(SpacetimeDBClientFactoryBase):
             return True
             
         except Exception as e:
-            logger.error(f"Go server compatibility check failed: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Go Factory", "compatibility check", e))
             return False

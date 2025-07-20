@@ -6,6 +6,12 @@ This test creates a mock WebSocket server that inspects incoming frames
 to ensure they are sent with the correct opcode (binary vs text).
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import websocket
 import threading
 import time
@@ -19,8 +25,8 @@ logger = logging.getLogger(__name__)
 
 # Import the SpacetimeDB SDK components
 from spacetimedb_sdk import SpacetimeDBClient, BIN_PROTOCOL, TEXT_PROTOCOL
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient
-from spacetimedb_sdk.spacetime_websocket_client import WebSocketClient
+from spacetimedb_sdk.websocket_client import WebSocketClient
+from spacetimedb_sdk import WebSocketClient
 
 
 class FrameTypeVerifier:
@@ -68,13 +74,13 @@ class FrameTypeVerifier:
 
 
 def test_modern_websocket_client_binary_frames():
-    """Test that ModernWebSocketClient sends binary frames correctly."""
-    logger.info("=== Testing ModernWebSocketClient ===")
+    """Test that WebSocketClient sends binary frames correctly."""
+    logger.info("=== Testing WebSocketClient ===")
     
     verifier = FrameTypeVerifier()
     
-    # Create a ModernWebSocketClient with binary protocol
-    client = ModernWebSocketClient(protocol=BIN_PROTOCOL)
+    # Create a WebSocketClient with binary protocol
+    client = WebSocketClient(protocol=BIN_PROTOCOL)
     
     # Mock the websocket send method to capture frames
     with patch.object(websocket.WebSocketApp, 'send') as mock_send:
@@ -114,7 +120,7 @@ def test_modern_websocket_client_binary_frames():
     logger.info(f"Captured {len(verifier.captured_frames)} frames")
     assert len(verifier.captured_frames) == 2, "Expected 2 frames to be sent"
     assert verifier.verify_binary_frames(), "All frames should be sent as binary"
-    logger.info("✓ ModernWebSocketClient correctly sends binary frames")
+    logger.info("✓ WebSocketClient correctly sends binary frames")
 
 
 def test_legacy_websocket_client_binary_frames():
@@ -170,8 +176,8 @@ def test_text_protocol_sends_text_frames():
     
     verifier = FrameTypeVerifier()
     
-    # Create a ModernWebSocketClient with text protocol
-    client = ModernWebSocketClient(protocol=TEXT_PROTOCOL)
+    # Create a WebSocketClient with text protocol
+    client = WebSocketClient(protocol=TEXT_PROTOCOL)
     
     # Mock the websocket send method to capture frames
     with patch.object(websocket.WebSocketApp, 'send') as mock_send:

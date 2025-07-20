@@ -4,6 +4,12 @@ Basic Connection Example - AFTER Migration
 This example shows the new way of connecting to SpacetimeDB with improved security and architecture.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 from spacetimedb_sdk import (
     ModernWebSocketClient,

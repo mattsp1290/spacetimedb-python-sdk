@@ -140,6 +140,11 @@ class BaseEvent:
     metadata: EventMetadata = field(default_factory=EventMetadata)
     priority: EventPriority = EventPriority.NORMAL
     
+    @property
+    def event_type(self) -> EventType:
+        """Backward compatibility property for event_type access."""
+        return self.type
+    
     def with_metadata(self, **kwargs) -> 'BaseEvent':
         """Return a copy of the event with updated metadata."""
         import copy

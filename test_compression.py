@@ -6,8 +6,15 @@ This test suite verifies the compression functionality works correctly
 and provides the same performance benefits as the TypeScript SDK.
 """
 
+
+import os
 import sys
-sys.path.append('src')
+
+# Add the src directory to the path for development/testing
+script_dir = os.path.dirname(os.path.abspath(__file__))
+src_dir = os.path.join(script_dir, 'src')
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
 import pytest
 import time
@@ -23,7 +30,7 @@ from spacetimedb_sdk.compression import (
     CompressionMetrics,
     BROTLI_AVAILABLE
 )
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.connection_builder import SpacetimeDBConnectionBuilder
 
 
@@ -276,7 +283,7 @@ class TestCompressionManager:
 
 
 class TestCompressionIntegration:
-    """Test compression integration with ModernSpacetimeDBClient."""
+    """Test compression integration with SpacetimeDBClient."""
     
     def setup_method(self):
         """Setup test fixtures."""
@@ -288,7 +295,7 @@ class TestCompressionIntegration:
     
     def test_client_compression_config(self):
         """Test client creation with compression configuration."""
-        client = ModernSpacetimeDBClient(
+        client = SpacetimeDBClient(
             compression_config=self.compression_config,
             start_message_processing=False  # Disable for testing
         )
@@ -302,7 +309,7 @@ class TestCompressionIntegration:
     
     def test_client_compression_methods(self):
         """Test client compression control methods."""
-        client = ModernSpacetimeDBClient(
+        client = SpacetimeDBClient(
             compression_config=self.compression_config,
             start_message_processing=False
         )

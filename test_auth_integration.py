@@ -16,6 +16,12 @@ Usage:
     python test_auth_integration.py
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 import logging
 import sys
@@ -25,7 +31,7 @@ from pathlib import Path
 # Add src to path for testing
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from spacetimedb_sdk import ModernSpacetimeDBClient
+from spacetimedb_sdk import SpacetimeDBClient
 from spacetimedb_sdk.auth_storage import get_credentials, clear_all_credentials
 
 
@@ -53,7 +59,7 @@ async def test_authentication_flow():
     print(f"📡 Testing connection to {HOST}/{DATABASE}")
     
     # Create client
-    client = ModernSpacetimeDBClient(test_mode=False)  # Use real WebSocket
+    client = SpacetimeDBClient(test_mode=False)  # Use real WebSocket
     
     connection_success = False
     auth_token_received = False
@@ -146,7 +152,7 @@ async def test_authentication_flow():
     
     # Test reconnection using stored credentials
     try:
-        client2 = ModernSpacetimeDBClient(test_mode=False)
+        client2 = SpacetimeDBClient(test_mode=False)
         connection_success2 = False
         
         def on_connect2():

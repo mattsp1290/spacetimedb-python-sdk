@@ -11,6 +11,12 @@ Tests the advanced algebraic type system:
 - Type inference
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import unittest
 import json
 from datetime import datetime

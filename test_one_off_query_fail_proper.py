@@ -131,9 +131,9 @@ def test_basic_one_off_query_response_lacks_error_methods():
 
 def test_websocket_client_lacks_enhanced_one_off_query():
     """Test WebSocket client OneOffQuery integration."""
-    from spacetimedb_sdk.websocket_client import ModernWebSocketClient
+    from spacetimedb_sdk.websocket_client import WebSocketClient
     
-    client = ModernWebSocketClient()
+    client = WebSocketClient()
     
     # Should have the execute_one_off_query method - this is now a positive test
     assert hasattr(client, 'execute_one_off_query'), "WebSocket client should have execute_one_off_query method"

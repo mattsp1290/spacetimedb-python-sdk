@@ -5,6 +5,12 @@ Demonstrates how to use the module system with runtime type information,
 metadata introspection, and enhanced DbContext integration.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import asyncio
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any

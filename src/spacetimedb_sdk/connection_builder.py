@@ -5,7 +5,7 @@ Provides a fluent builder API for creating SpacetimeDB connections,
 matching the TypeScript SDK's DbConnection.builder() pattern.
 
 Example usage:
-    conn = ModernSpacetimeDBClient.builder() \
+    conn = SpacetimeDBClient.builder() \
         .with_uri("ws://localhost:3000") \
         .with_module_name("my_module") \
         .with_token("auth_token") \
@@ -32,7 +32,7 @@ from .protocol import CallReducerFlags, TEXT_PROTOCOL, BIN_PROTOCOL
 from .shared_types import RetryPolicy
 
 if TYPE_CHECKING:
-    from .modern_client import ModernSpacetimeDBClient
+    from .spacetimedb_client import SpacetimeDBClient
     from .protocol import Identity
     from .connection_pool import ConnectionPool, LoadBalancedConnectionManager
 
@@ -322,7 +322,7 @@ class SpacetimeDBConnectionBuilder:
             Self for method chaining
             
         Example:
-            client = (ModernSpacetimeDBClient.builder()
+            client = (SpacetimeDBClient.builder()
                       .with_uri("ws://localhost:3000")
                       .with_module_name("my_module")
                       .with_json_api_base_url("http://localhost:3000")
@@ -542,7 +542,7 @@ class SpacetimeDBConnectionBuilder:
             Self for method chaining
         
         Example:
-            client = (ModernSpacetimeDBClient.builder()
+            client = (SpacetimeDBClient.builder()
                       .with_uri("ws://localhost:3000")
                       .with_module_name("test_module")
                       .with_test_mode()
@@ -573,14 +573,14 @@ class SpacetimeDBConnectionBuilder:
         Example:
             ```python
             # Get both client and context
-            client, ctx = (ModernSpacetimeDBClient.builder()
+            client, ctx = (SpacetimeDBClient.builder()
                           .with_uri("ws://localhost:3000")
                           .with_module_name("my_module")
                           .with_context()
                           .build_with_context())
             
             # With custom types
-            client, ctx = (ModernSpacetimeDBClient.builder()
+            client, ctx = (SpacetimeDBClient.builder()
                           .with_uri("ws://localhost:3000")
                           .with_module_name("my_module")
                           .with_context(
@@ -638,7 +638,7 @@ class SpacetimeDBConnectionBuilder:
             Self for method chaining
             
         Example:
-            pool = (ModernSpacetimeDBClient.builder()
+            pool = (SpacetimeDBClient.builder()
                     .with_uri("ws://localhost:3000")
                     .with_module_name("my_module")
                     .with_connection_pool(
@@ -692,12 +692,12 @@ class SpacetimeDBConnectionBuilder:
         )
         return self
     
-    def build(self) -> 'ModernSpacetimeDBClient':
+    def build(self) -> 'SpacetimeDBClient':
         """
         Build and return the configured SpacetimeDB client.
         
         Returns:
-            Configured ModernSpacetimeDBClient instance
+            Configured SpacetimeDBClient instance
         
         Raises:
             ValueError: If required parameters are missing or invalid
@@ -719,10 +719,10 @@ class SpacetimeDBConnectionBuilder:
             raise ValueError("Database address is required.")
         
         # Import here to avoid circular imports
-        from .modern_client import ModernSpacetimeDBClient
+        from .spacetimedb_client import SpacetimeDBClient
         
         # Create the client
-        client = ModernSpacetimeDBClient(
+        client = SpacetimeDBClient(
             autogen_package=self._autogen_package,
             protocol=self._protocol,
             auto_reconnect=self._auto_reconnect,
@@ -787,12 +787,12 @@ class SpacetimeDBConnectionBuilder:
         # Return the configured client
         return client
     
-    def connect(self) -> 'ModernSpacetimeDBClient':
+    def connect(self) -> 'SpacetimeDBClient':
         """
         Build the client and immediately connect to SpacetimeDB.
         
         Returns:
-            Connected ModernSpacetimeDBClient instance
+            Connected SpacetimeDBClient instance
         
         Raises:
             ValueError: If required parameters are missing
@@ -870,7 +870,7 @@ class SpacetimeDBConnectionBuilder:
             }
         } 
     
-    def build_with_context(self) -> tuple['ModernSpacetimeDBClient', DbContext]:
+    def build_with_context(self) -> tuple['SpacetimeDBClient', DbContext]:
         """
         Build both the client and a DbContext instance.
         
@@ -913,7 +913,7 @@ class SpacetimeDBConnectionBuilder:
             
         Example:
             ```python
-            pool = (ModernSpacetimeDBClient.builder()
+            pool = (SpacetimeDBClient.builder()
                     .with_uri("ws://localhost:3000")
                     .with_module_name("my_module")
                     .with_token("auth_token")
@@ -975,7 +975,7 @@ class SpacetimeDBConnectionBuilder:
         
         return pool
     
-    def connect_with_context(self) -> tuple['ModernSpacetimeDBClient', DbContext]:
+    def connect_with_context(self) -> tuple['SpacetimeDBClient', DbContext]:
         """
         Build the client and context, then immediately connect to SpacetimeDB.
         

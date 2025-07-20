@@ -247,11 +247,11 @@ def test_connection_metrics_missing():
 
 def test_modern_client_integration_missing():
     """Test that modern client integration is missing."""
-    from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     
     # Modern client should not have enhanced connection management
     try:
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         # Test enhanced connection management features
         assert hasattr(client, 'get_connection_id'), "Should provide connection ID access"

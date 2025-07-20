@@ -4,6 +4,7 @@ QueryId implementation for SpacetimeDB Python SDK.
 QueryId is used to track individual subscription queries in the modern protocol.
 """
 
+import json
 import threading
 from typing import Union
 
@@ -79,6 +80,14 @@ class QueryId:
         """Return detailed representation."""
         return f"QueryId(id={self.id})"
     
+    def __json__(self) -> int:
+        """Return JSON-serializable representation."""
+        return self.id
+    
+    def to_json(self) -> int:
+        """Convert to JSON-serializable format."""
+        return self.id
+    
     def write_bsatn(self, writer: BsatnWriter) -> None:
         """
         Write this QueryId to a BSATN writer.
@@ -148,4 +157,18 @@ try:
     
 except ImportError:
     # BSATN utils not available yet, skip registration
-    pass 
+    pass
+
+
+class QueryIdJSONEncoder(json.JSONEncoder):
+    """JSON encoder that can handle QueryId objects."""
+    
+    def default(self, obj):
+        if isinstance(obj, QueryId):
+            return obj.id
+        return super().default(obj)
+
+
+def dumps_with_queryid(obj, **kwargs):
+    """JSON dumps function that handles QueryId objects."""
+    return json.dumps(obj, cls=QueryIdJSONEncoder, **kwargs)

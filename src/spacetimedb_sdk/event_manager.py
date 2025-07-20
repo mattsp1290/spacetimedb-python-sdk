@@ -8,6 +8,7 @@ in the bug report where events are not properly chained.
 
 import threading
 import logging
+from .utils.error_formatting import ErrorFormatter
 from typing import Dict, Any, Callable, List, Optional
 from dataclasses import dataclass
 from enum import Enum
@@ -238,7 +239,7 @@ class SDKEventManager:
         except Exception as e:
             self.handler_errors += 1
             if self.enable_error_logging:
-                logger.error(f"Error in event handler for {event_data.event_type.value}: {e}")
+                logger.error(ErrorFormatter.format_event_error(f"event handler for {event_data.event_type.value}", e))
             return False
     
     def emit_connection_event(self, event_type: EventType, connection_info: Dict[str, Any]) -> int:
@@ -413,7 +414,7 @@ class SDKEventManager:
             return True
             
         except Exception as e:
-            logger.error(f"Error processing raw message: {e}")
+            logger.error(ErrorFormatter.format_generic_error("Event Manager", "raw message processing", e))
             return False
 
 

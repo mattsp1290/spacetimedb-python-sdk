@@ -18,7 +18,7 @@ import concurrent.futures
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+from spacetimedb_sdk.spacetimedb_client import SpacetimeDBClient
 from spacetimedb_sdk.exceptions import (
     SpacetimeDBConnectionError,
     DatabaseNotFoundError,
@@ -68,7 +68,7 @@ class TestMalformedResponses(unittest.TestCase):
         self.server.start()
         
         # Try to connect and handle errors
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         errors_received = []
         
         def on_error(error):
@@ -113,7 +113,7 @@ class TestMalformedResponses(unittest.TestCase):
         self.server.add_database("large_db", large_db)
         self.server.start()
         
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         try:
             self.client._connect_internal(
@@ -173,7 +173,7 @@ class TestUnicodeAndSpecialCharacters(unittest.TestCase):
         
     def test_unicode_in_data(self):
         """Test Unicode characters in data."""
-        self.client = ModernSpacetimeDBClient()
+        self.client = SpacetimeDBClient()
         
         received_data = []
         
@@ -201,7 +201,7 @@ class TestUnicodeAndSpecialCharacters(unittest.TestCase):
         self.server.add_database("データベース", unicode_name_db)
         
         # Try to connect to Unicode-named database
-        client2 = ModernSpacetimeDBClient()
+        client2 = SpacetimeDBClient()
         
         try:
             client2._connect_internal(
@@ -248,7 +248,7 @@ class TestExtremeLengths(unittest.TestCase):
         long_db = MockDatabase(long_name)
         self.server.add_database(long_name, long_db)
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         self.clients.append(client)
         
         try:
@@ -271,7 +271,7 @@ class TestExtremeLengths(unittest.TestCase):
         # Generate a very long token
         long_token = "".join(random.choices(string.ascii_letters, k=10000))
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         self.clients.append(client)
         
         try:
@@ -304,7 +304,7 @@ class TestExtremeLengths(unittest.TestCase):
         
         self.server.add_database("nested_db", nested_db)
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         self.clients.append(client)
         
         try:
@@ -342,7 +342,7 @@ class TestRapidOperations(unittest.TestCase):
         successful_cycles = 0
         
         for i in range(20):
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             try:
                 # Connect
@@ -375,7 +375,7 @@ class TestRapidOperations(unittest.TestCase):
         
     def test_concurrent_operations_same_client(self):
         """Test concurrent operations on the same client."""
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         try:
             client._connect_internal(
@@ -436,7 +436,7 @@ class TestResourceExhaustion(unittest.TestCase):
         
         # Try to create more connections than allowed
         for i in range(15):
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             
             try:
                 client._connect_internal(
@@ -478,7 +478,7 @@ class TestResourceExhaustion(unittest.TestCase):
         
         try:
             for i in range(5):
-                client = ModernSpacetimeDBClient()
+                client = SpacetimeDBClient()
                 client._connect_internal(
                     auth_token=None,
                     host="localhost:3035",
@@ -518,7 +518,7 @@ class TestThreadSafety(unittest.TestCase):
         
         def create_client(client_id):
             try:
-                client = ModernSpacetimeDBClient()
+                client = SpacetimeDBClient()
                 client._connect_internal(
                     auth_token=None,
                     host="localhost:3036",
@@ -559,7 +559,7 @@ class TestThreadSafety(unittest.TestCase):
         
     def test_shared_client_thread_safety(self):
         """Test using a single client from multiple threads."""
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         try:
             client._connect_internal(
@@ -632,7 +632,7 @@ class TestBoundaryConditions(unittest.TestCase):
         empty_db = MockDatabase("empty_db")
         self.server.add_database("empty_db", empty_db)
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         try:
             client._connect_internal(
@@ -663,7 +663,7 @@ class TestBoundaryConditions(unittest.TestCase):
         
         self.server.add_database("null_db", null_db)
         
-        client = ModernSpacetimeDBClient()
+        client = SpacetimeDBClient()
         
         try:
             client._connect_internal(
@@ -686,7 +686,7 @@ class TestBoundaryConditions(unittest.TestCase):
         high_port_server.start()
         
         try:
-            client = ModernSpacetimeDBClient()
+            client = SpacetimeDBClient()
             client._connect_internal(
                 auth_token=None,
                 host="localhost:65535",

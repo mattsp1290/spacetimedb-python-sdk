@@ -5,6 +5,12 @@ Verification script for circular import issue in SpacetimeDB Python SDK
 This script tests various import scenarios to document the circular import problem.
 """
 
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 import sys
 import traceback
 from pathlib import Path

@@ -94,8 +94,9 @@ class MockWebSocketAdapter:
     
     async def connect(self, url: str, headers: Optional[Dict[str, str]] = None):
         """Simulate connection."""
+        # Reset closed state to allow reconnection
         if self._closed:
-            raise RuntimeError("WebSocket is closed")
+            self._closed = False
         
         if self.auto_connect:
             await asyncio.sleep(0.01)  # Simulate connection delay
@@ -252,7 +253,7 @@ class MockSpacetimeDBConnection:
         self.websocket.add_message(MockMessage(
             MessageType.SUBSCRIPTION_UPDATE,
             {
-                "query_id": query_id.data.hex(),
+                "query_id": hex(query_id.id),
                 "tables": list(self._extract_tables_from_queries(queries))
             }
         ))

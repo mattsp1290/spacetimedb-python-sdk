@@ -108,9 +108,9 @@ def main():
     
     # 5. Energy-Aware Client
     print("\n5️⃣ Energy-Aware Client:")
-    from spacetimedb_sdk.modern_client import ModernSpacetimeDBClient
+    from spacetimedb_sdk import SpacetimeDBClient
     
-    client = ModernSpacetimeDBClient(
+    client = SpacetimeDBClient(
         start_message_processing=False,
         initial_energy=800,
         max_energy=1000,

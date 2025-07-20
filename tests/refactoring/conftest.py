@@ -20,7 +20,7 @@ import shutil
 # Add the SDK to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from spacetimedb_sdk.websocket_client import ModernWebSocketClient, SubscriptionMetrics, ConnectionState
+from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetrics, ConnectionState
 from spacetimedb_sdk.protocol import (
     TEXT_PROTOCOL, BIN_PROTOCOL,
     Identity, ConnectionId, IdentityToken,
@@ -33,6 +33,9 @@ from spacetimedb_sdk.exceptions import (
     AuthenticationError,
     ConnectionTimeoutError
 )
+
+# Import test fixtures to make them available
+from .test_fixtures import *
 
 
 @dataclass
@@ -220,9 +223,10 @@ class SubscriptionManagerMock:
         self.subscriptions[query_id] = {
             'table_name': table_name,
             'sql_query': sql_query,
-            'status': 'active',
+            'status': 'pending',
             'created_at': time.time()
         }
+        return True
         
     def remove_subscription(self, query_id):
         """Remove a subscription"""
@@ -236,11 +240,49 @@ class SubscriptionManagerMock:
     def get_all_subscriptions(self):
         """Get all subscriptions"""
         return self.subscriptions.copy()
+    
+    def get_subscription_count(self):
+        """Get number of active subscriptions"""
+        return len(self.subscriptions)
         
     def update_subscription_status(self, query_id, status):
         """Update subscription status"""
         if query_id in self.subscriptions:
             self.subscriptions[query_id]['status'] = status
+    
+    def handle_subscription_applied(self, query_id, table_name):
+        """Handle subscription applied event"""
+        if query_id in self.subscriptions:
+            self.subscriptions[query_id]['status'] = 'active'
+            
+    def handle_subscription_error(self, query_id, error):
+        """Handle subscription error event"""
+        if query_id in self.subscriptions:
+            self.subscriptions[query_id]['status'] = 'error'
+            self.subscriptions[query_id]['error'] = error
+            
+            # Update metrics for error tracking
+            table_name = self.subscriptions[query_id]['table_name']
+            self.metrics.record_subscription_error(table_name, error)
+            
+    def cleanup_inactive_subscriptions(self, max_age_hours):
+        """Clean up inactive subscriptions older than specified age"""
+        current_time = time.time()
+        to_remove = []
+        
+        for query_id, subscription in self.subscriptions.items():
+            # Calculate age in hours
+            age_seconds = current_time - subscription['created_at']
+            age_hours = age_seconds / 3600
+            
+            # Remove subscriptions that are older than max_age_hours
+            if age_hours >= max_age_hours:
+                to_remove.append(query_id)
+                
+        for query_id in to_remove:
+            del self.subscriptions[query_id]
+            
+        return len(to_remove)
 
 
 class AuthenticationHandlerMock:
@@ -250,7 +292,9 @@ class AuthenticationHandlerMock:
         self.identity = None
         self.connection_id = None
         self.token = None
+        self.identity_token = None
         self.auth_callbacks = []
+        self.error_callbacks = []
         self.auth_status = "unauthenticated"
         
     def set_identity(self, identity, connection_id, token):
@@ -275,6 +319,66 @@ class AuthenticationHandlerMock:
         """Remove authentication callback"""
         if callback in self.auth_callbacks:
             self.auth_callbacks.remove(callback)
+    
+    def add_error_handler(self, callback):
+        """Add error handler callback - alias for add_error_callback"""
+        self.error_callbacks.append(callback)
+    
+    def add_error_callback(self, callback):
+        """Add error callback"""
+        self.error_callbacks.append(callback)
+    
+    def set_auth_token(self, token):
+        """Set authentication token"""
+        self.token = token
+        
+    def get_auth_token(self):
+        """Get authentication token"""
+        return self.token
+    
+    def authenticate(self, token=None):
+        """Authenticate with optional token"""
+        if token:
+            self.token = token
+        if self.token:
+            self.auth_status = "authenticated"
+            return True
+        return False
+    
+    def is_authenticated(self):
+        """Check if authenticated"""
+        return self.auth_status == "authenticated"
+    
+    def handle_identity_token(self, identity_token_msg):
+        """Handle identity token message from server"""
+        try:
+            self.identity_token = identity_token_msg.token
+            self.identity = identity_token_msg.identity
+            self.connection_id = identity_token_msg.connection_id
+            self.auth_status = "authenticated"
+            
+            # Notify auth callbacks
+            for callback in self.auth_callbacks:
+                try:
+                    callback(self.identity_token, self.identity, self.connection_id)
+                except Exception as e:
+                    logging.error(f"Auth callback error: {e}")
+            
+            return True
+        except Exception:
+            return False
+    
+    def get_identity(self):
+        """Get current identity"""
+        return self.identity
+    
+    def get_connection_id(self):
+        """Get current connection ID"""
+        return self.connection_id
+    
+    def get_auth_status(self):
+        """Get authentication status"""
+        return self.auth_status
             
     def notify_auth_change(self, event_type, data):
         """Notify authentication change"""
@@ -283,6 +387,18 @@ class AuthenticationHandlerMock:
                 callback(event_type, data)
             except Exception as e:
                 logging.error(f"Auth callback error: {e}")
+                
+    def handle_auth_error(self, error):
+        """Handle authentication error"""
+        self.auth_status = "error"
+        self.clear_identity()
+        
+        # Notify error callbacks
+        for callback in self.error_callbacks:
+            try:
+                callback(error)
+            except Exception as e:
+                logging.error(f"Auth error callback error: {e}")
 
 
 class EventSystemMock:

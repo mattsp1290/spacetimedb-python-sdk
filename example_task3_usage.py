@@ -50,11 +50,11 @@ def demonstrate_builder_pattern():
     print("\n2. Testing builder pattern for connection pooling...")
     
     try:
-        from spacetimedb_sdk import ModernSpacetimeDBClient, RetryPolicy
+        from spacetimedb_sdk import SpacetimeDBClient, RetryPolicy
         
         # Create a builder
-        builder = ModernSpacetimeDBClient.builder()
-        print("   ✅ Created ModernSpacetimeDBClient.builder()")
+        builder = SpacetimeDBClient.builder()
+        print("   ✅ Created SpacetimeDBClient.builder()")
         
         # Configure for connection pooling
         pool_builder = (builder

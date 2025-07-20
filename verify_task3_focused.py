@@ -275,7 +275,7 @@ def test_import_chain() -> Tuple[bool, str]:
 
 
 def test_builder_pattern_usage() -> Tuple[bool, str]:
-    """Test that connection_pool uses ModernSpacetimeDBClient.builder() pattern."""
+    """Test that connection_pool uses SpacetimeDBClient.builder() pattern."""
     print_section("Test 5: Builder Pattern Usage")
     
     try:
@@ -285,22 +285,22 @@ def test_builder_pattern_usage() -> Tuple[bool, str]:
             content = f.read()
         
         # Check for the builder pattern usage
-        uses_modern_builder = "ModernSpacetimeDBClient.builder()" in content
-        imports_modern_client = "from .modern_client import ModernSpacetimeDBClient" in content
+        uses_modern_builder = "SpacetimeDBClient.builder()" in content
+        imports_modern_client = "from .spacetimedb_client import SpacetimeDBClient" in content
         
         if uses_modern_builder:
-            test_result("Uses ModernSpacetimeDBClient.builder()", True)
+            test_result("Uses SpacetimeDBClient.builder()", True)
         else:
-            test_result("Uses ModernSpacetimeDBClient.builder()", False, 
+            test_result("Uses SpacetimeDBClient.builder()", False, 
                        "Pattern not found in connection_pool.py")
         
         if imports_modern_client:
-            test_result("Imports ModernSpacetimeDBClient", True)
+            test_result("Imports SpacetimeDBClient", True)
         else:
-            test_result("Imports ModernSpacetimeDBClient", False)
+            test_result("Imports SpacetimeDBClient", False)
         
         success = uses_modern_builder and imports_modern_client
-        details = "Correctly uses builder pattern from ModernSpacetimeDBClient" if success else "Builder pattern not properly implemented"
+        details = "Correctly uses builder pattern from SpacetimeDBClient" if success else "Builder pattern not properly implemented"
         
         return success, details
         
@@ -346,7 +346,7 @@ def run_all_tests() -> bool:
         print("  2. ✅ Lazy import of ConnectionPool in connection_builder.py's build_pool()")
         print("  3. ✅ Shared types module for common type definitions")
         print("  4. ✅ No circular dependencies in the import chain")
-        print("  5. ✅ ModernSpacetimeDBClient.builder() pattern used in connection_pool.py")
+        print("  5. ✅ SpacetimeDBClient.builder() pattern used in connection_pool.py")
         print("\nTask 3 is COMPLETE and VERIFIED! ✅")
     else:
         print(f"\n❌ {total_tests - passed_tests} test(s) failed.")

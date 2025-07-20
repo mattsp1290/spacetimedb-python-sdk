@@ -26,6 +26,7 @@ import platform
 import sys
 from pathlib import Path
 import logging
+from .utils.error_formatting import ErrorFormatter
 
 # Type definitions
 T = TypeVar('T')
@@ -656,7 +657,7 @@ class ConfigurationManager:
             with open(path, 'w') as f:
                 json.dump(config, f, indent=2, sort_keys=True)
         except Exception as e:
-            logging.error(f"Failed to save config file {path}: {e}")
+            logging.error(ErrorFormatter.format_generic_error("Utils", f"save config file {path}", e))
             raise
     
     @staticmethod

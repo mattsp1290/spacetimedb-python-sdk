@@ -2,6 +2,12 @@
 # WILL NOT BE SAVED. MODIFY TABLES IN RUST INSTEAD.
 
 from __future__ import annotations
+
+import sys
+import os
+# Add src directory to path for testing
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
 from typing import List, Iterator, Callable
 
 from spacetimedb_sdk.spacetimedb_client import SpacetimeDBClient, Identity, Address

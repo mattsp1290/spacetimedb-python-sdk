@@ -13,6 +13,15 @@ from .auth_interface import AuthInterface
 from .subscription_interface import SubscriptionInterface
 from .reducer_interface import ReducerInterface
 from .client_interface import SpacetimeDBClientInterface
+from .factory_interface import (
+    SpacetimeDBClientFactoryInterface,
+    ConnectionFactoryInterface,
+    ClientFactory,
+    DependencyInjectionContainer,
+    get_container,
+    register_client_factory,
+    get_client_factory
+)
 
 __all__ = [
     'ConnectionInterface',
@@ -20,5 +29,12 @@ __all__ = [
     'AuthInterface',
     'SubscriptionInterface', 
     'ReducerInterface',
-    'SpacetimeDBClientInterface'
+    'SpacetimeDBClientInterface',
+    'SpacetimeDBClientFactoryInterface',
+    'ConnectionFactoryInterface',
+    'ClientFactory',
+    'DependencyInjectionContainer',
+    'get_container',
+    'register_client_factory',
+    'get_client_factory'
 ]

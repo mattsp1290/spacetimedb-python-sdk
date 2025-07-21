@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/websocket_integration.py
+# hypothesis_version: 6.135.32
+
+[100, '*', 'ConnectionError', 'DatabaseUpdate', 'IdentityToken', 'SubscriptionUpdate', 'WebSocketClient', '_connection_id', 'applied', 'auth_event_handler', 'called', 'closed', 'connection', 'connection_id', 'error', 'established', 'host', 'identity', 'message_data', 'message_type', 'opened', 'operation', 'reason', 'received', 'result', 'row_data', 'sent', 'source_message', 'success', 'table_name', 'token', 'transaction_id', 'unknown', 'unknown error', 'update', 'update_data']

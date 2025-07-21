@@ -23,7 +23,7 @@ import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Any, Optional, List, Callable, AsyncGenerator, Tuple
+from typing import Dict, Any, Optional, List, Callable, AsyncGenerator, Tuple, TYPE_CHECKING
 from weakref import WeakSet
 
 from ..exceptions import (
@@ -34,7 +34,10 @@ from ..exceptions import (
 )
 from ..factory.base import ServerLanguage, OptimizationProfile
 from ..retry_policies import RetryPolicy, CircuitBreaker
-from ..spacetimedb_client import SpacetimeDBClient
+
+# Use TYPE_CHECKING to avoid circular import
+if TYPE_CHECKING:
+    from ..spacetimedb_client import SpacetimeDBClient
 
 
 logger = logging.getLogger(__name__)
@@ -113,7 +116,7 @@ class PoolConfiguration:
 @dataclass
 class PooledConnection:
     """Wrapper for pooled connection with metadata."""
-    connection: SpacetimeDBClient
+    connection: 'SpacetimeDBClient'
     created_at: float = field(default_factory=time.time)
     last_used: float = field(default_factory=time.time)
     in_use: bool = False
@@ -295,7 +298,7 @@ class ConnectionPool:
             })
     
     @asynccontextmanager
-    async def get_connection(self, timeout: Optional[float] = None) -> AsyncGenerator[SpacetimeDBClient, None]:
+    async def get_connection(self, timeout: Optional[float] = None) -> AsyncGenerator['SpacetimeDBClient', None]:
         """
         Get a connection from the pool.
         
@@ -618,7 +621,7 @@ class EnhancedConnectionManager:
     @asynccontextmanager
     async def get_connection(self, server_config: ServerConfig,
                            timeout: Optional[float] = None,
-                           pool_config: Optional[PoolConfiguration] = None) -> AsyncGenerator[SpacetimeDBClient, None]:
+                           pool_config: Optional[PoolConfiguration] = None) -> AsyncGenerator['SpacetimeDBClient', None]:
         """
         Get a connection for the specified server configuration.
         
@@ -713,7 +716,7 @@ def get_connection_manager() -> EnhancedConnectionManager:
 @asynccontextmanager
 async def get_connection(server_config: ServerConfig, 
                         timeout: Optional[float] = None,
-                        pool_config: Optional[PoolConfiguration] = None) -> AsyncGenerator[SpacetimeDBClient, None]:
+                        pool_config: Optional[PoolConfiguration] = None) -> AsyncGenerator['SpacetimeDBClient', None]:
     """
     Convenience function to get a connection.
     

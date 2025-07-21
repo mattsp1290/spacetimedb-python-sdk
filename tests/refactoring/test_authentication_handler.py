@@ -18,7 +18,7 @@ from spacetimedb_sdk.exceptions import (
     SpacetimeDBAuthHandshakeError,
     WebSocketHandshakeError
 )
-from spacetimedb_sdk.auth_storage import AuthCredentials, get_credentials, store_credentials
+from spacetimedb_sdk.auth.storage import AuthCredentials, get_credentials, store_credentials
 
 
 class MockAuthenticationHandler:

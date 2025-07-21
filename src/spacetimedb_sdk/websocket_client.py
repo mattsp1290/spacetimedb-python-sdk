@@ -21,6 +21,9 @@ import json
 from typing import Optional, Callable, Dict, List, Any, Union
 from enum import Enum
 import uuid
+import os
+import urllib.parse
+import re
 
 from .exceptions import (
     WebSocketHandshakeError,
@@ -32,9 +35,36 @@ from .exceptions import (
     SpacetimeDBConnectionError,
     ServerNotAvailableError,
     RetryableError,
-    SpacetimeDBAuthHandshakeError
+    SpacetimeDBAuthHandshakeError,
+    ValidationSecurityError,
+    AuthenticationSecurityError,
+    ProtocolSecurityError,
+    ConnectionSecurityError,
+    NetworkOperationalError,
+    ResourceOperationalError,
+    OperationalError
 )
-from .auth_storage import AuthCredentials, get_credentials, store_credentials
+from .security_logger import log_security_exception
+from .auth.storage import AuthCredentials
+from .auth.storage import SecureAuthStorage
+from .auth.authentication_manager import AuthenticationManager
+
+# Global storage instance for compatibility
+_global_auth_storage = None
+
+def get_credentials(host: str, database: str, allow_expired: bool = False) -> Optional[AuthCredentials]:
+    """Get authentication credentials using modern secure storage."""
+    global _global_auth_storage
+    if _global_auth_storage is None:
+        _global_auth_storage = SecureAuthStorage()
+    return _global_auth_storage.get_credentials(host, database, allow_expired)
+
+def store_credentials(identity: str, token: str, host: str, database: str) -> None:
+    """Store authentication credentials using modern secure storage."""
+    global _global_auth_storage
+    if _global_auth_storage is None:
+        _global_auth_storage = SecureAuthStorage()
+    _global_auth_storage.store_credentials(identity, token, host, database)
 from .connection_diagnostics import ConnectionDiagnostics
 from .retry_policies import RetryPolicy, RetryPolicyPresets
 from .protocol import (
@@ -58,17 +88,26 @@ from .messages.one_off_query import (
     OneOffQueryMessage
 )
 from .query_id import QueryId
-from .compression import (
+from .compression_handlers.compression_manager import (
     CompressionManager,
     CompressionConfig,
     CompressionType,
     CompressionLevel,
-    CompressionMetrics
+    CompressionMetrics,
+    CompressionSecurityConfig
 )
+# Also import security manager for enhanced security
+try:
+    from .validation.security_manager import SecurityManager
+    SECURITY_AVAILABLE = True
+except ImportError:
+    SECURITY_AVAILABLE = False
+    SecurityManager = None
 from .large_message_handler import LargeMessageHandler
 from .memory_management import (
     BoundedDict, BoundedSubscriptionManager, RecursionLimiter,
-    MemoryAccountant, MessageSizeValidator, get_global_memory_accountant
+    MemoryAccountant, MessageSizeValidator, get_global_memory_accountant,
+    BoundedRequestTracker
 )
 # Import validation with fallback handling
 try:
@@ -106,6 +145,116 @@ except ImportError:
     sanitize_url = lambda url, field=None: url
     sanitize_sql_query = lambda query, field=None: query
     sanitize_json_data = lambda data, field=None: data
+
+
+def validate_database_identifier(db_identifier: str) -> str:
+    """
+    Secure validation function for database identifiers to prevent path traversal attacks.
+    
+    This function provides comprehensive protection against:
+    - URL-encoded path traversal attacks (%2e%2e%2f, etc.)
+    - Multiple slash variations (/, \\, mixed)
+    - Absolute paths and parent directory escapes
+    - Invalid characters outside of safe whitelist
+    - Null byte attacks and length limits
+    - Mixed encoding attacks
+    
+    Security measures implemented:
+    1. URL decoding to handle encoded attacks
+    2. Path normalization using os.path.normpath()
+    3. Rejection of absolute paths and parent directory escapes
+    4. Character whitelist validation (alphanumeric, underscore, hyphen only)
+    5. Length limits (max 255 characters)
+    6. Comprehensive security logging for attack attempts
+    
+    Args:
+        db_identifier: The database identifier to validate
+        
+    Returns:
+        The validated and sanitized database identifier
+        
+    Raises:
+        ValidationError: If the identifier fails security validation
+        
+    Examples:
+        Valid: "my_database", "db-1", "test123"
+        Invalid: "../etc/passwd", "%2e%2e%2fpasswd", "/abs/path", "db\x00name"
+    """
+    logger = logging.getLogger(__name__)
+    
+    if not db_identifier:
+        logger.warning("Security: Empty database identifier provided")
+        raise ValidationError("Database identifier cannot be empty")
+    
+    original_identifier = db_identifier
+    
+    # 1. Length validation (before any processing to prevent DoS)
+    if len(db_identifier) > 255:
+        logger.warning(f"Security: Database identifier too long: {len(db_identifier)} chars (max 255)")
+        raise ValidationError("Database identifier too long (max 255 characters)")
+    
+    # 2. Check for null bytes (prevent null byte injection)
+    if '\x00' in db_identifier:
+        logger.warning(f"Security: Null byte attack detected in database identifier: {repr(db_identifier)}")
+        raise ValidationError("Database identifier contains null bytes")
+    
+    # 3. URL decode to handle encoded attacks (e.g., %2e%2e%2f for ../)
+    try:
+        # Decode multiple times to handle double/triple encoding
+        decoded = db_identifier
+        for _ in range(3):  # Limit iterations to prevent infinite loops
+            new_decoded = urllib.parse.unquote(decoded)
+            if new_decoded == decoded:
+                break  # No more decoding needed
+            decoded = new_decoded
+        db_identifier = decoded
+    except Exception as e:
+        logger.warning(f"Security: URL decoding failed for database identifier: {e}")
+        raise ValidationError("Invalid URL encoding in database identifier")
+    
+    # 4. Path normalization to resolve . and .. components
+    normalized = os.path.normpath(db_identifier)
+    
+    # 5. Check for path traversal attempts after normalization
+    if '..' in normalized:
+        logger.warning(f"Security: Path traversal attempt detected - Original: {repr(original_identifier)}, Normalized: {repr(normalized)}")
+        raise ValidationError("Path traversal attempt in database identifier")
+    
+    # 6. Reject absolute paths (Unix and Windows)
+    if normalized.startswith('/') or (len(normalized) > 1 and normalized[1] == ':'):
+        logger.warning(f"Security: Absolute path rejected - Original: {repr(original_identifier)}, Normalized: {repr(normalized)}")
+        raise ValidationError("Absolute paths not allowed in database identifier")
+    
+    # 7. Character whitelist validation (only alphanumeric, underscore, hyphen)
+    # This is the most restrictive check and should catch most remaining attacks
+    if not re.match(r'^[a-zA-Z0-9_-]+$', normalized):
+        invalid_chars = set(normalized) - set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-')
+        logger.warning(f"Security: Invalid characters in database identifier - Original: {repr(original_identifier)}, Invalid chars: {invalid_chars}")
+        raise ValidationError(f"Database identifier contains invalid characters. Only alphanumeric, underscore, and hyphen allowed. Found: {', '.join(sorted(invalid_chars))}")
+    
+    # 8. Final length check after normalization
+    if len(normalized) > 255:
+        logger.warning(f"Security: Normalized database identifier too long: {len(normalized)} chars")
+        raise ValidationError("Normalized database identifier too long")
+    
+    # 9. Additional checks for common attack patterns
+    suspicious_patterns = [
+        'etc', 'passwd', 'shadow', 'hosts', 'resolv', 'profile',
+        'bashrc', 'zshrc', 'ssh', 'config', 'secret', 'key',
+        'proc', 'sys', 'dev', 'tmp', 'var', 'usr', 'bin', 'sbin'
+    ]
+    
+    lower_normalized = normalized.lower()
+    for pattern in suspicious_patterns:
+        if pattern in lower_normalized:
+            logger.warning(f"Security: Suspicious pattern '{pattern}' detected in database identifier: {repr(original_identifier)}")
+            # Note: This is a warning, not an error, as legitimate database names might contain these substrings
+    
+    # Log successful validation for audit trail
+    if original_identifier != normalized:
+        logger.info(f"Security: Database identifier normalized - Original: {repr(original_identifier)}, Final: {repr(normalized)}")
+    
+    return normalized
 
 
 class SubscriptionMetrics:
@@ -189,17 +338,9 @@ class SubscriptionMetrics:
         self.subscriptions.clear()
 
 
-class ConnectionState(Enum):
-    """Connection state tracking."""
-    DISCONNECTED = "disconnected"
-    CONNECTING = "connecting"
-    CONNECTED = "connected"
-    AUTHENTICATING = "authenticating"
-    AUTHENTICATED = "authenticated"
-    DISCONNECTING = "disconnecting"
-    RECONNECTING = "reconnecting"
-    CLOSED = "closed"
-    ERROR = "error"
+# ConnectionState moved to connection.connection_manager module
+# Import it from there to maintain backward compatibility
+from .connection.connection_manager import ConnectionState
 
 
 class WebSocketClient:
@@ -302,27 +443,134 @@ class WebSocketClient:
         
         self.use_binary = self._determine_frame_type(self.protocol)
         
-        # Connection state
+        # Initialize ConnectionManager for focused connection lifecycle management
+        from .connection.connection_manager import (
+            ConnectionManager, 
+            ConnectionConfig, 
+            DefaultWebSocketFactory,
+            NullEventManager
+        )
+        from .events.websocket_integration import get_websocket_integration
+        
+        # Create event integration bridge
+        self._event_integration = get_websocket_integration(self)
+        
+        # Create bridge class to connect ConnectionManager to unified event system
+        class UnifiedEventBridge:
+            def __init__(self, integration, websocket_client):
+                self.integration = integration
+                self.websocket_client = websocket_client
+            
+            def emit_connection_opened(self):
+                # Bridge to unified event system
+                connection_id = getattr(self.websocket_client, 'connection_id', 'unknown')
+                host = getattr(self.websocket_client, 'host', 'unknown') 
+                database = getattr(self.websocket_client, 'database_address', 'unknown')
+                self.integration.emit_connection_opened(connection_id, host, database)
+            
+            def emit_connection_closed(self, reason: str):
+                connection_id = getattr(self.websocket_client, 'connection_id', None)
+                self.integration.emit_connection_closed(connection_id, reason)
+            
+            def emit_connection_error(self, error: Exception):
+                connection_id = getattr(self.websocket_client, 'connection_id', None)
+                self.integration.emit_connection_error(str(error))
+        
+        self._connection_manager = ConnectionManager(
+            websocket_factory=DefaultWebSocketFactory(),
+            event_manager=UnifiedEventBridge(self._event_integration, self),
+            diagnostics=getattr(self, 'diagnostics', None)
+        )
+        
+        # Set up connection manager callbacks to maintain WebSocketClient behavior
+        self._connection_manager.set_callbacks(
+            on_open=self._on_ws_open,
+            on_close=self._on_ws_close,
+            on_error=self._on_ws_error,
+            on_message=self._on_ws_message
+        )
+        
+        # Backward compatibility properties for connection state
         self.state = ConnectionState.DISCONNECTED
         self.ws: Optional[websocket.WebSocketApp] = None
         self.connection_thread: Optional[threading.Thread] = None
         
-        # SpacetimeDB JWT Authentication
+        # SpacetimeDB JWT Authentication - Backward compatibility properties
         self.spacetimedb_identity: Optional[str] = None
         self.spacetimedb_token: Optional[str] = None
         self.auth_handshake_completed: bool = False
         self.retry_with_auth: bool = False
         
+        # AuthenticationManager - Centralized authentication flow management
+        # Initialize with None host/database_address - will be set in connect()
+        self._auth_manager = AuthenticationManager(
+            host=getattr(self, 'host', None),
+            database=getattr(self, 'database_address', None),
+            storage=_global_auth_storage,
+            event_manager=getattr(self, 'event_manager', None),
+            logger=self.logger
+        )
+        
         # Identity and connection tracking
         self.identity: Optional[Identity] = None
         self.connection_id: Optional[ConnectionId] = None
         
-        # Protocol handling
-        self.encoder = ProtocolEncoder(use_binary=self.use_binary)
-        self.decoder = ProtocolDecoder(use_binary=self.use_binary)
+        # Initialize Compression Manager before protocol configuration
+        security_validator = None
+        if SECURITY_AVAILABLE:
+            try:
+                security_validator = SecurityManager()
+                self.logger.debug("Enhanced compression security enabled")
+            except Exception as e:
+                self.logger.warning(f"Could not initialize compression security: {e}")
         
-        # Compression support
-        self.compression_manager = CompressionManager(self.compression_config)
+        # Create default compression config if none exists
+        compression_config = getattr(self, 'compression_config', None)
+        if compression_config is None:
+            # Import the enhanced CompressionConfig here to avoid import issues
+            from .compression_handlers.compression_manager import CompressionConfig as EnhancedCompressionConfig
+            compression_config = EnhancedCompressionConfig()
+            
+        self.compression_manager = CompressionManager(
+            config=compression_config,
+            security_validator=security_validator
+        )
+        
+        # Protocol handling - using focused ProtocolHandler
+        from .protocol_handlers.protocol_handler import ProtocolHandlerFactory, ProtocolConfiguration
+        
+        protocol_config = ProtocolConfiguration(
+            protocol_version=self.protocol,
+            use_binary=self.use_binary,
+            enable_compression=bool(self.compression_manager),
+            enable_security_validation=True,
+            enable_message_size_validation=True,
+            thread_safe=True
+        )
+        
+        self.protocol_handler = ProtocolHandlerFactory.create_handler(
+            protocol_version=self.protocol,
+            enable_security=True,
+            enable_compression=bool(self.compression_manager),
+            thread_safe=True
+        )
+        
+        # Set compression manager for protocol handler
+        if self.compression_manager:
+            self.protocol_handler.compression_manager = self.compression_manager
+            
+        # Sync compression state when negotiated
+        def sync_compression_state() -> None:
+            if hasattr(self, 'negotiated_compression') and self.negotiated_compression:
+                self.protocol_handler.set_compression(self.negotiated_compression)
+                
+        self._sync_compression_state = sync_compression_state
+        
+        # Legacy compatibility: keep encoder/decoder references
+        self.encoder = self.protocol_handler.encoder
+        self.decoder = self.protocol_handler.decoder
+        
+        # Compression negotiation state
         self.negotiated_compression: Optional[CompressionType] = None
         
         # Large message handling
@@ -373,13 +621,11 @@ class WebSocketClient:
             memory_accountant=self.memory_accountant
         )
         
-        # Request tracking with bounded storage
-        self.pending_requests = BoundedDict[int, threading.Event](
-            max_size=5000,
-            memory_accountant=self.memory_accountant
-        )
-        self.request_responses = BoundedDict[int, Any](
-            max_size=5000,
+        # Request tracking with bounded storage using BoundedRequestTracker
+        self.request_tracker = BoundedRequestTracker(
+            max_size=10000,
+            cleanup_interval=300.0,  # 5 minutes
+            default_timeout=30.0,
             memory_accountant=self.memory_accountant
         )
         
@@ -419,7 +665,35 @@ class WebSocketClient:
         
         self.logger.debug("WebSocketClient initializing...")
         self.logger.info(f"WebSocket client initialized with compression: {self.compression_manager.get_compression_info()['capabilities']['supported_types']}")
+        self.logger.info(f"Memory management: BoundedRequestTracker with max_size={self.request_tracker.max_size}, cleanup_interval={self.request_tracker.cleanup_interval}s")
         self.logger.debug("WebSocketClient initialized.")
+        
+        # Sync initial state from AuthenticationManager
+        self._sync_auth_state_from_manager()
+    
+    def _sync_auth_state_from_manager(self) -> None:
+        """Synchronize authentication state from AuthenticationManager to legacy properties."""
+        if self._auth_manager:
+            self.spacetimedb_identity = self._auth_manager.identity
+            self.spacetimedb_token = self._auth_manager.token
+            self.auth_handshake_completed = self._auth_manager.handshake_completed
+            self.retry_with_auth = False  # Reset retry flag
+    
+    def _sync_auth_state_to_manager(self) -> None:
+        """Synchronize authentication state from legacy properties to AuthenticationManager."""
+        if self._auth_manager and self.spacetimedb_identity and self.spacetimedb_token:
+            # This is primarily for backward compatibility when code directly sets properties
+            try:
+                from .auth.storage import AuthCredentials
+                credentials = AuthCredentials(
+                    identity=self.spacetimedb_identity,
+                    token=self.spacetimedb_token,
+                    host=self.host,
+                    database=self.database_address
+                )
+                self._auth_manager.authenticate(credentials)
+            except Exception as e:
+                self.logger.warning(f"Failed to sync auth state to manager: {e}")
     
     def _determine_frame_type(self, protocol: str) -> bool:
         """
@@ -483,7 +757,7 @@ class WebSocketClient:
         self.logger.debug("Sending heartbeat via OneOffQuery")
         self.send_message(heartbeat)
     
-    def get_protocol_helper(self):
+    def get_protocol_helper(self) -> Dict[str, Any]:
         """
         Get the protocol helper for client-side encoding compatibility.
         
@@ -494,7 +768,34 @@ class WebSocketClient:
             'encoder': self.encoder,
             'decoder': self.decoder,
             'protocol': self.protocol,
-            'use_binary': self.use_binary
+            'use_binary': self.use_binary,
+            'protocol_handler': self.protocol_handler
+        }
+    
+    def get_protocol_metrics(self) -> Dict[str, Any]:
+        """
+        Get protocol processing metrics.
+        
+        Returns:
+            Protocol metrics including encoding/decoding performance
+        """
+        if hasattr(self, 'protocol_handler'):
+            return self.protocol_handler.get_metrics()
+        return {}
+    
+    def get_protocol_info(self) -> Dict[str, Any]:
+        """
+        Get protocol handler information and configuration.
+        
+        Returns:
+            Protocol configuration and status
+        """
+        if hasattr(self, 'protocol_handler'):
+            return self.protocol_handler.get_protocol_info()
+        return {
+            'protocol_version': self.protocol,
+            'use_binary': self.use_binary,
+            'legacy_mode': True
         }
     
     def should_use_sdk_encoding(self, message: Union[str, bytes, dict]) -> bool:
@@ -534,25 +835,25 @@ class WebSocketClient:
     
     def _send_client_encoded_message(self, message: Union[str, bytes]) -> None:
         """
-        Send a pre-encoded message from client directly to WebSocket.
+        Send a pre-encoded message from client directly to WebSocket using ConnectionManager.
         
         Args:
             message: Pre-encoded message data
         """
         self.logger.debug(f"Sending client-encoded message: {len(str(message))} bytes")
         
-        # Send directly with appropriate frame type
-        if isinstance(message, str):
-            # Text message - send as TEXT frame
-            self.ws.send(message)
-            self.logger.debug("Sent client-encoded message as TEXT frame")
-        elif isinstance(message, bytes):
-            # Binary message - send as BINARY frame  
-            from websocket import ABNF
-            self.ws.send(message, opcode=ABNF.OPCODE_BINARY)
-            self.logger.debug("Sent client-encoded message as BINARY frame")
-        else:
-            raise ValueError(f"Client-encoded message must be str or bytes, got {type(message)}")
+        # Use ConnectionManager to send data
+        try:
+            self._connection_manager.send_data(message)
+            
+            # Log frame type for debugging
+            if isinstance(message, str):
+                self.logger.debug("Sent client-encoded message as TEXT frame")
+            elif isinstance(message, bytes):
+                self.logger.debug("Sent client-encoded message as BINARY frame")
+        except Exception as e:
+            self.logger.error(f"Failed to send client-encoded message: {e}")
+            raise
     
     def add_subscription_state_callback(self, callback: Callable[[str, Any], None]) -> None:
         """
@@ -616,9 +917,10 @@ class WebSocketClient:
         db_identity: Optional[str] = None,
         retry_policy: Optional[RetryPolicy] = None
     ) -> None:
-        """Connect to SpacetimeDB with JWT authentication support and preflight checks."""
+        """Connect to SpacetimeDB using ConnectionManager with backward compatibility."""
         with self._lock:
-            if self.state in [ConnectionState.CONNECTED, ConnectionState.CONNECTING]:
+            # Check current connection state through ConnectionManager
+            if self._connection_manager.is_connected() or self._connection_manager.get_connection_state() == ConnectionState.CONNECTING:
                 self.logger.warning("Already connected or connecting")
                 return
             
@@ -634,48 +936,88 @@ class WebSocketClient:
             # Validate required parameters
             if not self.host:
                 raise ValueError("host is required (either in constructor or connect() call)")
-            if not self.database_address:
-                raise ValueError("database_address is required (either in constructor or connect() call)")
             
-            self.reconnect_attempts = 0
+            # For V1.1.2 protocol compatibility:
+            # - If db_identity is provided, database_address can be empty
+            # - If both are empty, will fall back to module name (handled in URL construction)
+            if not self.database_address and not self.db_identity:
+                # Both empty - this is allowed for fallback behavior
+                pass
+            elif not self.database_address and self.db_identity:
+                # db_identity provided but database_address empty - allowed in V1.1.2
+                pass
+            elif self.database_address and not self.db_identity:
+                # Traditional mode - database_address only
+                pass
+            # All other combinations are valid (both provided, etc.)
             
             # Reset authentication state
             self.auth_handshake_completed = False
             self.retry_with_auth = False
             
-            # Check for stored SpacetimeDB credentials
-            stored_credentials = get_credentials(host, database_address)
-            if stored_credentials and not stored_credentials.is_expired():
-                self.logger.info(f"Found stored SpacetimeDB credentials for {host}/{database_address}")
-                self.spacetimedb_identity = stored_credentials.identity
-                self.spacetimedb_token = stored_credentials.token
-                self.auth_handshake_completed = True
+            # Use AuthenticationManager for credential management
+            if self._auth_manager:
+                # Update manager with current connection parameters
+                self._auth_manager.host = self.host
+                self._auth_manager.database = self.database_address
+                
+                # Load stored credentials through manager
+                auth_result = self._auth_manager.authenticate()
+                if auth_result.success:
+                    self.logger.info(f"AuthenticationManager loaded credentials for {self.host}/{self.database_address}")
+                else:
+                    self.logger.debug("No valid stored credentials found in AuthenticationManager")
+                
+                # Sync state from manager to legacy properties
+                self._sync_auth_state_from_manager()
             else:
-                # Clear any expired credentials
-                self.spacetimedb_identity = None
-                self.spacetimedb_token = None
+                # Fallback to direct credential loading (backward compatibility)
+                stored_credentials = get_credentials(self.host, self.database_address)
+                if stored_credentials and not stored_credentials.is_expired():
+                    self.logger.info(f"Found stored SpacetimeDB credentials for {self.host}/{self.database_address}")
+                    self.spacetimedb_identity = stored_credentials.identity
+                    self.spacetimedb_token = stored_credentials.token
+                    self.auth_handshake_completed = True
+                else:
+                    # Clear any expired credentials
+                    self.spacetimedb_identity = None
+                    self.spacetimedb_token = None
             
             # Use provided retry policy or default
             if retry_policy:
                 self.retry_policy = retry_policy
             
-            # Run preflight checks if enabled
-            if self.enable_preflight_checks:
-                try:
-                    self.logger.info("Running preflight checks...")
-                    checks = self.diagnostics.run_preflight_checks(
-                        host=self.host,
-                        database=self.database_address,
-                        raise_on_failure=True
-                    )
-                    self.logger.info("Preflight checks passed")
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_websocket_error("preflight checks", e))
-                    if self._on_error:
-                        self._on_error(e)
-                    raise
+            # Create connection configuration for ConnectionManager
+            from .connection.connection_manager import ConnectionConfig
             
-            self._do_connect()
+            config = ConnectionConfig(
+                host=self.host,
+                database_address=self.database_address,
+                auth_token=self.auth_token,
+                ssl_enabled=self.ssl_enabled,
+                db_identity=self.db_identity,
+                protocol=self.protocol,
+                connection_timeout=getattr(self, 'connection_timeout', 30.0),
+                auto_reconnect=self.auto_reconnect,
+                max_reconnect_attempts=self.max_reconnect_attempts,
+                initial_reconnect_delay=self.initial_reconnect_delay,
+                max_reconnect_delay=self.max_reconnect_delay,
+                enable_preflight_checks=getattr(self, 'enable_preflight_checks', True),
+                retry_on_transient_errors=getattr(self, 'retry_on_transient_errors', True)
+            )
+            
+            # Use ConnectionManager to establish connection
+            try:
+                self._connection_manager.connect(config)
+                
+                # Note: State synchronization will happen in the WebSocket event callbacks
+                # (_on_ws_open, _on_ws_error, etc.) to avoid race conditions
+                
+            except Exception as e:
+                self.logger.error(f"Connection failed: {e}")
+                if self._on_error:
+                    self._on_error(e)
+                raise
     
     def _do_connect(self) -> None:
         """Internal connection logic with retry support."""
@@ -718,23 +1060,20 @@ class WebSocketClient:
             # Use db_identity in URL path if provided, otherwise use database_address
             db_identifier = self.db_identity if self.db_identity else self.database_address
             
-            # Validate and sanitize database identifier
+            # Validate and sanitize database identifier using comprehensive security validation
             try:
-                security_manager = get_security_manager()
-                validated_db_identifier = db_identifier
+                # Apply comprehensive path traversal protection
+                validated_db_identifier = validate_database_identifier(db_identifier)
                 
-                # Use data size validator to check database identifier if available
+                # Additional security manager validation if available
+                security_manager = get_security_manager()
                 if security_manager:
-                    db_result = security_manager.size_validator.validate(db_identifier, "database_identifier")
+                    db_result = security_manager.size_validator.validate(validated_db_identifier, "database_identifier")
                     if not db_result.is_valid:
                         raise ValidationError(f"Invalid database identifier: {'; '.join(str(e) for e in db_result.errors)}")
                     validated_db_identifier = db_result.sanitized_value
                 
-                # Additional validation: prevent path traversal
-                if '../' in validated_db_identifier or '..\\' in validated_db_identifier:
-                    raise ValidationError("Path traversal attempt in database identifier")
-                
-                # Sanitize for URL inclusion
+                # Sanitize for URL inclusion (safe to do after validation)
                 validated_db_identifier = urllib.parse.quote(validated_db_identifier, safe='')
                 
             except ValidationError as e:
@@ -743,8 +1082,14 @@ class WebSocketClient:
             # Build URL with V1.1.2 format: /v1/ws/database/{identity}/subscribe?db_identity={uuid}
             # For backward compatibility, support both formats
             if self.db_identity:
+                # Validate db_identity query parameter for security
+                try:
+                    validated_db_identity = validate_database_identifier(self.db_identity)
+                except ValidationError as e:
+                    raise WebSocketHandshakeError(f"Invalid db_identity parameter: {e}")
+                
                 # V1.1.2 format with /ws/ prefix and db_identity query parameter
-                url = f"{protocol_scheme}://{validated_host}/v1/ws/database/{validated_db_identifier}/subscribe?db_identity={urllib.parse.quote(self.db_identity, safe='')}"
+                url = f"{protocol_scheme}://{validated_host}/v1/ws/database/{validated_db_identifier}/subscribe?db_identity={urllib.parse.quote(validated_db_identity, safe='')}"
             else:
                 # Legacy format for backward compatibility
                 url = f"{protocol_scheme}://{validated_host}/v1/database/{validated_db_identifier}/subscribe"
@@ -770,8 +1115,13 @@ class WebSocketClient:
             # Prepare headers
             headers = {}
             
-            # SpacetimeDB JWT Authentication (takes precedence)
-            if self.spacetimedb_token and self.auth_handshake_completed:
+            # Use AuthenticationManager for header generation
+            if self._auth_manager and self._auth_manager.is_authenticated:
+                auth_headers = self._auth_manager.get_auth_headers()
+                headers.update(auth_headers)
+                self.logger.debug("Using AuthenticationManager for JWT authentication")
+            # Fallback to legacy properties for backward compatibility
+            elif self.spacetimedb_token and self.auth_handshake_completed:
                 self.logger.debug("Using stored SpacetimeDB JWT token for authentication")
                 headers["Authorization"] = f"Bearer {self.spacetimedb_token}"
             # Legacy token-based auth
@@ -830,51 +1180,24 @@ class WebSocketClient:
                 self._schedule_reconnect()
     
     def disconnect(self) -> None:
-        """Disconnect from SpacetimeDB and ensure the connection thread is stopped."""
-        self.logger.debug(f"Disconnect called. Current thread: {threading.get_ident()}, Current state: {self.state.value}")
+        """Disconnect from SpacetimeDB using ConnectionManager with cleanup."""
+        self.logger.debug(f"Disconnect called. Current thread: {threading.get_ident()}")
+        
         with self._lock:
-            self.logger.debug("Disconnect: Acquired _lock.")
             self.logger.info("WebSocket client disconnect initiated.")
-            # Prevent further auto-reconnection attempts
-            self.auto_reconnect = False 
-            self.state = ConnectionState.CLOSED # Mark as intentionally closed
-
-            if self.reconnect_timer:
-                self.logger.debug("Disconnect: Cancelling reconnect_timer.")
-                self.reconnect_timer.cancel()
-                self.reconnect_timer = None
             
-            current_ws = self.ws
-            current_thread = self.connection_thread
-            self.logger.debug(f"Disconnect: current_ws is {'set' if current_ws else 'None'}, current_thread is {'set and alive' if current_thread and current_thread.is_alive() else ('set but not alive' if current_thread else 'None')}")
-
-            if current_ws:
-                self.logger.debug("Disconnect: Calling current_ws.close().")
-                try:
-                    current_ws.close()
-                    self.logger.debug("Disconnect: current_ws.close() returned.")
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_websocket_error("disconnect close", e), exc_info=True)
+            # Use ConnectionManager to handle connection cleanup
+            self._connection_manager.disconnect()
             
-            if current_thread and current_thread.is_alive():
-                self.logger.debug(f"Disconnect: Joining connection_thread (ID: {current_thread.ident}).")
-                current_thread.join(timeout=2.0)
-                if current_thread.is_alive():
-                    self.logger.warning(f"Disconnect: connection_thread (ID: {current_thread.ident}) did NOT stop cleanly.")
-                else:
-                    self.logger.debug(f"Disconnect: connection_thread (ID: {current_thread.ident}) stopped.")
+            # Sync state for backward compatibility
+            self.state = self._connection_manager.get_connection_state()
             
-            self.ws = None # Clear after join attempt
-            self.connection_thread = None # Clear after join attempt
-            self.logger.debug("Disconnect: Cleared ws and connection_thread attributes.")
-            
-            # Clear other state
+            # Clear WebSocketClient-specific state
             self.identity = None
             self.connection_id = None
             self.active_subscriptions.clear()
             self.subscription_queries.clear()
-            self.pending_requests.clear()
-            self.request_responses.clear()
+            self.request_tracker.clear_all()
             self.negotiated_compression = None
             
             # Cleanup large message handler
@@ -886,6 +1209,16 @@ class WebSocketClient:
             # Note: We don't clear spacetimedb_identity and spacetimedb_token here
             # as they may be reused for reconnection
             self.retry_with_auth = False
+            
+            # Clear authentication state in AuthenticationManager (but preserve stored credentials)
+            if self._auth_manager:
+                # This clears in-memory state but preserves stored credentials
+                self._auth_manager.logout()
+            
+            # Backward compatibility: clear old connection attributes
+            self.ws = None
+            self.connection_thread = None
+            
             self.logger.info("WebSocket client disconnected and cleaned up.")
     
     @monitor_performance("websocket_send_message")
@@ -897,76 +1230,48 @@ class WebSocketClient:
             message: Message to send
             use_client_encoding: If True, skip SDK encoding and send message directly
         """
-        # Thread-safe check of connection state
-        with self._lock:
-            if self.state != ConnectionState.CONNECTED or not self.ws:
-                raise RuntimeError(f"Not connected to SpacetimeDB (state: {self.state.value})")
-            # Keep references to avoid race conditions
-            current_ws = self.ws
-            current_state = self.state
+        # Thread-safe check of connection state using ConnectionManager
+        # We check both the ConnectionManager state and ensure we have a connection reference
+        with self._connection_manager._lock:
+            if not self._connection_manager.is_connected() or not self._connection_manager._connection:
+                state = self._connection_manager.get_connection_state()
+                self.logger.debug(f"send_message failed: Not connected (ConnectionManager state: {state.value})")
+                raise RuntimeError(f"Not connected to SpacetimeDB (state: {state.value})")
         
         try:
             # Handle client-encoded messages (bypass SDK encoding)
             if use_client_encoding:
                 return self._send_client_encoded_message(message)
             
-            # Validate message conforms to SpacetimeDB protocol
-            from .message_validator import SpacetimeDBMessageValidator, MessageValidationError
+            # Use ProtocolHandler for message processing
             try:
-                SpacetimeDBMessageValidator.validate_message(message)
-            except MessageValidationError as e:
-                self.logger.error(ErrorFormatter.format_websocket_error("message validation", e))
-                raise ValueError(f"Invalid SpacetimeDB message: {e}")
-            
-            # Import serialization functions
-            from .serialization import prepare_message_for_client
-            from .protocol_handler import get_default_handler
-            
-            # Prepare message with client compatibility (for any embedded objects)
-            # This ensures any response objects are properly serialized
-            if hasattr(message, '__dict__'):
-                # For client messages, we typically don't need to serialize since
-                # they're going TO the server, but we may have response objects embedded
-                prepared_message = message
-            else:
-                prepared_message = message
-            
-            # Encode the message
-            encoded_data = self.encoder.encode_client_message(prepared_message)
-            
-            # Apply compression if negotiated and beneficial
-            if self.negotiated_compression and self.negotiated_compression != CompressionType.NONE:
-                try:
-                    compressed_data, compression_used = self.compression_manager.compress(
-                        encoded_data, self.negotiated_compression
-                    )
+                # Encode message using the focused ProtocolHandler
+                # This handles validation, encoding, and compression automatically
+                encoded_data = self.protocol_handler.encode_message(message)
+                
+                # Update compression state from protocol handler
+                if hasattr(self.protocol_handler, 'negotiated_compression'):
+                    self.negotiated_compression = self.protocol_handler.negotiated_compression
                     
-                    if compression_used != CompressionType.NONE:
-                        # Add compression metadata if needed
-                        # For WebSocket, compression is typically transparent
-                        encoded_data = compressed_data
-                        self.logger.debug(f"Compressed message: {len(encoded_data)} -> {len(compressed_data)} bytes ({compression_used.value})")
-                    
-                except Exception as e:
-                    self.logger.warning(f"Compression failed, sending uncompressed: {e}")
-                    # Continue with uncompressed data
+            except Exception as e:
+                self.logger.error(ErrorFormatter.format_websocket_error("protocol handler encoding", e))
+                raise ValueError(f"Message encoding failed: {e}")
+            
+            # Compression is now handled by ProtocolHandler
+            # encoded_data already includes compression if enabled
             
             # Send the message with large message handling support
             message_type = type(message).__name__
             
             # Use large message handler if available and message is potentially large
             if self.large_message_handler and len(encoded_data) > 1024:  # 1KB threshold for checking
-                # Large message handler needs to use current_ws reference for thread safety
-                def thread_safe_send(data):
-                    if isinstance(data, str):
-                        current_ws.send(data)
-                    else:
-                        from websocket import ABNF
-                        current_ws.send(data, opcode=ABNF.OPCODE_BINARY)
+                # Large message handler needs to use ConnectionManager for thread safety
+                def connection_manager_send(data: bytes) -> None:
+                    self._connection_manager.send_data(data)
                 
                 # Temporarily update the handler's send function
                 original_send = self.large_message_handler._websocket_send_func
-                self.large_message_handler._websocket_send_func = thread_safe_send
+                self.large_message_handler._websocket_send_func = connection_manager_send
                 try:
                     self.large_message_handler.send_large_message(
                         encoded_data, 
@@ -979,17 +1284,16 @@ class WebSocketClient:
                 # Send normally with correct frame type based on negotiated protocol
                 expected_frame_type = self.detect_expected_frame_type()
                 
+                # Send data using ConnectionManager
+                self._connection_manager.send_data(encoded_data)
+                
+                # Log frame type for debugging
                 if self.use_binary:
-                    # Binary protocol → BINARY WebSocket frame
-                    from websocket import ABNF
-                    current_ws.send(encoded_data, opcode=ABNF.OPCODE_BINARY)
                     self.logger.debug(
                         f"Sent {message_type} as BINARY frame "
                         f"(protocol: {self.protocol}, {len(encoded_data)} bytes)"
                     )
                 else:
-                    # JSON protocol → TEXT WebSocket frame
-                    current_ws.send(encoded_data)  # Default opcode is TEXT
                     self.logger.debug(
                         f"Sent {message_type} as TEXT frame "
                         f"(protocol: {self.protocol}, {len(encoded_data)} bytes)"
@@ -1208,32 +1512,25 @@ class WebSocketClient:
         return message_id
     
     def _on_ws_open(self, ws) -> None:
-        """WebSocket connection opened."""
+        """WebSocket connection opened - sync with ConnectionManager state."""
         self.logger.debug(f"_on_ws_open: Callback triggered. Current thread: {threading.get_ident()}")
         with self._lock:
             self.logger.debug("_on_ws_open: Acquired _lock.")
-            self.state = ConnectionState.CONNECTED
-            self.reconnect_attempts = 0
             
-            # Cancel connection timeout timer
-            self._cancel_connection_timeout()
+            # Sync state from ConnectionManager
+            cm_state = self._connection_manager.get_connection_state()
+            self.state = cm_state
+            self.ws = ws
+            self.logger.debug(f"_on_ws_open: Synced state to {cm_state.value} and set ws reference")
             
-            # Record successful connection for circuit breaker
-            self._record_connection_success()
-            
-            # Initialize large message handler
+            # Initialize large message handler with ConnectionManager
             if not self.large_message_handler:
-                def websocket_send_func(data):
-                    """Wrapper function for large message handler to send data via WebSocket."""
-                    if self.ws:
-                        if isinstance(data, str):
-                            self.ws.send(data)
-                        else:
-                            from websocket import ABNF
-                            self.ws.send(data, opcode=ABNF.OPCODE_BINARY)
+                def connection_manager_send_func(data: bytes) -> None:
+                    """Wrapper function for large message handler to use ConnectionManager."""
+                    self._connection_manager.send_data(data)
                 
-                self.large_message_handler = LargeMessageHandler(websocket_send_func)
-                self.logger.debug("Large message handler initialized")
+                self.large_message_handler = LargeMessageHandler(connection_manager_send_func)
+                self.logger.debug("Large message handler initialized with ConnectionManager")
             
             # Attempt compression negotiation from server response headers
             # In practice, WebSocket compression is usually handled at the WebSocket layer
@@ -1262,8 +1559,8 @@ class WebSocketClient:
             # These are not real protocol messages but test simulation helpers
             if isinstance(message, str):
                 try:
-                    import json
-                    json_data = json.loads(message)
+                    from .security.json_validator import secure_json_loads
+                    json_data = secure_json_loads(message, "websocket_test_message")
                     
                     # Handle test simulation of SubscriptionApplied (with legacy format)
                     if "SubscriptionApplied" in json_data:
@@ -1330,9 +1627,9 @@ class WebSocketClient:
                             else:
                                 self.logger.warning(f"Invalid JSON message: {'; '.join(str(e) for e in json_result.errors)}")
                         else:
-                            # Fallback to direct parsing if validation not available
-                            import json
-                            json_data = json.loads(message)
+                            # Fallback to secure parsing if validation not available
+                            from .security.json_validator import secure_json_loads
+                            json_data = secure_json_loads(message, "websocket_fallback_message")
                             message_types = list(json_data.keys()) if isinstance(json_data, dict) else []
                             self.logger.warning(f"Unknown message type in data: {message_types}")
                     except ValidationError as e:
@@ -1375,8 +1672,8 @@ class WebSocketClient:
                 try:
                     if message_data.startswith(b'{') and b'"InitialSubscription"' in message_data:
                         # Parse just enough to get summary info without full processing
-                        import json
-                        parsed_preview = json.loads(message_data.decode('utf-8'))
+                        from .security.json_validator import secure_json_loads
+                        parsed_preview = secure_json_loads(message_data.decode('utf-8'), "initial_subscription_preview")
                         if "InitialSubscription" in parsed_preview:
                             initial_sub = parsed_preview["InitialSubscription"]
                             database_update = initial_sub.get("database_update", {})
@@ -1386,33 +1683,50 @@ class WebSocketClient:
                                 table_name = table.get("table_name", "unknown")
                                 num_rows = table.get("num_rows", 0)
                                 self.logger.debug(f"  - {table_name}: {num_rows} rows")
+                except (ValidationSecurityError, AuthenticationSecurityError, ProtocolSecurityError) as parse_error:
+                    # Security exceptions in message preview parsing must be logged and re-raised
+                    event_id = log_security_exception(parse_error, operation="message_preview_parsing")
+                    self.logger.error(f"Security violation during message preview parsing [Event: {event_id}]: {parse_error}")
+                    raise  # Always re-raise security exceptions
+                except (ValueError, UnicodeDecodeError, KeyError, AttributeError) as parse_error:
+                    # Expected errors during preview parsing - safe to handle
+                    self.logger.debug(f"Expected error during large message preview parsing: {parse_error}")
                 except Exception as parse_error:
-                    self.logger.debug(f"Could not parse large message preview: {parse_error}")
+                    # Unexpected errors in preview parsing should be logged but not break message processing
+                    self.logger.warning(f"Unexpected error during large message preview parsing: {type(parse_error).__name__}: {parse_error}")
             
-            # Apply decompression if needed
-            if self.negotiated_compression and self.negotiated_compression != CompressionType.NONE:
-                try:
-                    decompressed_data = self.compression_manager.decompress(
-                        message_data, self.negotiated_compression
-                    )
-                    message_data = decompressed_data
-                    self.logger.debug(f"Decompressed message: {len(message)} -> {len(message_data)} bytes")
-                except Exception as e:
-                    self.logger.warning(f"Decompression failed, processing as uncompressed: {e}")
-                    # Continue with original data
-            
-            # Decode the server message with enhanced error handling for large messages
+            # Use ProtocolHandler for complete message processing
             try:
-                server_message = self.decoder.decode_server_message(message_data)
+                # Process message using the focused ProtocolHandler
+                # This handles decompression, decoding, validation, and metrics automatically
+                processed_result = self.protocol_handler.process_message(message_data)
+                
+                if processed_result is None:
+                    # Partial message - waiting for more chunks
+                    self.logger.debug("Received partial chunked message, waiting for more chunks")
+                    return
+                
+                server_message = processed_result.message
+                
+                # Log processing information for debugging
+                if processed_result.processing_time_ms > 100:  # Log slow processing
+                    self.logger.debug(
+                        f"Message processing: {processed_result.message_type} "
+                        f"({processed_result.processing_time_ms:.1f}ms, "
+                        f"compressed: {processed_result.was_compressed}, "
+                        f"chunked: {processed_result.was_chunked})"
+                    )
+                    
             except Exception as decode_error:
                 if message_size > large_message_threshold:
-                    self.logger.error(ErrorFormatter.format_websocket_error(f"decode large message ({message_size} bytes)", decode_error))
-                    self.logger.info("Large message decode failure - this may indicate:")
+                    self.logger.error(ErrorFormatter.format_websocket_error(f"protocol handler processing large message ({message_size} bytes)", decode_error))
+                    self.logger.info("Large message processing failure - this may indicate:")
                     self.logger.info("1. Message corruption during transmission")
                     self.logger.info("2. WebSocket frame fragmentation issues")
                     self.logger.info("3. Server-side message formatting problems")
+                    self.logger.info("4. Protocol version mismatch")
                 else:
-                    self.logger.error(ErrorFormatter.format_websocket_error("decode message", decode_error))
+                    self.logger.error(ErrorFormatter.format_websocket_error("protocol handler processing", decode_error))
                 raise
             
             # Handle identity token
@@ -1495,23 +1809,67 @@ class WebSocketClient:
                 # The modern client expects protocol objects, not serialized dicts
                 self._on_message(server_message)
                 
-        except Exception as e:
-            # Enhanced error logging for large message issues
+        except (ValidationSecurityError, AuthenticationSecurityError, ProtocolSecurityError, ConnectionSecurityError) as e:
+            # Security exceptions must never be silently caught - these indicate potential attacks
+            message_size = len(message) if hasattr(message, '__len__') else 0
+            event_id = log_security_exception(e, operation="websocket_message_processing")
+            self.logger.error(f"SECURITY VIOLATION during message processing ({message_size} bytes) [Event: {event_id}]: {e}")
+            self.logger.critical(f"Security context: {getattr(e, 'security_context', 'Unknown')}")
+            
+            # Always notify error callback of security violations
+            if self._on_error:
+                self._on_error(e)
+            
+            # Always re-raise security exceptions
+            raise
+            
+        except (ConnectionError, TimeoutError, OSError, AttributeError, TypeError, ValueError, UnicodeDecodeError) as e:
+            # Expected operational errors during message processing - safe to handle
             message_size = len(message) if hasattr(message, '__len__') else 0
             if message_size > 50 * 1024:  # 50KB
-                self.logger.error(ErrorFormatter.format_websocket_error(f"large message processing ({message_size} bytes)", e))
+                self.logger.warning(f"Expected error during large message processing ({message_size} bytes): {e}")
+                self.logger.info("Large message error - consider:")
+                self.logger.info("1. Increasing WebSocket buffer sizes")
+                self.logger.info("2. Implementing message streaming")  
+                self.logger.info("3. Server-side message compression")
+            else:
+                self.logger.warning(f"Expected error during message processing: {e}")
+            
+            if self._on_error:
+                self._on_error(e)
+                
+        except Exception as e:
+            # Unexpected errors should be logged and converted to operational error
+            message_size = len(message) if hasattr(message, '__len__') else 0
+            if message_size > 50 * 1024:  # 50KB
+                self.logger.critical(f"Unexpected error during large message processing ({message_size} bytes): {type(e).__name__}: {e}")
                 self.logger.info("Large message error - consider:")
                 self.logger.info("1. Increasing WebSocket buffer sizes")
                 self.logger.info("2. Implementing message streaming")
                 self.logger.info("3. Server-side message compression")
             else:
-                self.logger.error(ErrorFormatter.format_websocket_error("message processing", e))
+                self.logger.critical(f"Unexpected error during message processing: {type(e).__name__}: {e}")
+            
+            # Convert to operational error with diagnostic info
+            operational_error = NetworkOperationalError(
+                f"Internal error during message processing: {type(e).__name__}",
+                diagnostic_info={
+                    "original_error": str(e),
+                    "error_type": type(e).__name__,
+                    "message_size": message_size,
+                    "operation": "websocket_message_processing",
+                    "is_large_message": message_size > 50 * 1024
+                }
+            )
             
             if self._on_error:
-                self._on_error(e)
+                self._on_error(operational_error)
+            
+            # Re-raise as operational error to maintain error handling chain
+            raise operational_error
     
     def _on_ws_error(self, ws, error) -> None:
-        """WebSocket error occurred with enhanced error handling."""
+        """WebSocket error occurred - sync with ConnectionManager."""
         error_str = str(error).lower()
         
         # Enhanced detection for large message related errors
@@ -1553,7 +1911,7 @@ class WebSocketClient:
                         if identity_match:
                             headers["spacetime-identity"] = identity_match.group(1)
                         
-                        token_match = re.search(r"spacetime-identity-token:\s*([\w.-]+)", error_str)
+                        token_match = re.search(r"spacetime-identity-token:\s*([A-Za-z0-9+/=._-]+)", error_str)
                         if token_match:
                             headers["spacetime-identity-token"] = token_match.group(1)
                     
@@ -1563,7 +1921,8 @@ class WebSocketClient:
                         # Look for JSON error body in the error string
                         json_match = re.search(r'\{[^}]*"error"[^}]*\}', error_str)
                         if json_match:
-                            json_error_body = json.loads(json_match.group(0))
+                            from .security.json_validator import secure_json_loads
+                            json_error_body = secure_json_loads(json_match.group(0), "websocket_error_body")
                     except (json.JSONDecodeError, AttributeError):
                         pass
                     
@@ -1576,20 +1935,38 @@ class WebSocketClient:
                         if identity and token:
                             self.logger.info("Received identity token, retrying with authentication")
                             
-                            # Store the credentials in a thread-safe manner
-                            with self._lock:
-                                self.spacetimedb_identity = identity
-                                self.spacetimedb_token = token
-                                self.auth_handshake_completed = True
-                                self.retry_with_auth = True
-                            
-                            # Store credentials for future use
-                            if self.host and self.database_address:
-                                try:
-                                    store_credentials(identity, token, self.host, self.database_address)
-                                    self.logger.debug("Stored SpacetimeDB credentials for future use")
-                                except Exception as store_error:
-                                    self.logger.warning(f"Failed to store credentials: {store_error}")
+                            # Use AuthenticationManager for handshake processing
+                            if self._auth_manager:
+                                auth_result = self._auth_manager.handle_auth_handshake(identity, token)
+                                
+                                if auth_result.success:
+                                    # Update legacy properties for backward compatibility
+                                    with self._lock:
+                                        self.spacetimedb_identity = identity
+                                        self.spacetimedb_token = token
+                                        self.auth_handshake_completed = True
+                                        self.retry_with_auth = True
+                                    
+                                    self.logger.info("AuthenticationManager handshake completed successfully")
+                                else:
+                                    self.logger.error(f"AuthenticationManager handshake failed: {auth_result.error}")
+                                    # Fall through to error handling
+                                    return
+                            else:
+                                # Fallback to direct credential handling (backward compatibility)
+                                with self._lock:
+                                    self.spacetimedb_identity = identity
+                                    self.spacetimedb_token = token
+                                    self.auth_handshake_completed = True
+                                    self.retry_with_auth = True
+                                
+                                # Store credentials for future use
+                                if self.host and self.database_address:
+                                    try:
+                                        store_credentials(identity, token, self.host, self.database_address)
+                                        self.logger.debug("Stored SpacetimeDB credentials for future use")
+                                    except Exception as store_error:
+                                        self.logger.warning(f"Failed to store credentials: {store_error}")
                             
                             # Schedule an immediate reconnect with authentication
                             # Use a small delay to avoid tight retry loops
@@ -1763,43 +2140,32 @@ class WebSocketClient:
         # Cancel connection timeout if still running
         self._cancel_connection_timeout()
         
-        # Record the failure for circuit breaker (if it's a retryable error)
-        if self._should_retry_error(error):
-            self._record_connection_failure(error)
+        # Sync state with ConnectionManager
+        with self._lock:
+            self.state = self._connection_manager.get_connection_state()
         
+        # Call error callbacks
         if self._on_error:
             self._on_error(error)
+        
+        # Call legacy callback for backward compatibility
+        if self.on_error:
+            try:
+                self.on_error(error)
+            except Exception as e:
+                self.logger.error(f"Error in legacy error callback: {e}")
     
     def _on_ws_close(self, ws, close_status_code, close_msg) -> None:
-        """WebSocket connection closed with thread-safe state management."""
-        self.logger.debug(f"_on_ws_close: Callback triggered. Current thread: {threading.get_ident()}. Status: {close_status_code}, Msg: {close_msg}")
+        """WebSocket connection closed - sync with ConnectionManager state."""
+        self.logger.debug(f"_on_ws_close: Callback triggered. Status: {close_status_code}, Msg: {close_msg}")
         
-        # Single critical section to avoid race conditions
+        # Sync state with ConnectionManager
         with self._lock:
             self.logger.debug("_on_ws_close: Acquired _lock.")
-            original_state = self.state
             
-            # Cancel connection timeout if still running
-            self._cancel_connection_timeout()
-            
-            # Only change state if not already intentionally CLOSED
-            # This prevents overwriting the CLOSED state set by an explicit disconnect()
-            if self.state != ConnectionState.CLOSED:
-                self.logger.debug(f"_on_ws_close: Current state {self.state.value} is not CLOSED, setting to DISCONNECTED.")
-                self.state = ConnectionState.DISCONNECTED
-            else:
-                self.logger.debug(f"_on_ws_close: Current state is already CLOSED, not changing to DISCONNECTED.")
-            
-            # Determine if we should attempt reconnection based on original state
-            # We want to reconnect if we were in an active connection state before the close
-            should_attempt_reconnect = (
-                self.auto_reconnect and 
-                self.state != ConnectionState.CLOSED and
-                original_state in [ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING]
-            )
-            
-            final_state = self.state
-            self.logger.debug(f"_on_ws_close: original_state={original_state.value}, final_state={final_state.value}, should_attempt_reconnect={should_attempt_reconnect}")
+            # Sync state from ConnectionManager
+            self.state = self._connection_manager.get_connection_state()
+            self.ws = None
         
         # Call disconnect callback outside of lock to avoid deadlocks
         self.logger.info(f"Disconnected from SpacetimeDB (WebSocket closed). Reason: {close_msg or 'N/A'}")
@@ -1809,12 +2175,12 @@ class WebSocketClient:
             except Exception as e:
                 self.logger.error(ErrorFormatter.format_websocket_error("close callback", e), exc_info=True)
         
-        # Schedule reconnect if needed (this method handles its own locking)
-        if should_attempt_reconnect:
-            self.logger.info("_on_ws_close: Scheduling reconnect attempt")
-            self._schedule_reconnect()
-        else:
-            self.logger.info(f"_on_ws_close: No reconnect needed. auto_reconnect={self.auto_reconnect}, final_state={final_state.value}, original_state={original_state.value}")
+        # Call legacy callback for backward compatibility
+        if self.on_disconnect:
+            try:
+                self.on_disconnect()
+            except Exception as e:
+                self.logger.error(ErrorFormatter.format_websocket_error("legacy on_disconnect callback", e), exc_info=True)
     
     def _schedule_reconnect(self) -> None:
         """Schedule a reconnection attempt with exponential backoff and thread safety."""
@@ -1991,18 +2357,20 @@ class WebSocketClient:
         self.compression_manager.config.compression_level = level
         self.logger.info(f"Compression level set to {level.value}")
     
-    @property
     def is_connected(self) -> bool:
-        """Check if currently connected."""
-        return self.state == ConnectionState.CONNECTED
+        """Check if currently connected using ConnectionManager."""
+        return self._connection_manager.is_connected()
     
     def get_connection_state(self) -> ConnectionState:
-        """Get current connection state."""
+        """Get current connection state from ConnectionManager."""
+        # Sync state for backward compatibility
+        self.state = self._connection_manager.get_connection_state()
         return self.state
     
     def get_connection_info(self) -> Dict[str, Any]:
         """Get current connection information."""
         compression_info = self.get_compression_info()
+        memory_stats = self.get_memory_stats()
         
         return {
             "state": self.state.value,
@@ -2023,6 +2391,14 @@ class WebSocketClient:
                     "compression_ratio": compression_info["metrics"]["compression_ratio"],
                     "space_savings_percent": compression_info["metrics"]["space_savings_percent"]
                 }
+            },
+            "memory": {
+                "total_mb": memory_stats["total_memory_estimate_mb"],
+                "usage_percent": memory_stats["memory_accountant"]["usage_percent"],
+                "pending_requests": memory_stats["request_tracker"]["pending_requests"],
+                "request_tracker_mb": memory_stats["request_tracker"]["memory_mb"],
+                "evicted_requests": memory_stats["request_tracker"]["evicted_requests"],
+                "expired_requests": memory_stats["request_tracker"]["expired_requests"]
             }
         }
     
@@ -2124,6 +2500,166 @@ class WebSocketClient:
         """Reset all subscription health metrics."""
         self.subscription_metrics.reset_metrics()
     
+    # Memory Management and Monitoring Methods
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive memory usage statistics for the WebSocket client.
+        
+        Returns:
+            Dictionary containing memory usage for all components
+        """
+        request_stats = self.request_tracker.get_memory_stats()
+        accountant_stats = self.memory_accountant.get_stats()
+        
+        return {
+            'request_tracker': request_stats,
+            'memory_accountant': {
+                'total_bytes': accountant_stats.total_bytes,
+                'total_mb': accountant_stats.total_bytes / (1024 * 1024),
+                'cache_bytes': accountant_stats.cache_bytes,
+                'subscription_bytes': accountant_stats.subscription_bytes,
+                'request_bytes': accountant_stats.request_bytes,
+                'message_bytes': accountant_stats.message_bytes,
+                'peak_bytes': accountant_stats.peak_bytes,
+                'peak_mb': accountant_stats.peak_bytes / (1024 * 1024),
+                'evictions': accountant_stats.evictions,
+                'oom_prevented': accountant_stats.oom_prevented,
+                'usage_percent': self.memory_accountant.get_usage_percentage()
+            },
+            'active_subscriptions': len(self.active_subscriptions),
+            'subscription_queries': len(self.subscription_queries),
+            'total_memory_estimate_mb': (
+                request_stats['memory_bytes'] + 
+                accountant_stats.total_bytes
+            ) / (1024 * 1024)
+        }
+    
+    def check_memory_health(self) -> Dict[str, Any]:
+        """
+        Check memory health and return alerts/warnings.
+        
+        Returns:
+            Dictionary with health status and any alerts
+        """
+        stats = self.get_memory_stats()
+        alerts = []
+        warnings = []
+        
+        # Check request tracker memory usage
+        if stats['request_tracker']['memory_usage_percent'] > 80:
+            alerts.append("Request tracker memory usage above 80%")
+        elif stats['request_tracker']['memory_usage_percent'] > 60:
+            warnings.append("Request tracker memory usage above 60%")
+        
+        # Check overall memory accountant usage
+        if stats['memory_accountant']['usage_percent'] > 90:
+            alerts.append("Overall memory usage above 90%")
+        elif stats['memory_accountant']['usage_percent'] > 75:
+            warnings.append("Overall memory usage above 75%")
+        
+        # Check for high eviction rates
+        if stats['memory_accountant']['evictions'] > 100:
+            warnings.append("High memory eviction rate detected")
+        
+        # Check request tracker size limits
+        req_stats = stats['request_tracker']
+        if req_stats['pending_requests'] > req_stats['max_size'] * 0.8:
+            warnings.append("Pending requests approaching size limit")
+        
+        health_status = "healthy"
+        if alerts:
+            health_status = "critical"
+        elif warnings:
+            health_status = "warning"
+        
+        return {
+            'status': health_status,
+            'alerts': alerts,
+            'warnings': warnings,
+            'stats': stats,
+            'recommendations': self._get_memory_recommendations(stats, alerts, warnings)
+        }
+    
+    def _get_memory_recommendations(self, stats: Dict, alerts: List[str], warnings: List[str]) -> List[str]:
+        """Generate memory optimization recommendations."""
+        recommendations = []
+        
+        if stats['memory_accountant']['usage_percent'] > 75:
+            recommendations.append("Consider reducing memory limits or increasing available memory")
+        
+        if stats['request_tracker']['evicted_requests'] > 50:
+            recommendations.append("High request eviction rate - consider increasing max_size or reducing request timeout")
+        
+        if stats['request_tracker']['expired_requests'] > 100:
+            recommendations.append("Many expired requests - consider reducing default timeout or improving response handling")
+        
+        if stats['request_tracker']['pending_requests'] > 1000:
+            recommendations.append("Large number of pending requests - check for request handling bottlenecks")
+        
+        return recommendations
+    
+    def force_memory_cleanup(self) -> Dict[str, Any]:
+        """
+        Force immediate memory cleanup across all components.
+        
+        Returns:
+            Statistics about the cleanup operation
+        """
+        self.logger.info("Forcing memory cleanup across all components")
+        
+        # Force request tracker cleanup
+        cleanup_stats = self.request_tracker.force_cleanup()
+        
+        # Force subscription cleanup if available
+        subscription_cleanup = 0
+        if hasattr(self, 'subscription_metrics'):
+            # Reset metrics to free memory
+            self.subscription_metrics.reset_metrics()
+            subscription_cleanup += 1
+        
+        # Log the results
+        total_cleaned = sum(cleanup_stats.values()) + subscription_cleanup
+        
+        self.logger.info(
+            f"Memory cleanup completed: {cleanup_stats['requests_cleaned']} requests, "
+            f"{cleanup_stats['responses_cleaned']} responses, "
+            f"{cleanup_stats['handlers_cleaned']} handlers, "
+            f"{subscription_cleanup} subscription metrics reset"
+        )
+        
+        return {
+            'cleanup_stats': cleanup_stats,
+            'subscription_cleanup': subscription_cleanup,
+            'total_items_cleaned': total_cleaned,
+            'memory_stats_after': self.get_memory_stats()
+        }
+    
+    def log_memory_status(self, level: str = 'info') -> None:
+        """
+        Log current memory status.
+        
+        Args:
+            level: Log level ('debug', 'info', 'warning', 'error')
+        """
+        health = self.check_memory_health()
+        stats = health['stats']
+        
+        message = (
+            f"Memory Status: {health['status']} | "
+            f"Total: {stats['total_memory_estimate_mb']:.1f}MB | "
+            f"Requests: {stats['request_tracker']['pending_requests']} | "
+            f"Usage: {stats['memory_accountant']['usage_percent']:.1f}%"
+        )
+        
+        if health['alerts']:
+            message += f" | ALERTS: {', '.join(health['alerts'])}"
+        if health['warnings']:
+            message += f" | WARNINGS: {', '.join(health['warnings'])}"
+        
+        log_method = getattr(self.logger, level, self.logger.info)
+        log_method(message)
+    
     # Legacy API compatibility methods
     def subscribe(self, table_name: str, sql_query: str = None) -> QueryId:
         """
@@ -2166,6 +2702,12 @@ class WebSocketClient:
     def connection_state(self, value: ConnectionState) -> None:
         """Legacy alias for state."""
         self.state = value
+        # Sync with connection manager for API compatibility
+        # This allows tests to set connection_state directly and have it work
+        if hasattr(self, '_connection_manager') and self._connection_manager:
+            # Access the private _state to sync for testing purposes
+            with self._connection_manager._lock:
+                self._connection_manager._state = value
     
     @property
     def ws_app(self) -> Optional[websocket.WebSocketApp]:
@@ -2176,3 +2718,195 @@ class WebSocketClient:
     def ws_app(self, value: Optional[websocket.WebSocketApp]) -> None:
         """Legacy alias for ws."""
         self.ws = value
+        # Sync with connection manager for API compatibility
+        # This allows tests to set ws_app directly and have it work
+        if hasattr(self, '_connection_manager') and self._connection_manager:
+            with self._connection_manager._lock:
+                self._connection_manager._connection = value
+    
+    # Legacy API compatibility for request tracking
+    @property
+    def pending_requests(self) -> 'LegacyRequestDict':
+        """Legacy compatibility: access to pending requests via BoundedRequestTracker."""
+        return LegacyRequestDict(self.request_tracker, 'requests')
+    
+    @property
+    def request_responses(self) -> 'LegacyRequestDict':
+        """Legacy compatibility: access to request responses via BoundedRequestTracker."""
+        return LegacyRequestDict(self.request_tracker, 'responses')
+    
+    # Authentication methods using AuthenticationManager
+    def get_authentication_state(self) -> str:
+        """
+        Get current authentication state.
+        
+        Returns:
+            Authentication state as string
+        """
+        if self._auth_manager:
+            return self._auth_manager.authentication_state.value
+        return "unknown"
+    
+    def get_authentication_info(self) -> Dict[str, Any]:
+        """
+        Get authentication information for debugging/monitoring.
+        
+        Returns:
+            Dict with authentication status info (no sensitive data)
+        """
+        if self._auth_manager:
+            return self._auth_manager.get_auth_info()
+        
+        # Fallback to legacy properties
+        return {
+            "state": "unknown",
+            "is_authenticated": self.auth_handshake_completed,
+            "handshake_completed": self.auth_handshake_completed,
+            "has_identity": self.spacetimedb_identity is not None,
+            "has_token": self.spacetimedb_token is not None,
+            "host": self.host,
+            "database": self.database_address
+        }
+    
+    def refresh_authentication(self) -> bool:
+        """
+        Refresh authentication credentials.
+        
+        Returns:
+            True if refresh succeeded, False otherwise
+        """
+        if self._auth_manager:
+            result = self._auth_manager.refresh_token()
+            if result.success:
+                self._sync_auth_state_from_manager()
+                return True
+            else:
+                self.logger.warning(f"Authentication refresh failed: {result.error}")
+                return False
+        
+        self.logger.warning("AuthenticationManager not available for refresh")
+        return False
+    
+    def clear_authentication(self) -> None:
+        """
+        Clear all authentication state and stored credentials.
+        
+        This removes credentials from both memory and persistent storage.
+        """
+        if self._auth_manager:
+            self._auth_manager.clear_stored_credentials()
+        
+        # Also clear legacy properties
+        with self._lock:
+            self.spacetimedb_identity = None
+            self.spacetimedb_token = None
+            self.auth_handshake_completed = False
+            self.retry_with_auth = False
+        
+        self.logger.info("Authentication credentials cleared")
+    
+    def is_authenticated(self) -> bool:
+        """
+        Check if client is currently authenticated.
+        
+        Returns:
+            True if authenticated, False otherwise
+        """
+        if self._auth_manager:
+            return self._auth_manager.is_authenticated
+        
+        # Fallback to legacy check
+        return (
+            self.spacetimedb_identity is not None and
+            self.spacetimedb_token is not None and
+            self.auth_handshake_completed
+        )
+
+
+class LegacyRequestDict:
+    """
+    Legacy compatibility wrapper for the new BoundedRequestTracker.
+    
+    Provides dict-like interface for backward compatibility with existing code
+    that expects `pending_requests` and `request_responses` to be dicts.
+    """
+    
+    def __init__(self, request_tracker: BoundedRequestTracker, dict_type: str):
+        self._tracker = request_tracker
+        self._type = dict_type
+    
+    def __setitem__(self, key, value):
+        """Set an item (add request or response)."""
+        if self._type == 'requests':
+            self._tracker.add_request(key, value)
+        elif self._type == 'responses':
+            self._tracker.add_response_future(key, value)
+    
+    def __getitem__(self, key):
+        """Get an item."""
+        if self._type == 'requests':
+            result = self._tracker.get_request(key)
+        elif self._type == 'responses':
+            result = self._tracker.get_response(key)
+        else:
+            result = None
+        
+        if result is None:
+            raise KeyError(key)
+        return result
+    
+    def __delitem__(self, key):
+        """Delete an item."""
+        if self._type == 'requests':
+            if not self._tracker.remove_request(key):
+                raise KeyError(key)
+        elif self._type == 'responses':
+            if not self._tracker.remove_response(key):
+                raise KeyError(key)
+    
+    def __contains__(self, key):
+        """Check if key exists."""
+        if self._type == 'requests':
+            return key in self._tracker.pending_requests
+        elif self._type == 'responses':
+            return key in self._tracker.response_futures
+        return False
+    
+    def get(self, key: Any, default: Any = None) -> Any:
+        """Get with default value."""
+        try:
+            return self[key]
+        except KeyError:
+            return default
+    
+    def pop(self, key: Any, default: Any = None) -> Any:
+        """Pop an item."""
+        try:
+            value = self[key]
+            del self[key]
+            return value
+        except KeyError:
+            if default is not None:
+                return default
+            raise
+    
+    def clear(self) -> None:
+        """Clear all items."""
+        if self._type == 'requests':
+            # Clear only requests
+            request_ids = list(self._tracker.pending_requests.keys())
+            for req_id in request_ids:
+                self._tracker.remove_request(req_id)
+        elif self._type == 'responses':
+            # Clear only responses
+            response_ids = list(self._tracker.response_futures.keys())
+            for resp_id in response_ids:
+                self._tracker.remove_response(resp_id)
+    
+    def __len__(self):
+        """Get number of items."""
+        if self._type == 'requests':
+            return len(self._tracker.pending_requests)
+        elif self._type == 'responses':
+            return len(self._tracker.response_futures)
+        return 0

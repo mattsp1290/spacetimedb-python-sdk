@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/sql_validator.py
+# hypothesis_version: 6.135.32
+
+['""', '".*?".*?"', '"[^"]*"', "'", "''", "'.*?'.*?'", "'[^']*'", '(?:\\?|\\$\\d+|:\\w+)', '--', '--.*$', '/\\*.*?\\*/', '0x[0-9a-f]+', ':(\\w+)', ';', '?', 'ALTER', 'BACKUP', 'BULK', 'CREATE', 'DBCC', 'DELETE', 'DROP', 'DUMP', 'EXEC', 'EXECUTE', 'GRANT', 'INSERT', 'KILL', 'LOAD', 'RENAME', 'REPLACE', 'RESTORE', 'REVOKE', 'SELECT', 'SHUTDOWN', 'TRUNCATE', 'UPDATE', '\\b\\w+\\b', '\\bascii\\s*\\(', '\\bbenchmark\\s*\\(', '\\bchar\\s*\\(', '\\bexec\\s*\\(', '\\binto\\s+outfile\\b', '\\bload_file\\s*\\(', '\\bsleep\\s*\\(', '\\s+', 'query_template']

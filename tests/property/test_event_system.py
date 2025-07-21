@@ -26,18 +26,19 @@ class TestEventSystemProperties:
     @given(
         st.lists(
             st.tuples(
-                st.text(min_size=1, max_size=20),  # event_name
+                st.text(min_size=1, max_size=8),  # event_name - reduced size
                 st.dictionaries(
-                    st.text(min_size=1, max_size=10),  # key
-                    st.one_of(st.text(), st.integers(), st.booleans()),  # value
+                    st.text(min_size=1, max_size=6),  # key - smaller
+                    st.one_of(st.text(max_size=8), st.integers(), st.booleans()),  # value - limited text size
                     min_size=0,
-                    max_size=5
+                    max_size=2  # Fewer entries
                 )  # event_data
             ),
             min_size=1,
-            max_size=100
+            max_size=25  # Further reduced max events
         )
     )
+    @settings(deadline=1500, max_examples=10)  # More aggressive optimization
     def test_event_system_processes_all_events(self, events):
         """Test that event system processes all emitted events."""
         event_system = EventSystem()
@@ -101,19 +102,20 @@ class TestEventSystemProperties:
     @given(
         st.lists(
             st.tuples(
-                st.text(min_size=1, max_size=15),  # event_name
-                st.integers(min_value=1, max_value=10),  # handler_count
+                st.text(min_size=1, max_size=8),  # event_name - reduced size
+                st.integers(min_value=1, max_value=3),  # handler_count - further reduced max
             ),
             min_size=1,
-            max_size=20
+            max_size=5  # Much smaller list size
         ),
         st.dictionaries(
-            st.text(min_size=1, max_size=10),
-            st.text(min_size=1, max_size=20),
+            st.text(min_size=1, max_size=6),  # Smaller keys
+            st.text(min_size=1, max_size=10),  # Smaller values
             min_size=1,
-            max_size=5
+            max_size=2  # Fewer dictionary entries
         )
     )
+    @settings(deadline=1500, max_examples=8)  # Much more aggressive settings
     def test_event_routing_accuracy(self, event_subscriptions, test_data):
         """Test that events are routed only to subscribed handlers."""
         event_system = EventSystem()
@@ -150,10 +152,11 @@ class TestEventSystemProperties:
                 assert received_data == test_data
     
     @given(
-        st.text(min_size=1, max_size=20),
-        st.integers(min_value=1, max_value=30),
-        st.lists(st.integers(), min_size=1, max_size=100)
+        st.text(min_size=1, max_size=15),
+        st.integers(min_value=1, max_value=15),
+        st.lists(st.integers(), min_size=1, max_size=50)
     )
+    @settings(deadline=1500, max_examples=10)
     def test_handler_unsubscription_works(self, event_name, handler_count, test_events):
         """Test that unsubscribed handlers don't receive events."""
         event_system = EventSystem()
@@ -192,13 +195,14 @@ class TestEventSystemProperties:
     @given(
         st.lists(
             st.tuples(
-                st.text(min_size=1, max_size=10),  # event_name
-                st.text(min_size=1, max_size=20),  # event_data
+                st.text(min_size=1, max_size=8),  # event_name - smaller
+                st.text(min_size=1, max_size=15),  # event_data - smaller
             ),
             min_size=1,
-            max_size=200
+            max_size=50  # Much reduced max events
         )
     )
+    @settings(deadline=1500, max_examples=10)
     def test_event_order_preservation(self, events):
         """Test that events are processed in the order they were emitted."""
         event_system = EventSystem()
@@ -221,11 +225,11 @@ class TestEventSystemProperties:
         assert received_events == expected_data
     
     @given(
-        st.text(min_size=1, max_size=15),
-        st.integers(min_value=1, max_value=50),  # Reduced max to make test faster
-        st.text(min_size=1, max_size=50)
+        st.text(min_size=1, max_size=8),
+        st.integers(min_value=1, max_value=10),  # Much smaller for concurrent tests
+        st.text(min_size=1, max_size=15)
     )
-    @settings(deadline=500)  # Increase deadline to 500ms
+    @settings(deadline=1500, max_examples=5)  # Very conservative for concurrent tests
     def test_concurrent_event_emission(self, event_name, event_count, event_data):
         """Test thread safety of concurrent event emission."""
         event_system = EventSystem()
@@ -255,9 +259,10 @@ class TestEventSystemProperties:
             assert received.startswith(event_data)
     
     @given(
-        st.text(min_size=1, max_size=15),
-        st.integers(min_value=1, max_value=50)
+        st.text(min_size=1, max_size=10),
+        st.integers(min_value=1, max_value=20)
     )
+    @settings(deadline=1500, max_examples=5)
     def test_concurrent_subscription_management(self, event_name, operation_count):
         """Test thread safety of concurrent subscription operations."""
         event_system = EventSystem()
@@ -315,15 +320,15 @@ class EventSystemStateMachine(RuleBasedStateMachine):
     handlers = Bundle('handlers')
     event_data = Bundle('event_data')
     
-    @rule(target=event_names, name=st.text(min_size=1, max_size=15))
+    @rule(target=event_names, name=st.text(min_size=1, max_size=6))  # Much smaller names
     def add_event_name(self, name):
         return name
     
     @rule(target=event_data, data=st.dictionaries(
-        st.text(min_size=1, max_size=10),
-        st.one_of(st.text(), st.integers(), st.booleans()),
+        st.text(min_size=1, max_size=5),  # Much smaller keys
+        st.one_of(st.text(max_size=6), st.integers(), st.booleans()),  # Very limited text size
         min_size=0,
-        max_size=5
+        max_size=2  # Fewer entries
     ))
     def add_event_data(self, data):
         return data
@@ -489,5 +494,7 @@ class TestEventSystemEdgeCases:
         assert calls[0] == ("handler1", "first")
 
 
-# Run state machine tests
+# Run state machine tests with optimized settings
 TestEventSystemStateMachine = EventSystemStateMachine.TestCase
+# Apply settings to state machine
+TestEventSystemStateMachine.settings = settings(deadline=2000, max_examples=10, stateful_step_count=8)

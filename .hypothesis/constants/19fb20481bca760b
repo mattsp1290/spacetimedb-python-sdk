@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/metrics.py
+# hypothesis_version: 6.135.32
+
+[0.0, 1.0, 60.0, 1000, 'ConnectionMetrics', 'EventMetrics', 'MemoryMetrics', 'MetricsCollector', 'cache_hits', 'cache_misses', 'cache_size', 'connection_pool_size', 'connections_active', 'connections_failed', 'connections_total', 'event_queue_depth', 'events_batched', 'events_failed', 'events_processed', 'gc_collections', 'get_global_collector', 'monitor_performance', 'objects_allocated', 'objects_deallocated', 'reconnections']

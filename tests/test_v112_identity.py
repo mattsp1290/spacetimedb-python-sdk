@@ -16,19 +16,19 @@ from spacetimedb_sdk.protocol import TEXT_PROTOCOL
 class TestIdentityParameter:
     """Test database identity parameter handling"""
     
-    def test_identity_in_url_construction(self, mock_websocket):
+    def test_identity_in_url_construction(self, mock_websocket_comprehensive):
         """Test that db_identity is used in WebSocket URL"""
         client = SpacetimeDBClient(autogen_package=None)  # Remove test_mode to allow WebSocket creation
         
         # Track WebSocket creation
         ws_calls = []
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def track_websocket(*args, **kwargs):
             ws_calls.append((args, kwargs))
             return original_app(*args, **kwargs)
             
-        mock_websocket.WebSocketApp = track_websocket
+        mock_websocket_comprehensive.WebSocketApp = track_websocket
         
         try:
             client._connect_internal(
@@ -47,18 +47,18 @@ class TestIdentityParameter:
         finally:
             client.disconnect()
             
-    def test_identity_fallback_to_database_address(self, mock_websocket):
+    def test_identity_fallback_to_database_address(self, mock_websocket_comprehensive):
         """Test that database_address is used as fallback when db_identity is None"""
         client = SpacetimeDBClient(autogen_package=None)  # Remove test_mode
         
         ws_calls = []
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def track_websocket(*args, **kwargs):
             ws_calls.append((args, kwargs))
             return original_app(*args, **kwargs)
             
-        mock_websocket.WebSocketApp = track_websocket
+        mock_websocket_comprehensive.WebSocketApp = track_websocket
         
         try:
             client._connect_internal(
@@ -77,7 +77,7 @@ class TestIdentityParameter:
         finally:
             client.disconnect()
             
-    def test_identity_with_different_formats(self, mock_websocket):
+    def test_identity_with_different_formats(self, mock_websocket_comprehensive):
         """Test various identity formats are accepted"""
         test_identities = [
             "550e8400-e29b-41d4-a716-446655440000",  # UUID format
@@ -91,13 +91,13 @@ class TestIdentityParameter:
             
             ws_calls = []
             # Need to restore original after each iteration to avoid recursion
-            original_app = mock_websocket.WebSocketApp.__class__
+            original_app = mock_websocket_comprehensive.WebSocketApp.__class__
             
             def track_websocket(*args, **kwargs):
                 ws_calls.append((args, kwargs))
                 return original_app(*args, **kwargs)
                 
-            mock_websocket.WebSocketApp = track_websocket
+            mock_websocket_comprehensive.WebSocketApp = track_websocket
             
             try:
                 client._connect_internal(
@@ -120,22 +120,21 @@ class TestIdentityParameter:
 class TestIdentityInConnectionMethods:
     """Test db_identity parameter in various connection methods"""
     
-    def test_connect_class_method_with_identity(self, mock_websocket):
+    def test_connect_class_method_with_identity(self, mock_websocket_comprehensive):
         """Test SpacetimeDBClient.connect() with db_identity"""
         ws_calls = []
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def track_websocket(*args, **kwargs):
             ws_calls.append((args, kwargs))
             return original_app(*args, **kwargs)
             
-        mock_websocket.WebSocketApp = track_websocket
+        mock_websocket_comprehensive.WebSocketApp = track_websocket
         
         client = SpacetimeDBClient.connect(
             host="localhost:3000",
             database_address="test-db",
-            db_identity="my-identity-123",
-            test_mode=False  # Need WebSocket creation to track calls
+            db_identity="my-identity-123"
         )
         
         try:
@@ -149,16 +148,16 @@ class TestIdentityInConnectionMethods:
     # Note: The builder doesn't have a with_identity method
     # db_identity is passed as a parameter to connect() or _connect_internal()
             
-    def test_builder_without_identity_uses_module_name(self, mock_websocket):
+    def test_builder_without_identity_uses_module_name(self, mock_websocket_comprehensive):
         """Test builder without identity falls back to module name"""
         ws_calls = []
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def track_websocket(*args, **kwargs):
             ws_calls.append((args, kwargs))
             return original_app(*args, **kwargs)
             
-        mock_websocket.WebSocketApp = track_websocket
+        mock_websocket_comprehensive.WebSocketApp = track_websocket
         
         # The builder creates a client but doesn't connect automatically
         # Need to use connect() method
@@ -179,12 +178,12 @@ class TestIdentityInConnectionMethods:
 class TestIdentityValidation:
     """Test identity parameter validation and error handling"""
     
-    def test_invalid_database_name_characters(self, mock_websocket, connection_tracker):
+    def test_invalid_database_name_characters(self, mock_websocket_comprehensive, connection_tracker):
         """Test error handling for invalid database name characters"""
         client = SpacetimeDBClient(autogen_package=None)
         
         # Mock server rejection for invalid name
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def mock_invalid_name(*args, **kwargs):
             app = original_app(*args, **kwargs)
@@ -199,7 +198,7 @@ class TestIdentityValidation:
             app.run_forever = run_forever
             return app
             
-        mock_websocket.WebSocketApp = mock_invalid_name
+        mock_websocket_comprehensive.WebSocketApp = mock_invalid_name
         
         try:
             client._connect_internal(
@@ -236,16 +235,16 @@ class TestIdentityValidation:
         # Should not crash
         client.disconnect()
         
-    def test_identity_priority_over_database_address(self, mock_websocket):
+    def test_identity_priority_over_database_address(self, mock_websocket_comprehensive):
         """Test that db_identity takes priority over database_address"""
         ws_calls = []
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def track_websocket(*args, **kwargs):
             ws_calls.append((args, kwargs))
             return original_app(*args, **kwargs)
             
-        mock_websocket.WebSocketApp = track_websocket
+        mock_websocket_comprehensive.WebSocketApp = track_websocket
         
         client = SpacetimeDBClient(autogen_package=None)  # Remove test_mode to track WebSocket calls
         
@@ -271,12 +270,12 @@ class TestIdentityValidation:
 class TestIdentityErrorMessages:
     """Test error messages related to identity/database issues"""
     
-    def test_database_not_found_error(self, mock_websocket, connection_tracker):
+    def test_database_not_found_error(self, mock_websocket_comprehensive, connection_tracker):
         """Test handling of database not found (404) error"""
         client = SpacetimeDBClient(autogen_package=None)
         
         # Mock 404 response
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def mock_not_found(*args, **kwargs):
             app = original_app(*args, **kwargs)
@@ -290,7 +289,7 @@ class TestIdentityErrorMessages:
             app.run_forever = run_forever
             return app
             
-        mock_websocket.WebSocketApp = mock_not_found
+        mock_websocket_comprehensive.WebSocketApp = mock_not_found
         
         try:
             client._connect_internal(
@@ -316,16 +315,16 @@ class TestIdentityErrorMessages:
 class TestIdentityWithSSL:
     """Test identity parameter with SSL connections"""
     
-    def test_ssl_url_with_identity(self, mock_websocket):
+    def test_ssl_url_with_identity(self, mock_websocket_comprehensive):
         """Test that SSL URLs are constructed correctly with identity"""
         ws_calls = []
-        original_app = mock_websocket.WebSocketApp
+        original_app = mock_websocket_comprehensive.WebSocketApp
         
         def track_websocket(*args, **kwargs):
             ws_calls.append((args, kwargs))
             return original_app(*args, **kwargs)
             
-        mock_websocket.WebSocketApp = track_websocket
+        mock_websocket_comprehensive.WebSocketApp = track_websocket
         
         client = SpacetimeDBClient(autogen_package=None)  # Remove test_mode to track WebSocket calls
         

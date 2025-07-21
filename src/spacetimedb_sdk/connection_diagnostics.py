@@ -109,7 +109,8 @@ class ConnectionDiagnostics:
                 
                 # Try to parse response
                 try:
-                    data = json.loads(response.read().decode('utf-8'))
+                    from .security.json_validator import secure_json_loads
+                    data = secure_json_loads(response.read().decode('utf-8'), "connection_diagnostics.health")
                     server_info["server_version"] = data.get("version", "unknown")
                     server_info["server_status"] = data.get("status", "unknown")
                 except:

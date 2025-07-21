@@ -661,6 +661,48 @@ def memory_monitor():
     return MemoryMonitor()
 
 
+@pytest.fixture
+def mock_connected_websocket_client():
+    """Create a properly mocked and connected WebSocket client for performance testing"""
+    from spacetimedb_sdk.websocket_client import WebSocketClient
+    from spacetimedb_sdk.connection.connection_manager import ConnectionState
+    from unittest.mock import Mock, patch
+    
+    client = WebSocketClient()
+    mock_instance = Mock()
+    
+    with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
+        mock_ws_app.return_value = mock_instance
+        
+        # Mock the connection manager to be properly connected
+        with patch.object(client._connection_manager, 'is_connected', return_value=True):
+            with patch.object(client._connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
+                with patch.object(client._connection_manager, 'send_data', return_value=None):
+                    # Set up mock WebSocket and ensure connection reference is set
+                    client.ws = mock_instance
+                    client.state = ConnectionState.CONNECTED
+                    client.ws_app = mock_instance
+                    client._connection_manager._connection = mock_instance
+                    
+                    yield client, mock_instance
+
+
+@pytest.fixture
+def performance_baseline_fixture():
+    """Create performance baseline for comparison"""
+    from .test_fixtures import PerformanceBaseline
+    baseline = PerformanceBaseline()
+    # Set reasonable default baselines for test environment
+    baseline.baselines = {
+        'connection_time': 1.0,  # 1 second max connection time
+        'subscription_time': 0.1,  # 100ms max subscription time
+        'message_processing_time': 0.01,  # 10ms max per message
+        'cpu_usage_percent': 50.0,  # Max 50% CPU increase
+        'memory_usage_mb': 50.0,  # Max 50MB memory usage
+    }
+    return baseline
+
+
 @pytest.fixture(autouse=True)
 def cleanup_after_test():
     """Cleanup after each test"""

@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_manager.py
+# hypothesis_version: 6.135.32
+
+[0.1, 1.0, 5.0, 300.0, -1000, 100, 1000, 10000, '*', ',', 'UnifiedEventManager', 'error', 'event_emit', 'events_by_priority', 'events_by_type', 'events_failed', 'events_filtered', 'events_per_second', 'events_processed', 'events_published', 'filter', 'handler_errors', 'handler_success_rate', 'handlers_executed', 'success_rate', 'transformer', 'uptime_seconds']

@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/context_pool.py
+# hypothesis_version: 6.135.32
+
+[30.0, 100, '_pooled', '_response_data', '_start_time', '_triggered_events', 'active_contexts', 'available_contexts', 'enable_timing', 'max_size', 'max_triggered_events', 'min_size', 'peak_active', 'pool_utilization', 'source_component', 'system', 'total_acquired', 'total_released']

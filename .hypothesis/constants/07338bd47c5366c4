@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/json_api.py
+# hypothesis_version: 6.135.32
+
+[1.0, 30.0, 200, 300, 500, 1000, '/', '/v1/databases', '/v1/identity', 'Accept', 'Authorization', 'Content-Type', 'DELETE', 'GET', 'PATCH', 'POST', 'PUT', 'Request failed', 'T', 'User-Agent', 'application/json', 'args', 'data', 'energy_used', 'error', 'headers', 'method', 'params', 'query', 'reducer', 'request_id', 'requests_failed', 'requests_sent', 'requests_succeeded', 'response_data', 'response_time_ms', 'result', 'status_code', 'success_rate', 'timestamp', 'total_retry_attempts', 'url']

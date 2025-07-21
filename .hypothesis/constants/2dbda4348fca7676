@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_filters.py
+# hypothesis_version: 6.135.32
+
+[60.0, 'AND', 'OR', 'WebSocketClient', 'custom', 'event_type', 'source', 'websocket']

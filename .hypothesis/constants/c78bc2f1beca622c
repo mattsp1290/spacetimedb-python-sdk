@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/auto_tuner.py
+# hypothesis_version: 6.135.32
+
+[0.01, 0.2, 0.3, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.95, 1.0, 1.2, 1.5, 5.0, 60.0, 100.0, 100, 1000, 10000, 'Auto-tuning started', 'Auto-tuning stopped', 'batch_size', 'cache_size', 'confidence', 'connection_manager', 'connection_timeout', 'decreasing', 'event_system', 'gc_threshold', 'high', 'increase by 50%', 'increase threshold', 'increasing', 'low', 'max_queue_size', 'max_size', 'medium', 'memory_manager', 'new_value', 'old_value', 'parameter', 'pool_', 'pool_size', 'stable', 'timestamp', 'unknown', 'utilization']

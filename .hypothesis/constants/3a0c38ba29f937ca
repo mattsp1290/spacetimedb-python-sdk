@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/table_interface.py
+# hypothesis_version: 6.135.32
+
+['EventContext', 'ReducerEvent', 'T', 'TableUpdate', '_', 'committed', 'delete', 'entries', 'insert', 'primary_key', 'reducer_event', 'row_type', 'source', 'table_interface', 'timestamp', 'unique_columns', 'update', 'values']

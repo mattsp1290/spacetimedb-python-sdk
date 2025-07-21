@@ -273,7 +273,8 @@ class SecureAuthStorage:
         try:
             data = keyring.get_password(self.KEYRING_SERVICE_NAME, key)
             if data:
-                return AuthCredentials.from_dict(json.loads(data))
+                from ..security.json_validator import secure_json_loads
+                return AuthCredentials.from_dict(secure_json_loads(data, "auth.keyring_credentials"))
             return None
         except Exception as e:
             self.logger.error(ErrorFormatter.format_auth_error("keyring retrieval", e))
@@ -298,7 +299,8 @@ class SecureAuthStorage:
                 encrypted_data = f.read()
             
             decrypted_data = self._fernet.decrypt(encrypted_data)
-            data = json.loads(decrypted_data.decode())
+            from ..security.json_validator import secure_json_loads
+            data = secure_json_loads(decrypted_data.decode(), "auth.file_credentials")
             
             credentials = {}
             for key, cred_data in data.items():
@@ -483,6 +485,22 @@ class SecureAuthStorage:
             
             return removed
     
+    def clear_credentials(self, host: str, database: str) -> bool:
+        """
+        Clear stored credentials for a specific host/database combination.
+        
+        This method is an alias for remove_credentials to match the expected
+        interface used by the authentication manager tests.
+        
+        Args:
+            host: Server host
+            database: Database name
+            
+        Returns:
+            True if credentials were removed, False if not found
+        """
+        return self.remove_credentials(host, database)
+    
     def clear_all_credentials(self) -> None:
         """Remove all stored credentials."""
         with self._lock:
@@ -616,3 +634,53 @@ class SecureAuthStorage:
         except Exception as e:
             self.logger.error(ErrorFormatter.format_auth_error("plaintext migration", e))
             return 0
+
+
+# Global auth storage instance
+_auth_storage: Optional[SecureAuthStorage] = None
+
+
+def get_auth_storage() -> SecureAuthStorage:
+    """Get global auth storage instance."""
+    global _auth_storage
+    if _auth_storage is None:
+        _auth_storage = SecureAuthStorage()
+    return _auth_storage
+
+
+def store_credentials(identity: str, token: str, host: str, database: str) -> None:
+    """
+    Convenience function to store credentials.
+    
+    Args:
+        identity: User identity
+        token: Authentication token
+        host: Server host
+        database: Database name
+    """
+    storage = get_auth_storage()
+    storage.store_credentials(identity, token, host, database)
+
+
+def get_credentials(host: str, database: str) -> Optional[AuthCredentials]:
+    """
+    Convenience function to get credentials.
+    
+    Args:
+        host: Server host
+        database: Database name
+        
+    Returns:
+        Auth credentials if found, None otherwise
+    """
+    storage = get_auth_storage()
+    return storage.get_credentials(host, database)
+
+
+__all__ = [
+    'AuthCredentials',
+    'SecureAuthStorage',
+    'get_auth_storage',
+    'store_credentials', 
+    'get_credentials'
+]

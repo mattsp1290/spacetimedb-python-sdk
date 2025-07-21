@@ -12,7 +12,8 @@ from .core_events import (
     ConnectionEvent, AuthenticationEvent, SubscriptionEvent,
     TableEvent, ReducerEvent, TransactionEvent, MessageEvent, ErrorEvent
 )
-from .event_manager import get_event_manager, EventContext
+from .event_manager import get_event_manager
+from .event_context import EventContext
 from .event_filters import type_filter, CommonFilters
 
 logger = logging.getLogger(__name__)

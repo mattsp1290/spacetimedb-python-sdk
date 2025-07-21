@@ -391,3 +391,27 @@ class DatabaseNameValidator(Validator):
             raise ValueError(f"Invalid database name: {'; '.join(error_messages)}")
         
         return result.sanitized_value
+
+
+# Global instance for convenience functions
+_database_validator = DatabaseNameValidator()
+
+
+def validate_database_identifier(name: str, field: Optional[str] = None) -> ValidationResult:
+    """
+    Convenience function to validate database identifiers.
+    
+    Args:
+        name: Database name to validate
+        field: Optional field name for error reporting
+        
+    Returns:
+        ValidationResult with validation results
+    """
+    return _database_validator.validate(name, field)
+
+
+__all__ = [
+    'DatabaseNameValidator',
+    'validate_database_identifier'
+]

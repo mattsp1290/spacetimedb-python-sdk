@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/registry.py
+# hypothesis_version: 6.135.32
+
+['Registry', 'available', 'class', 'error', 'registered', 'server_language', 'supported_protocols']

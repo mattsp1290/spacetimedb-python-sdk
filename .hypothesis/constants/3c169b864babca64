@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/protocol_handlers/protocol_handler.py
+# hypothesis_version: 6.135.32
+
+[0.0, 1.0, 1000, 1024, 'ClientMessage', 'CompressionManager', 'CompressionType', 'InputValidator', 'ServerMessage', '__class__', '__str__', 'avg_decoding_time_ms', 'avg_encoding_time_ms', 'bsatn', 'compression_enabled', 'compression_ratio', 'error_rate', 'message_size', 'messages_processed', 'metrics_enabled', 'protocol_version', 'query_string', 'reducer', 'reducer_name', 'security_enabled', 'sql_query', 'thread_safe', 'total_bytes_decoded', 'total_bytes_encoded', 'use_binary', 'v1.bsatn.spacetimedb', 'v1.text.spacetimedb']

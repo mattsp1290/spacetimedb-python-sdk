@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/writer.py
+# hypothesis_version: 6.135.32
+
+[-9223372036854775808, -2147483648, -32768, -128, 127, 255, 32767, 65535, 2147483647, 4294967295, 9223372036854775807, 18446744073709551615, '<H', '<I', '<Q', '<b', '<d', '<f', '<h', '<i', '<q', 'utf-8']

@@ -58,7 +58,12 @@ class TestIntegrationRegression:
             # Execute complete flow
             client.connect()
             
-            # Simulate connection events by calling the client's callback directly
+            # Simulate connection events by calling both ConnectionManager and client callbacks
+            # First set up the mock connection in ConnectionManager
+            client._connection_manager._connection = mock_instance
+            # Then update ConnectionManager state to CONNECTED
+            client._connection_manager._on_ws_open(mock_instance)
+            # Finally sync WebSocketClient state
             client._on_ws_open(mock_instance)
                 
             # Simulate identity token by calling the client's message callback directly
@@ -155,7 +160,7 @@ class TestIntegrationRegression:
                 query_id = client.subscribe(table, query)
                 subscription_ids.append(query_id)
                 
-            # Simulate subscription applied for all
+            # Simulate subscription applied for all with better timing
             if hasattr(client.ws_app, 'on_message'):
                 for i, table in enumerate(tables):
                     sub_msg = json.dumps({
@@ -165,8 +170,11 @@ class TestIntegrationRegression:
                         }
                     })
                     client.ws_app.on_message(mock_instance, sub_msg)
+                    # Small delay between messages for processing
+                    time.sleep(0.01)
                     
-            time.sleep(0.1)
+            # Longer delay for all events to be processed
+            time.sleep(0.3)
             
             # Validate multi-subscription regression
             baseline_result = {
@@ -239,7 +247,8 @@ class TestIntegrationRegression:
             if hasattr(client.ws_app, 'on_open'):
                 client.ws_app.on_open(mock_instance)
                 
-            time.sleep(0.1)
+            # Give more time for recovery events to be processed
+            time.sleep(0.3)
             
             # Validate error handling regression
             baseline_result = {
@@ -276,7 +285,10 @@ class TestIntegrationRegression:
             mock_ws_app.return_value = mock_instance
             
             client.connect()
-            client.connection_state = ConnectionState.CONNECTED
+            # Properly synchronize connection state
+            client._connection_manager._connection = mock_instance
+            client._connection_manager._on_ws_open(mock_instance)
+            client._on_ws_open(mock_instance)
             
             def create_subscriptions():
                 try:

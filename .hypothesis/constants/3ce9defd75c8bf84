@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/connection_interface.py
+# hypothesis_version: 6.135.32
+
+[1.0, 5.0, 60.0, 'authenticating', 'connected', 'connecting', 'degraded', 'disconnected', 'failed', 'healthy', 'ready', 'reconnecting', 'unhealthy', 'unknown']

@@ -8,6 +8,7 @@ versions and ensures proper message formatting based on the protocol version.
 from typing import Any, Dict, List, Union, Optional
 import logging
 from enum import Enum
+import time  # Security fix: Static import to replace dynamic __import__('time')
 
 from .serialization import serialize_for_client, prepare_message_for_client, ensure_dict_compatible
 
@@ -279,7 +280,7 @@ class ProtocolHandler:
         error_response = {
             "error": error_message,
             "protocol_version": self.version.value,
-            "timestamp": __import__('time').time()
+            "timestamp": time.time()  # Security fix: Using static import instead of dynamic __import__
         }
         
         if request_id is not None:

@@ -52,6 +52,28 @@ except ImportError:
     validate_json_data = None
     ValidationError = Exception
 
+# Import security validation framework
+try:
+    from .security.input_validation import (
+        SQLSecurityValidator,
+        ProtocolMessageValidator,
+        ResourceProtection,
+        SecurityValidationError,
+        SecurityViolation,
+        AttackType,
+        SecurityConfig,
+        create_secure_validators,
+        sanitize_sql_query,
+        sanitize_table_name
+    )
+    SECURITY_VALIDATION_ENABLED = True
+except ImportError:
+    # Fallback if security module is not available
+    SECURITY_VALIDATION_ENABLED = False
+    SecurityValidationError = Exception
+    SecurityViolation = object
+    AttackType = object
+
 # Protocol constants
 TEXT_PROTOCOL = "v1.json.spacetimedb"
 BIN_PROTOCOL = "v1.bsatn.spacetimedb"
@@ -612,13 +634,39 @@ ServerMessage = Union[
 
 
 class ProtocolEncoder:
-    """Encodes messages for the SpacetimeDB protocol."""
+    """Encodes messages for the SpacetimeDB protocol with comprehensive security validation."""
     
-    def __init__(self, use_binary: bool = False):
+    def __init__(self, use_binary: bool = False, enable_security: bool = True, security_config: Optional[SecurityConfig] = None):
         self.use_binary = use_binary
+        self.enable_security = enable_security and SECURITY_VALIDATION_ENABLED
+        
+        # Initialize security validators if enabled
+        if self.enable_security:
+            self.security_config = security_config or SecurityConfig()
+            self.sql_validator, self.protocol_validator, self.resource_protector = create_secure_validators(self.security_config)
+        else:
+            self.sql_validator = None
+            self.protocol_validator = None
+            self.resource_protector = None
     
-    def encode_client_message(self, message: ClientMessage) -> bytes:
-        """Encode a client message for transmission."""
+    def encode_client_message(self, message: ClientMessage, client_id: Optional[str] = None) -> bytes:
+        """
+        Encode a client message for transmission with security validation.
+        
+        Args:
+            message: Client message to encode
+            client_id: Optional client identifier for security tracking
+            
+        Returns:
+            Encoded message bytes
+            
+        Raises:
+            SecurityValidationError: If message fails security validation
+        """
+        # Perform security validation if enabled
+        if self.enable_security:
+            self._validate_message_security(message, client_id)
+        
         if self.use_binary:
             return self._encode_bsatn(message)
         else:
@@ -841,6 +889,157 @@ class ProtocolEncoder:
             raise writer.error()
         
         return writer.get_bytes()
+    
+    def _validate_message_security(self, message: ClientMessage, client_id: Optional[str] = None) -> None:
+        """
+        Validate message for security threats.
+        
+        Args:
+            message: Client message to validate
+            client_id: Optional client identifier for tracking
+            
+        Raises:
+            SecurityValidationError: If validation fails
+        """
+        violations = []
+        
+        # Check rate limiting first
+        if self.resource_protector:
+            is_expensive = self._is_expensive_operation(message)
+            is_allowed, rate_violation = self.resource_protector.check_rate_limit(client_id or "unknown", is_expensive)
+            if not is_allowed and rate_violation:
+                raise SecurityValidationError("Rate limit exceeded", rate_violation)
+        
+        # Validate message size
+        if self.protocol_validator:
+            is_valid, size_violations = self.protocol_validator.validate_message_size(message, client_id)
+            violations.extend(size_violations)
+        
+        # Validate SQL queries in different message types
+        if isinstance(message, (Subscribe, SubscribeSingleMessage, SubscribeMultiMessage)):
+            query_violations = self._validate_subscription_queries(message, client_id)
+            violations.extend(query_violations)
+        elif isinstance(message, (OneOffQuery, OneOffQueryMessage)):
+            query_violations = self._validate_oneoff_query(message, client_id)
+            violations.extend(query_violations)
+        elif isinstance(message, CallReducer):
+            reducer_violations = self._validate_reducer_call(message, client_id)
+            violations.extend(reducer_violations)
+        
+        # Raise exception if any violations found
+        if violations:
+            # Log all violations
+            if self.security_config.log_security_violations:
+                for violation in violations:
+                    security_logger.warning(
+                        f"Security violation: {violation.description}",
+                        extra={'violation_data': violation.to_dict()}
+                    )
+            
+            # Raise exception for the most severe violation
+            critical_violations = [v for v in violations if v.severity == 'critical']
+            if critical_violations:
+                raise SecurityValidationError("Critical security violation detected", critical_violations[0])
+            
+            high_violations = [v for v in violations if v.severity == 'high']
+            if high_violations:
+                raise SecurityValidationError("High security risk detected", high_violations[0])
+            
+            # For medium/low violations, just log them but don't block
+            if any(v.severity in ['medium', 'low'] for v in violations):
+                security_logger.warning(f"Security warnings detected for client {client_id}: {len(violations)} violations")
+    
+    def _is_expensive_operation(self, message: ClientMessage) -> bool:
+        """Determine if operation is expensive and should be rate limited."""
+        if isinstance(message, (Subscribe, SubscribeSingleMessage, SubscribeMultiMessage)):
+            return True  # Subscriptions are expensive
+        elif isinstance(message, (OneOffQuery, OneOffQueryMessage)):
+            # Check query complexity
+            if self.resource_protector:
+                complexity = self.resource_protector.estimate_query_complexity(message.query_string)
+                return complexity > 50  # Threshold for expensive queries
+        return False
+    
+    def _validate_subscription_queries(self, message: Union[Subscribe, SubscribeSingleMessage, SubscribeMultiMessage], client_id: Optional[str]) -> List[SecurityViolation]:
+        """Validate SQL queries in subscription messages."""
+        violations = []
+        
+        if isinstance(message, SubscribeSingleMessage):
+            queries = [message.query]
+        else:
+            queries = message.query_strings
+        
+        # Validate each query
+        for i, query in enumerate(queries):
+            if not query:
+                continue
+                
+            # First sanitize table names if this looks like a simple table reference
+            if ' ' not in query and not any(keyword in query.lower() for keyword in ['select', 'from', 'where', 'join']):
+                # Validate table name
+                if self.protocol_validator:
+                    is_valid, table_violations = self.protocol_validator.validate_table_name(query, client_id)
+                    violations.extend(table_violations)
+                
+                # Convert to safe SQL query format
+                sanitized_table = sanitize_table_name(query)
+                query = f"SELECT * FROM {sanitized_table}"
+                
+                # Update the message with sanitized query
+                if isinstance(message, SubscribeSingleMessage):
+                    message.query = query
+                else:
+                    message.query_strings[i] = query
+            
+            # Validate the SQL query
+            if self.sql_validator:
+                is_valid, sql_violations = self.sql_validator.validate_query(query, client_id)
+                violations.extend(sql_violations)
+        
+        return violations
+    
+    def _validate_oneoff_query(self, message: Union[OneOffQuery, OneOffQueryMessage], client_id: Optional[str]) -> List[SecurityViolation]:
+        """Validate SQL query in one-off query messages."""
+        violations = []
+        
+        query = message.query_string
+        if query and self.sql_validator:
+            is_valid, sql_violations = self.sql_validator.validate_query(query, client_id)
+            violations.extend(sql_violations)
+            
+            # Sanitize the query if it passes validation
+            if is_valid:
+                sanitized_query = sanitize_sql_query(query)
+                message.query_string = sanitized_query
+        
+        return violations
+    
+    def _validate_reducer_call(self, message: CallReducer, client_id: Optional[str]) -> List[SecurityViolation]:
+        """Validate reducer call parameters."""
+        violations = []
+        
+        # Validate reducer name format
+        if self.protocol_validator:
+            # Treat reducer name like a table name for validation
+            is_valid, name_violations = self.protocol_validator.validate_table_name(message.reducer, client_id)
+            for violation in name_violations:
+                violation.field_name = 'reducer_name'
+                violations.append(violation)
+        
+        # Validate args size
+        if isinstance(message.args, (str, bytes)):
+            args_size = len(message.args)
+            if args_size > self.security_config.max_message_size_bytes:
+                violation = SecurityViolation(
+                    attack_type=AttackType.BUFFER_OVERFLOW,
+                    severity='medium',
+                    description=f'Reducer args size {args_size} exceeds limit',
+                    field_name='reducer_args',
+                    client_identifier=client_id
+                )
+                violations.append(violation)
+        
+        return violations
 
 
 class ProtocolDecoder:
@@ -874,8 +1073,9 @@ class ProtocolDecoder:
                 # All other exceptions from validate_json_data (including security-related ones)
                 # should be propagated up instead of falling back to unsafe parsing
             else:
-                # Fallback to direct parsing if validation not available
-                message = json.loads(json_str)
+                # Fallback to secure parsing if validation not available
+                from .security.json_validator import secure_json_loads
+                message = secure_json_loads(json_str, "protocol_message_fallback")
                 
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             raise ValueError(f"Failed to decode JSON message: {e}")
@@ -1807,11 +2007,11 @@ class BSATN:
     Reader = BsatnReader
     
     @staticmethod
-    def encode(value):
+    def encode(value: Any) -> bytes:
         """Encode a value to BSATN format."""
         return encode(value)
     
     @staticmethod
-    def decode(data):
+    def decode(data: bytes) -> Any:
         """Decode a value from BSATN format."""
         return decode(data)

@@ -57,7 +57,7 @@ from .connection_id import (
 )
 from .query_id import QueryId
 from .client_cache import ClientCache
-from .compression import (
+from .compression_handlers.compression_manager import (
     CompressionManager,
     CompressionConfig,
     CompressionType,
@@ -81,11 +81,14 @@ from .energy import (
 
 from .subscription_builder import AdvancedSubscriptionBuilder
 from .table_interface import DatabaseInterface, TableEventProcessor, create_event_context, ReducerEvent as TableReducerEvent
-from .event_system import (
-    EventEmitter, EventContext, EventType, Event, 
+from .events import (
+    UnifiedEventManager, EventContext, EventType, Event, 
     ReducerEvent as AdvancedReducerEvent, TableEvent,
-    create_event, create_reducer_event, create_table_event,
-    global_event_bus
+    create_reducer_event, create_table_event,
+    get_event_manager, emit_event,
+    # Legacy compatibility
+    LegacyEventEmitter as EventEmitter,
+    create_event
 )
 from .json_api import SpacetimeDBJsonAPI, ApiResponse, DatabaseInfo, ModuleInfo
 
@@ -419,8 +422,8 @@ class SpacetimeDBClient:
         # Module information
         self._module: Optional[RemoteModule] = None
         
-        # Advanced event system
-        self._event_emitter = EventEmitter(name=f"client_{id(self)}")
+        # Unified event system
+        self._event_manager = get_event_manager()
         self._setup_advanced_events()
         
         # JSON API client (initialized on demand)
@@ -465,88 +468,163 @@ class SpacetimeDBClient:
     def shutdown(self) -> None:
         """Properly shutdown the client and cleanup threads."""
         self.logger.debug(f"Shutdown called. Current thread: {threading.get_ident()}")
-        with self._lock:
-            self.logger.debug(f"Shutdown: Acquired _lock. should_stop_processing: {self.should_stop_processing.is_set()}")
-            if self.should_stop_processing.is_set() and not (self.processing_thread and self.processing_thread.is_alive()):
-                 self.logger.debug("Shutdown: Already stopped or stopping, exiting early.")
-                 # return # Avoid returning if ws_client still needs cleanup
-
-            self.should_stop_processing.set()
-            self.logger.debug("Shutdown: Set should_stop_processing.")
-
-            if self.enhanced_connection_id:
-                try:
-                    # Handle enhanced connection lifecycle (gracefully handle test mocks)
-                    connection_id_str = "test_connection" if hasattr(self.enhanced_connection_id, '_mock_name') else self.enhanced_connection_id.to_hex()[:8]
-                    self.logger.debug(f"Shutdown: Handling enhanced connection lifecycle for {connection_id_str}")
-                    
-                    self.connection_lifecycle_manager.on_connection_lost(
-                        self.enhanced_connection_id, "Client disconnect"
-                    )
-                    self.connection_metrics.record_disconnection(self.enhanced_connection_id)
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_connection_error("shutdown lifecycle cleanup", e))
+        
+        # Check if already shutting down to prevent multiple shutdown attempts
+        if hasattr(self, '_shutting_down') and self._shutting_down:
+            self.logger.debug("Shutdown: Already shutting down, skipping.")
+            return
             
-            if self.ws_client:
-                self.logger.debug("Shutdown: Disconnecting ws_client.")
-                try:
-                    self.ws_client.disconnect()
-                    self.logger.debug("Shutdown: ws_client.disconnect() called.")
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_connection_error("shutdown disconnect", e))
-                self.ws_client = None
-            
-            if self.processing_thread and self.processing_thread.is_alive():
-                self.logger.debug(f"Shutdown: Stopping processing_thread (ID: {self.processing_thread.ident}). Current state: {self.processing_thread.is_alive()}")
-                try:
-                    self.logger.debug(f"Shutdown: Putting None on message_queue (empty: {self.message_queue.empty()}).")
-                    self.message_queue.put(None, timeout=0.1)
-                except queue.Full:
-                    self.logger.warning("Shutdown: Message queue full, processing_thread might be blocked on put.")
-                except Exception as e:
-                     self.logger.error(ErrorFormatter.format_generic_error("Client", "shutdown queue cleanup", e))
+        self._shutting_down = True
+        
+        try:
+            with self._lock:
+                self.logger.debug(f"Shutdown: Acquired _lock. should_stop_processing: {self.should_stop_processing.is_set()}")
                 
-                self.logger.debug(f"Shutdown: Joining processing_thread (ID: {self.processing_thread.ident}).")
-                self.processing_thread.join(timeout=3.0)
-                if self.processing_thread.is_alive():
-                    self.logger.warning(f"Shutdown: processing_thread (ID: {self.processing_thread.ident}) did NOT stop cleanly.")
+                # Set shutdown signal first
+                self.should_stop_processing.set()
+                self.logger.debug("Shutdown: Set should_stop_processing.")
+
+                # Handle enhanced connection lifecycle cleanup
+                if self.enhanced_connection_id:
+                    try:
+                        connection_id_str = "test_connection" if hasattr(self.enhanced_connection_id, '_mock_name') else self.enhanced_connection_id.to_hex()[:8]
+                        self.logger.debug(f"Shutdown: Handling enhanced connection lifecycle for {connection_id_str}")
+                        
+                        self.connection_lifecycle_manager.on_connection_lost(
+                            self.enhanced_connection_id, "Client disconnect"
+                        )
+                        self.connection_metrics.record_disconnection(self.enhanced_connection_id)
+                    except Exception as e:
+                        self.logger.error(ErrorFormatter.format_connection_error("shutdown lifecycle cleanup", e))
+                
+                # Disconnect WebSocket client
+                if self.ws_client:
+                    self.logger.debug("Shutdown: Disconnecting ws_client.")
+                    try:
+                        self.ws_client.disconnect()
+                        self.logger.debug("Shutdown: ws_client.disconnect() called.")
+                    except Exception as e:
+                        self.logger.error(ErrorFormatter.format_connection_error("shutdown disconnect", e))
+                    finally:
+                        self.ws_client = None
+                
+                # Force thread shutdown - more aggressive approach
+                if self.processing_thread and self.processing_thread.is_alive():
+                    self.logger.debug(f"Shutdown: Forcefully stopping processing_thread (ID: {self.processing_thread.ident})")
+                    
+                    # Put multiple None messages to ensure thread gets the signal
+                    for _ in range(3):
+                        try:
+                            self.message_queue.put(None, timeout=0.05)
+                        except queue.Full:
+                            break
+                        except Exception:
+                            break
+                    
+                    # Shorter timeout for faster shutdown
+                    self.logger.debug(f"Shutdown: Joining processing_thread with 1.5s timeout")
+                    self.processing_thread.join(timeout=1.5)
+                    
+                    if self.processing_thread.is_alive():
+                        self.logger.warning(f"Shutdown: processing_thread (ID: {self.processing_thread.ident}) did NOT stop cleanly - forcing cleanup")
+                        # Mark thread as None to prevent further operations
+                        self.processing_thread = None
+                    else:
+                        self.logger.debug(f"Shutdown: processing_thread stopped successfully")
+                        self.processing_thread = None
                 else:
-                    self.logger.debug(f"Shutdown: processing_thread (ID: {self.processing_thread.ident}) stopped.")
-            else:
-                self.logger.debug("Shutdown: processing_thread is None or not alive.")
-            
-            self.logger.debug("Shutdown: Clearing client state.")
-            # Clear all state
-            self.identity = None
-            self.connection_id = None
-            self.enhanced_identity = None
-            self.enhanced_connection_id = None
-            self.enhanced_identity_token = None
-            self.active_subscriptions.clear()
-            self.subscription_callbacks.clear()
-            self._connection_event_listeners.clear()
-            
-            # Clear message queue
-            try:
-                while not self.message_queue.empty():
+                    self.logger.debug("Shutdown: processing_thread is None or not alive.")
+                
+                # Aggressive memory cleanup
+                self._aggressive_cleanup()
+                
+                self.logger.debug("Shutdown: Process complete.")
+        finally:
+            self._shutting_down = False
+    
+    def _aggressive_cleanup(self) -> None:
+        """Perform aggressive memory and resource cleanup."""
+        self.logger.debug("Shutdown: Starting aggressive cleanup")
+        
+        # Clear all state
+        self.identity = None
+        self.connection_id = None
+        self.enhanced_identity = None
+        self.enhanced_connection_id = None
+        self.enhanced_identity_token = None
+        
+        # Clear collections
+        self.active_subscriptions.clear()
+        self.subscription_callbacks.clear()
+        self._connection_event_listeners.clear()
+        if hasattr(self, '_on_event'):
+            self._on_event.clear()
+        
+        # Aggressive message queue cleanup
+        try:
+            # Drain the queue completely
+            while True:
+                try:
                     self.message_queue.get_nowait()
                     self.message_queue.task_done()
-            except:
-                pass
-            
-            # Clean up JSON API client
-            if self._json_api:
+                except queue.Empty:
+                    break
+                except Exception:
+                    break
+        except Exception:
+            pass
+        
+        # Clean up JSON API client
+        if self._json_api:
+            try:
+                import asyncio
                 try:
-                    import asyncio
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(self._json_api.close())
-                    loop.close()
-                except:
-                    pass
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # If in async context, create task
+                        import weakref
+                        task = loop.create_task(self._json_api.close())
+                        # Don't wait for completion to avoid blocking shutdown
+                    else:
+                        asyncio.run(self._json_api.close())
+                except RuntimeError:
+                    # No event loop or other async issues
+                    try:
+                        asyncio.run(self._json_api.close())
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            finally:
                 self._json_api = None
-            
-            self.logger.debug("Shutdown: Process complete.")
+        
+        # Clear any remaining event system references
+        if hasattr(self, '_event_manager'):
+            try:
+                # Try to shutdown the event manager properly
+                if hasattr(self._event_manager, 'shutdown'):
+                    # Check if we're in an async context
+                    try:
+                        loop = asyncio.get_running_loop()
+                        asyncio.create_task(self._event_manager.shutdown())
+                    except RuntimeError:
+                        # No running loop, cleanup synchronously
+                        if hasattr(self._event_manager, '_cleanup_event_loop'):
+                            self._event_manager._is_shutting_down = True
+                            if self._event_manager._thread_pool:
+                                self._event_manager._thread_pool.shutdown(wait=False)
+                            self._event_manager._cleanup_event_loop()
+                elif hasattr(self._event_manager, 'clear'):
+                    self._event_manager.clear()
+            except Exception as e:
+                self.logger.debug(f"Error during event manager cleanup: {e}")
+                pass
+        
+        # Force garbage collection
+        import gc
+        gc.collect()
+        
+        self.logger.debug("Shutdown: Aggressive cleanup complete")
     
     def _setup_enhanced_connection_events(self) -> None:
         """Setup enhanced connection event handling."""
@@ -619,7 +697,7 @@ class SpacetimeDBClient:
     ) -> None:
         """Internal method to connect to SpacetimeDB."""
         # Validate inputs for security
-        self._validate_connection_inputs(host, database_address, auth_token)
+        self._validate_connection_inputs(host, database_address, auth_token, db_identity)
         
         with self._lock:
             if self.ws_client and self.ws_client.is_connected:
@@ -660,7 +738,7 @@ class SpacetimeDBClient:
             self.auth_token = auth_token
             self.ws_client.connect(auth_token, host, database_address, ssl_enabled, db_identity)
     
-    def _validate_connection_inputs(self, host: str, database_address: str, auth_token: Optional[str]) -> None:
+    def _validate_connection_inputs(self, host: str, database_address: str, auth_token: Optional[str], db_identity: Optional[str] = None) -> None:
         """
         Validate connection inputs for security vulnerabilities.
         
@@ -668,20 +746,43 @@ class SpacetimeDBClient:
             host: Host address to validate
             database_address: Database name to validate
             auth_token: Authentication token to validate
+            db_identity: Optional database identity (V1.1.2 protocol)
             
         Raises:
             ValueError: If any input fails validation
             Exception: For critical security violations
         """
-        # Validate database name
-        try:
-            self._database_validator.validate_and_raise(database_address, "database_address")
-        except ValueError as e:
-            # Re-raise as ValueError for test compatibility
-            raise ValueError(f"Invalid database name: {e}")
-        except DatabaseValidationError as e:
-            # Re-raise as Exception for critical security violations
-            raise Exception(f"Security violation in database name: {e}")
+        # For V1.1.2 protocol compatibility:
+        # - If db_identity is provided, database_address can be empty (will use db_identity)
+        # - If both are empty/None, will fall back to module name
+        # - For security: ALWAYS validate database_address parameter if provided, even if empty
+        
+        # Validate db_identity if provided
+        if db_identity and db_identity.strip():
+            try:
+                self._database_validator.validate_and_raise(db_identity, "db_identity")
+            except ValueError as e:
+                raise ValueError(f"Invalid db_identity: {e}")
+            except DatabaseValidationError as e:
+                raise Exception(f"Security violation in db_identity: {e}")
+        
+        # SECURITY FIX: Always validate database_address parameter for security issues,
+        # even if empty or when db_identity is provided. This prevents security bypasses.
+        if database_address is not None:
+            try:
+                self._database_validator.validate_and_raise(database_address, "database_address")
+            except ValueError as e:
+                # Re-raise as ValueError for test compatibility
+                raise ValueError(f"Invalid database name: {e}")
+            except DatabaseValidationError as e:
+                # Re-raise as Exception for critical security violations
+                raise Exception(f"Security violation in database name: {e}")
+        
+        # For protocol compatibility, after validation, check if we have a valid identifier
+        # This logic remains for backwards compatibility but security validation happens above
+        if not db_identity and (not database_address or not database_address.strip()):
+            # Both are empty - will fall back to module name (this is allowed after validation)
+            pass
         
         # Validate host format
         try:
@@ -809,68 +910,18 @@ class SpacetimeDBClient:
         super().__setattr__(name, value)
     
     def disconnect(self) -> None:
-        """Disconnect from SpacetimeDB."""
-        self.logger.debug(f"Disconnect called. Current thread: {threading.get_ident()}")
-        with self._lock:
-            self.logger.debug(f"Disconnect: Acquired _lock. Current state: {self.ws_client.state.value if self.ws_client else 'No ws_client'}")
-            self.logger.info("Disconnect requested.")
-            self.should_stop_processing.set()
-            self.logger.debug("Disconnect: Set should_stop_processing.")
-
-            if self.enhanced_connection_id:
-                try:
-                    # Handle enhanced connection lifecycle (gracefully handle test mocks)
-                    connection_id_str = "test_connection" if hasattr(self.enhanced_connection_id, '_mock_name') else self.enhanced_connection_id.to_hex()[:8]
-                    self.logger.debug(f"Disconnect: Handling enhanced connection lifecycle for {connection_id_str}")
-                    
-                    self.connection_lifecycle_manager.on_connection_lost(
-                        self.enhanced_connection_id, "Client disconnect initiated"
-                    )
-                    self.connection_metrics.record_disconnection(self.enhanced_connection_id)
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_connection_error("pre-disconnect lifecycle", e))
-            
-            if self.ws_client:
-                self.logger.debug("Disconnect: Preparing to call ws_client.disconnect().")
-                try:
-                    self.ws_client.disconnect()
-                    self.logger.debug("Disconnect: ws_client.disconnect() returned.")
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_connection_error("disconnect operation", e), exc_info=True)
-                finally:
-                    self.logger.debug("Disconnect: Setting self.ws_client to None in finally block.")
-                    self.ws_client = None
-            else:
-                self.logger.debug("Disconnect: self.ws_client is None, skipping ws_client.disconnect().")
-            
-            if self.processing_thread and self.processing_thread.is_alive():
-                self.logger.debug(f"Disconnect: Stopping processing_thread (ID: {self.processing_thread.ident}). Current state: {self.processing_thread.is_alive()}")
-                try:
-                    self.logger.debug(f"Disconnect: Putting None on message_queue (empty: {self.message_queue.empty()}).")
-                    self.message_queue.put(None, timeout=0.1)
-                except queue.Full:
-                    self.logger.warning("Disconnect: Message queue full during disconnect, thread might be stuck.")
-                except Exception as e:
-                    self.logger.error(ErrorFormatter.format_generic_error("Client", "disconnect queue cleanup", e))
-                
-                self.logger.debug(f"Disconnect: Joining processing_thread (ID: {self.processing_thread.ident}).")
-                self.processing_thread.join(timeout=2.0)
-                if self.processing_thread.is_alive():
-                    self.logger.warning(f"Disconnect: processing_thread (ID: {self.processing_thread.ident}) did not stop cleanly during disconnect.")
-                else:
-                    self.logger.debug(f"Disconnect: processing_thread (ID: {self.processing_thread.ident}) stopped.")
-            else:
-                self.logger.debug("Disconnect: processing_thread is None or not alive.")
-            
-            self.logger.debug("Disconnect: Clearing client state.")
-            self.identity = None
-            self.connection_id = None
-            self.enhanced_identity = None
-            self.enhanced_connection_id = None
-            self.enhanced_identity_token = None
-            self.active_subscriptions.clear()
-            self.subscription_callbacks.clear()
-            self.logger.info("Client disconnect process complete.")
+        """Disconnect from SpacetimeDB - delegate to optimized shutdown."""
+        self.logger.debug(f"Disconnect called, delegating to shutdown. Current thread: {threading.get_ident()}")
+        self.logger.info("Disconnect requested.")
+        
+        # Use optimized shutdown which handles all cleanup properly
+        self.shutdown()
+        
+        self.logger.info("Client disconnect process complete.")
+    
+    def close(self) -> None:
+        """Close connection - alias for shutdown."""
+        self.shutdown()
     
     # Enhanced connection management methods
     def get_connection_id(self) -> Optional[EnhancedConnectionId]:
@@ -1072,11 +1123,43 @@ class SpacetimeDBClient:
         
         return query_id
     
-    def unsubscribe(self, query_id: QueryId) -> int:
-        """Unsubscribe from a query."""
+    def unsubscribe(self, identifier) -> int:
+        """
+        Unsubscribe from a query.
+        
+        Args:
+            identifier: Either a QueryId object (modern API) or a table name string (legacy compatibility)
+        """
         if not self.is_connected:
             raise RuntimeError("Not connected to SpacetimeDB")
         
+        # Handle legacy API: string table names
+        if isinstance(identifier, str):
+            # Find QueryId(s) for this table name
+            table_name = identifier
+            with self._lock:
+                query_ids_to_remove = []
+                for query_id, queries in self.active_subscriptions.items():
+                    # Check if any query in this subscription references the table
+                    for query in queries:
+                        if table_name in query.lower():  # Simple heuristic
+                            query_ids_to_remove.append(query_id)
+                            break
+                
+                # Remove found subscriptions
+                for query_id in query_ids_to_remove:
+                    if query_id in self.active_subscriptions:
+                        del self.active_subscriptions[query_id]
+                    if query_id in self.subscription_callbacks:
+                        del self.subscription_callbacks[query_id]
+                
+                if not query_ids_to_remove:
+                    self.logger.warning(f"No active subscriptions found for table: {table_name}")
+                
+                return len(query_ids_to_remove)
+        
+        # Handle modern API: QueryId objects
+        query_id = identifier
         with self._lock:
             if query_id in self.active_subscriptions:
                 del self.active_subscriptions[query_id]
@@ -1140,7 +1223,7 @@ class SpacetimeDBClient:
             
             client.event_emitter.on(EventType.REDUCER_SUCCESS, async_handler)
         """
-        return self._event_emitter
+        return self._event_manager
     
     @property
     def json_api(self) -> SpacetimeDBJsonAPI:
@@ -1201,7 +1284,7 @@ class SpacetimeDBClient:
         Returns:
             EventContext with handling results
         """
-        return self._event_emitter.emit(event, **context_kwargs)
+        return self._event_manager.emit(event, **context_kwargs)
     
     def on_event(
         self,
@@ -1229,7 +1312,7 @@ class SpacetimeDBClient:
                 
             handler_id = client.on_event(EventType.TABLE_ROW_INSERT, handle_insert)
         """
-        return self._event_emitter.on(event_type, handler, priority, handler_name)
+        return self._event_manager.on(event_type, handler, priority, handler_name)
     
     def off_event(self, event_type: Union[EventType, str], handler_id: str) -> bool:
         """
@@ -1242,7 +1325,7 @@ class SpacetimeDBClient:
         Returns:
             True if handler was removed
         """
-        return self._event_emitter.off(event_type, handler_id)
+        return self._event_manager.off(event_type, handler_id)
     
     # Event registration using the new API is done through on_event() method
     # Example: client.on_event(EventType.CONNECTION_ESTABLISHED, handler)
@@ -1262,11 +1345,11 @@ class SpacetimeDBClient:
         Returns:
             List of (event, context) tuples
         """
-        return self._event_emitter.get_history(event_type, limit)
+        return self._event_manager.get_history(event_type, limit)
     
     def get_event_metrics(self) -> Dict[str, int]:
         """Get event system metrics."""
-        return self._event_emitter.get_metrics()
+        return self._event_manager.get_metrics()
     
     def set_json_api_base_url(self, base_url: str) -> None:
         """
@@ -1280,14 +1363,11 @@ class SpacetimeDBClient:
         # Reset JSON API client to use new URL
         if self._json_api:
             import asyncio
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
             try:
-                loop.run_until_complete(self._json_api.close())
+                # Use asyncio.run() for proper event loop management
+                asyncio.run(self._json_api.close())
             except:
                 pass
-            finally:
-                loop.close()
             self._json_api = None
     
     # Event registration methods
@@ -1484,7 +1564,7 @@ class SpacetimeDBClient:
                 'connection_id': message.connection_id
             }
         )
-        self._event_emitter.emit(identity_event)
+        self._event_manager.emit(identity_event)
         
         for callback in self._on_identity:
             try:
@@ -1535,7 +1615,7 @@ class SpacetimeDBClient:
                 'total_host_execution_duration': message.total_host_execution_duration
             }
         )
-        self._event_emitter.emit(database_update_event)
+        self._event_manager.emit(database_update_event)
         
         # Emit INITIAL_SUBSCRIPTION event
         initial_sub_event = create_event(
@@ -1546,7 +1626,7 @@ class SpacetimeDBClient:
                 'total_host_execution_duration': message.total_host_execution_duration
             }
         )
-        self._event_emitter.emit(initial_sub_event)
+        self._event_manager.emit(initial_sub_event)
         
         # Process the database update to populate table caches
         if message.database_update:
@@ -1570,7 +1650,7 @@ class SpacetimeDBClient:
                         operation='insert',
                         row_data=table_row
                     )
-                    self._event_emitter.emit(table_event)
+                    self._event_manager.emit(table_event)
         
         # Mark subscription as applied
         with self._lock:
@@ -1619,7 +1699,7 @@ class SpacetimeDBClient:
             advanced_reducer_event.type = EventType.REDUCER_ERROR
         
         # Emit the advanced reducer event
-        self._event_emitter.emit(advanced_reducer_event)
+        self._event_manager.emit(advanced_reducer_event)
         
         # Create table reducer event for table interface
         table_reducer_event = TableReducerEvent(
@@ -1759,7 +1839,7 @@ class SpacetimeDBClient:
                     row_data=row_data,
                     reducer_event=reducer_event
                 )
-                self._event_emitter.emit(event)
+                self._event_manager.emit(event)
         
         # Emit delete events
         if hasattr(table_update, 'deletes'):
@@ -1771,7 +1851,7 @@ class SpacetimeDBClient:
                     old_row_data=row_data,
                     reducer_event=reducer_event
                 )
-                self._event_emitter.emit(event)
+                self._event_manager.emit(event)
         
         # Detect and emit update events if table has primary key
         table_handle = self._db_interface.get_table(table_name)
@@ -1802,15 +1882,25 @@ class SpacetimeDBClient:
                     primary_key=pk,
                     reducer_event=reducer_event
                 )
-                self._event_emitter.emit(event)
+                self._event_manager.emit(event)
     
     def _simulate_test_connection(self) -> None:
         """Simulate a successful connection in test mode."""
+        import time
+        from spacetimedb_sdk.events.core_events import Event, EventType
+        
         # Generate test identity and connection ID
         identity = Identity.from_hex("0" * 32)
         connection_id = ConnectionId.from_hex("0" * 16)
         
-        # Call connect callbacks first
+        # Emit connection established event
+        connection_event = Event(
+            type=EventType.CONNECTION_ESTABLISHED,
+            data={"timestamp": time.time()}
+        )
+        self._event_manager.emit(connection_event)
+        
+        # Call connect callbacks (for backward compatibility)
         self._handle_connect()
         
         # Simulate the complete identity token flow (this triggers lifecycle reducer)
@@ -1819,6 +1909,18 @@ class SpacetimeDBClient:
             connection_id=connection_id,
             token="test_token"
         )
+        
+        # Emit identity received event
+        identity_event = Event(
+            type=EventType.IDENTITY_RECEIVED,
+            data={
+                "token": identity_token.token,
+                "identity": identity_token.identity.to_hex(),
+                "connection_id": identity_token.connection_id.to_hex(),
+                "timestamp": time.time()
+            }
+        )
+        self._event_manager.emit(identity_event)
         
         # Process the identity token through the normal flow
         # This will trigger _trigger_client_connected if auto_trigger_lifecycle is enabled
@@ -2164,39 +2266,39 @@ class SpacetimeDBClient:
         # Bridge legacy callbacks to advanced event system
         
         # Connection events
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.CONNECTION_ESTABLISHED,
             lambda ctx: self._handle_connect()
         )
         
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.CONNECTION_LOST,
             lambda ctx: self._handle_disconnect(ctx.event.data.get('reason', 'Unknown'))
         )
         
         # Table events - integrate with table interface
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.TABLE_ROW_INSERT,
             self._handle_advanced_table_insert
         )
         
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.TABLE_ROW_UPDATE,
             self._handle_advanced_table_update
         )
         
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.TABLE_ROW_DELETE,
             self._handle_advanced_table_delete
         )
         
         # Reducer events
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.REDUCER_SUCCESS,
             self._handle_advanced_reducer_success
         )
         
-        self._event_emitter.on(
+        self._event_manager.on(
             EventType.REDUCER_ERROR,
             self._handle_advanced_reducer_error
         )

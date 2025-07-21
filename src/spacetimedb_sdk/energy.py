@@ -135,8 +135,8 @@ class EnergyEvent:
                     operation = reader.read_string()
             elif field_name == "data":
                 if reader.read_option_tag():
-                    import json
-                    data = json.loads(reader.read_string())
+                    from .security.json_validator import secure_json_loads
+                    data = secure_json_loads(reader.read_string(), "EnergyEvent.data")
             else:
                 reader.skip_value()
         
@@ -229,8 +229,8 @@ class EnergyOperation:
                 success = reader.read_bool()
             elif field_name == "metadata":
                 if reader.read_option_tag():
-                    import json
-                    metadata = json.loads(reader.read_string())
+                    from .security.json_validator import secure_json_loads
+                    metadata = secure_json_loads(reader.read_string(), "EnergyOperation.metadata")
             else:
                 reader.skip_value()
         
@@ -314,11 +314,11 @@ class EnergyUsageReport:
             elif field_name == "efficiency_score":
                 efficiency_score = reader.read_f64()
             elif field_name == "top_consumers":
-                import json
-                top_consumers = json.loads(reader.read_string())
+                from .security.json_validator import secure_json_loads
+                top_consumers = secure_json_loads(reader.read_string(), "EnergyUsageReport.top_consumers")
             elif field_name == "usage_trends":
-                import json
-                usage_trends = json.loads(reader.read_string())
+                from .security.json_validator import secure_json_loads
+                usage_trends = secure_json_loads(reader.read_string(), "EnergyUsageReport.usage_trends")
             elif field_name == "recommendations":
                 count = reader.read_array_header()
                 recommendations = []
@@ -710,9 +710,12 @@ class EnergyEventManager:
             for listener in self._listeners.get(event_type_str, []):
                 try:
                     listener(event)
-                except Exception as e:
-                    # Log error but don't break other listeners
+                except (TypeError, AttributeError, ValueError, RuntimeError) as e:
+                    # Log specific expected errors but don't break other listeners
                     print(f"Error in energy event listener: {e}")
+                except Exception as e:
+                    # Log unexpected errors with more detail
+                    print(f"Unexpected error in energy event listener {type(e).__name__}: {e}")
     
     def get_event_history(self, event_type: Optional[EnergyEventType] = None) -> List[EnergyEvent]:
         """Get event history, optionally filtered by event type."""

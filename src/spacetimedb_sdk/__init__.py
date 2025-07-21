@@ -124,20 +124,83 @@ from .table_interface import (
     create_event_context
 )
 
-# Advanced event system exports
+# Event System Exports
+# 
+# MODERN (RECOMMENDED): Use the unified events system
+# from spacetimedb_sdk.events import get_event_manager, EventType, Event
+#
+# LEGACY (DEPRECATED): Old event system imports are deprecated but maintained for compatibility
+
+# Modern unified event system (RECOMMENDED - USE THESE)
+from .events import (
+    # MODERN CORE SYSTEM - RECOMMENDED
+    UnifiedEventManager,           # Replaces EventEmitter and SDKEventManager
+    get_event_manager,            # Primary entry point for event management
+    set_event_manager,            # For custom event manager setup
+    
+    # MODERN EVENTS - RECOMMENDED  
+    Event,                        # Replaces legacy Event classes
+    EventType,                    # Unified event type enum
+    EventPriority,                # Event priority levels
+    EventMetadata,                # Event metadata
+    EventContext,                 # Event context for handlers
+    
+    # MODERN SPECIFIC EVENT TYPES - RECOMMENDED
+    ConnectionEvent,              # Connection state events
+    AuthenticationEvent,          # Authentication events  
+    SubscriptionEvent,            # Subscription events
+    TableEvent,                   # Table change events
+    ReducerEvent,                 # Reducer call events
+    TransactionEvent,             # Transaction events
+    MessageEvent,                 # Message events
+    ErrorEvent,                   # Error events
+    PerformanceEvent,             # Performance monitoring events
+    
+    # MODERN EVENT CREATION - RECOMMENDED
+    create_connection_event,      # Create connection events
+    create_table_event,           # Create table events
+    create_reducer_event,         # Create reducer events
+    create_error_event,           # Create error events
+    create_performance_event,     # Create performance events
+    
+    # MODERN CONVENIENCE FUNCTIONS - RECOMMENDED
+    emit_event,                   # Emit events synchronously
+    emit_event_async,             # Emit events asynchronously
+    subscribe_to_events,          # Subscribe to multiple event types
+    
+    # MODERN EVENT FILTERING - RECOMMENDED
+    EventFilter,                  # Base event filter
+    type_filter,                  # Filter by event type
+    priority_filter,              # Filter by priority
+    source_filter,                # Filter by source
+    
+    # LEGACY COMPATIBILITY (DEPRECATED)
+    # These provide backward compatibility but show deprecation warnings
+    LegacyEventEmitter,           # DEPRECATED: Use UnifiedEventManager
+    LegacySDKEventManager,        # DEPRECATED: Use UnifiedEventManager
+    LegacyEventType,              # DEPRECATED: Use EventType
+    LegacyEventData,              # DEPRECATED: Use Event
+    # LegacyEventContext,           # DEPRECATED: Use EventContext - commented out due to import issue
+    
+    # Legacy aliases for backward compatibility
+    LegacyEventEmitter as EventEmitter,  # DEPRECATED
+    LegacyEventType as LegacyEventTypeAlias,  # DEPRECATED
+)
+
+# Additional legacy compatibility - these redirect to modern system with warnings
 from .event_system import (
-    EventEmitter,
-    EventContext,
-    EventType,
-    Event,
-    EventMetadata,
-    ReducerEvent as AdvancedReducerEvent,
-    TableEvent,
-    create_event,
-    create_reducer_event,
-    create_table_event,
-    global_event_bus,
-    subscribe_to_raw_events
+    global_event_bus,             # DEPRECATED: Use get_event_manager()
+    create_event,                 # DEPRECATED: Use Event() constructor
+    subscribe_to_raw_events,      # DEPRECATED: Use manager.on()
+    ReducerEvent as AdvancedReducerEvent,  # DEPRECATED: Use ReducerEvent from events
+)
+
+from .event_manager import (
+    SDKEventManager,              # DEPRECATED: Use UnifiedEventManager  
+    EventType as SDKEventType,    # DEPRECATED: Use EventType from events
+    EventData,                    # DEPRECATED: Use Event from events
+    get_event_manager as get_sdk_event_manager,  # DEPRECATED: Use get_event_manager from events
+    set_event_manager as set_sdk_event_manager,  # DEPRECATED: Use set_event_manager from events
 )
 
 # JSON API exports
@@ -482,16 +545,42 @@ except ImportError as e:
             for k, v in kwargs.items():
                 setattr(self, k, v)
 
-# Authentication storage
-from .auth_storage import (
+# Authentication storage (using modern secure implementation)
+from .auth.storage import (
     AuthCredentials,
-    SpacetimeDBAuthStorage,
-    get_global_auth_storage,
-    store_credentials,
-    get_credentials,
-    remove_credentials,
-    clear_all_credentials
+    SecureAuthStorage as SpacetimeDBAuthStorage,
 )
+
+# Global instance for backward compatibility
+from .auth.storage import SecureAuthStorage
+_global_auth_storage = None
+
+def get_global_auth_storage():
+    """Get the global authentication storage instance."""
+    global _global_auth_storage
+    if _global_auth_storage is None:
+        _global_auth_storage = SecureAuthStorage()
+    return _global_auth_storage
+
+def store_credentials(identity: str, token: str, host: str, database: str) -> None:
+    """Store authentication credentials using modern secure storage."""
+    storage = get_global_auth_storage()
+    storage.store_credentials(identity, token, host, database)
+
+def get_credentials(host: str, database: str, allow_expired: bool = False):
+    """Get authentication credentials using modern secure storage."""
+    storage = get_global_auth_storage()
+    return storage.get_credentials(host, database, allow_expired)
+
+def remove_credentials(host: str, database: str) -> bool:
+    """Remove authentication credentials using modern secure storage."""
+    storage = get_global_auth_storage()
+    return storage.remove_credentials(host, database)
+
+def clear_all_credentials() -> None:
+    """Clear all authentication credentials using modern secure storage."""
+    storage = get_global_auth_storage()
+    storage.clear_all_credentials()
 
 # Enhanced Factory Pattern for multi-server language support
 from .factory import (
@@ -542,7 +631,7 @@ from .cross_platform_validation import (
 )
 
 # Subscription data flow fixes (addressing bug report issues)
-from .subscription_manager import (
+from .connection.subscription_manager import (
     SubscriptionManager,
     SubscriptionState,
     SubscriptionInfo,
@@ -550,11 +639,13 @@ from .subscription_manager import (
     set_subscription_manager
 )
 
-from .event_manager import (
-    SDKEventManager,
-    EventType as SDKEventType,
-    EventData,
-    get_event_manager as get_sdk_event_manager,
+# Legacy event manager compatibility (deprecated)
+from .events import (
+    # Use UnifiedEventManager instead of these legacy imports
+    LegacySDKEventManager as SDKEventManager,
+    SDKEventType,
+    LegacyEventData as EventData,
+    get_legacy_sdk_event_manager as get_sdk_event_manager,
     set_event_manager as set_sdk_event_manager
 )
 
@@ -664,18 +755,66 @@ __all__ = [
     "CallbackManager",
     "create_event_context",
     
-    # Advanced event system
-    "EventEmitter",
-    "EventContext",
-    "EventType",
-    "Event",
-    "EventMetadata",
-    "AdvancedReducerEvent",
-    "TableEvent",
-    "create_event",
-    "create_reducer_event",
-    "create_table_event",
-    "global_event_bus",
+    # ====================================================================
+    # EVENT SYSTEM EXPORTS
+    # ====================================================================
+    # 
+    # MODERN (RECOMMENDED): Use these for new code
+    # from spacetimedb_sdk.events import get_event_manager, EventType, Event
+    # 
+    # LEGACY (DEPRECATED): These are maintained for compatibility but deprecated
+    # 
+    
+    # MODERN EVENT SYSTEM (RECOMMENDED - USE THESE)
+    "UnifiedEventManager",        # RECOMMENDED: Use instead of EventEmitter/SDKEventManager
+    "get_event_manager",          # RECOMMENDED: Primary entry point
+    "set_event_manager",          # RECOMMENDED: For custom setup
+    
+    # MODERN EVENT TYPES (RECOMMENDED)
+    "Event",                      # RECOMMENDED: Modern event class
+    "EventType",                  # RECOMMENDED: Unified event type enum
+    "EventPriority",              # RECOMMENDED: Event priority levels
+    "EventMetadata",              # RECOMMENDED: Event metadata
+    "EventContext",               # RECOMMENDED: Event context for handlers
+    
+    # MODERN SPECIFIC EVENTS (RECOMMENDED)
+    "ConnectionEvent",            # RECOMMENDED: Connection state events
+    "AuthenticationEvent",        # RECOMMENDED: Authentication events
+    "SubscriptionEvent",          # RECOMMENDED: Subscription events
+    "TableEvent",                 # RECOMMENDED: Table change events
+    "ReducerEvent",               # RECOMMENDED: Reducer call events
+    "TransactionEvent",           # RECOMMENDED: Transaction events
+    "MessageEvent",               # RECOMMENDED: Message events
+    "ErrorEvent",                 # RECOMMENDED: Error events
+    "PerformanceEvent",           # RECOMMENDED: Performance events
+    
+    # MODERN EVENT FUNCTIONS (RECOMMENDED)
+    "emit_event",                 # RECOMMENDED: Emit events synchronously
+    "emit_event_async",           # RECOMMENDED: Emit events asynchronously
+    "subscribe_to_events",        # RECOMMENDED: Subscribe to multiple events
+    "create_connection_event",    # RECOMMENDED: Create connection events
+    "create_table_event",         # RECOMMENDED: Create table events
+    "create_reducer_event",       # RECOMMENDED: Create reducer events
+    "create_error_event",         # RECOMMENDED: Create error events
+    "create_performance_event",   # RECOMMENDED: Create performance events
+    
+    # MODERN EVENT FILTERING (RECOMMENDED)
+    "EventFilter",                # RECOMMENDED: Event filtering
+    "type_filter",                # RECOMMENDED: Filter by type
+    "priority_filter",            # RECOMMENDED: Filter by priority
+    "source_filter",              # RECOMMENDED: Filter by source
+    
+    # LEGACY EVENT SYSTEM (DEPRECATED - Use modern system above)
+    "EventEmitter",               # DEPRECATED: Use UnifiedEventManager
+    "SDKEventManager",            # DEPRECATED: Use UnifiedEventManager
+    "AdvancedReducerEvent",       # DEPRECATED: Use ReducerEvent
+    "create_event",               # DEPRECATED: Use Event() constructor
+    "subscribe_to_raw_events",    # DEPRECATED: Use manager.on()
+    "global_event_bus",           # DEPRECATED: Use get_event_manager()
+    "SDKEventType",               # DEPRECATED: Use EventType
+    "EventData",                  # DEPRECATED: Use Event
+    "get_sdk_event_manager",      # DEPRECATED: Use get_event_manager
+    "set_sdk_event_manager",      # DEPRECATED: Use set_event_manager
     
     # JSON API
     "SpacetimeDBJsonAPI",

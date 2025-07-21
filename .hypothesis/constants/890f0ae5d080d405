@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/scheduling.py
+# hypothesis_version: 6.135.32
+
+[0.0, 1000, 3600, 'Scheduler started', 'Scheduler stopped', 'SpacetimeDBClient', '_scheduler', 'average_duration', 'failed_executions', 'scheduler_loop', 'success_rate', 'total_duration', 'total_executions']

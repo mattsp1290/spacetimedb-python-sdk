@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/subscription_manager.py
+# hypothesis_version: 6.135.32
+
+[0.0, 0.1, 0.5, 30.0, 300, 1000, '; ', 'DatabaseUpdate', 'SubscribeApplied', 'Subscription Manager', 'SubscriptionError', 'SubscriptionManager', 'SubscriptionMetrics', 'SubscriptionUpdate', 'Unknown error', 'activate', 'active', 'active_subscriptions', 'cancelled', 'clear', 'closed', 'created_at', 'critical', 'error', 'error_count', 'error_rate', 'exists', 'failed', 'failed_subscriptions', 'has_callback', 'healthy', 'idle_seconds', 'is_active', 'is_timeout', 'last_error', 'last_update', 'max_error_count', 'medium', 'message_count', 'metrics', 'not_found', 'pending', 'queries', 'reason', 'request_id', 'skipped', 'stale', 'stale_subscriptions', 'state', 'status', 'subscribe', 'subscription', 'table_name', 'tables', 'time_since_update', 'timestamp', 'too_soon', 'total_subscriptions', 'unsubscribe', 'uptime_seconds', 'warning']

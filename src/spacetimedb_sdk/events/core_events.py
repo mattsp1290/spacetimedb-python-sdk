@@ -145,6 +145,11 @@ class BaseEvent:
         """Backward compatibility property for event_type access."""
         return self.type
     
+    @property
+    def timestamp(self) -> float:
+        """Backward compatibility property for timestamp access."""
+        return self.metadata.timestamp
+    
     def with_metadata(self, **kwargs) -> 'BaseEvent':
         """Return a copy of the event with updated metadata."""
         import copy

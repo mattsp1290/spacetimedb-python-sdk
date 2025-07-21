@@ -386,7 +386,8 @@ class AlgebraicValue(Generic[T]):
     @classmethod
     def from_json(cls, type_def: AlgebraicType, json_str: str) -> 'AlgebraicValue':
         """Create AlgebraicValue from JSON string."""
-        data = json.loads(json_str)
+        from .security.json_validator import secure_json_loads
+        data = secure_json_loads(json_str, "AlgebraicValue.from_json")
         return cls._from_json_value(type_def, data)
     
     @classmethod

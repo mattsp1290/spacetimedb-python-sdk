@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_id.py
+# hypothesis_version: 6.135.32
+
+[b'\x00', 0.0, 3600, 1577836800000, 2524608000000, '<Q', '<QQ', 'BsatnReader', 'BsatnWriter', 'ConnectionEvent', 'ConnectionEventType', 'ConnectionMetrics', 'ConnectionState', 'EnhancedConnectionId', 'EnhancedIdentity', '_', 'active_connections', 'average_duration', 'connected', 'connecting', 'connection_failed', 'connection_id', 'disconnected', 'disconnecting', 'expires_at', 'failed', 'identity', 'identity_changed', 'issued_at', 'longest_duration', 'new_identity', 'old_identity', 'reason', 'reconnecting', 'reconnection_attempt', 'shortest_duration', 'token_length', 'total_connections']

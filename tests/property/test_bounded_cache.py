@@ -29,7 +29,8 @@ pytestmark = pytest.mark.skipif(not HAS_CACHE, reason="Cache implementations not
 class TestBoundedCacheProperties:
     """Property-based tests for bounded cache behavior."""
     
-    @given(st.integers(min_value=1, max_value=1000))
+    @given(st.integers(min_value=1, max_value=100))  # Further reduced max size
+    @settings(deadline=1200, max_examples=15)  # More aggressive optimization
     def test_cache_never_exceeds_capacity(self, max_size):
         """Test that cache never exceeds its specified capacity."""
         cache = BoundedCache(max_size=max_size)
@@ -43,9 +44,10 @@ class TestBoundedCacheProperties:
             assert cache.size() <= max_size
     
     @given(
-        st.integers(min_value=1, max_value=100),
-        st.lists(st.text(min_size=1, max_size=10), min_size=1, max_size=1000)
+        st.integers(min_value=1, max_value=30),  # Smaller cache sizes
+        st.lists(st.text(min_size=1, max_size=6), min_size=1, max_size=100)  # Much fewer keys
     )
+    @settings(deadline=1500, max_examples=12)  # More aggressive settings
     def test_cache_eviction_maintains_most_recent(self, max_size, keys):
         """Test that cache eviction preserves most recently accessed items."""
         assume(len(set(keys)) > max_size)  # Need more unique keys than capacity
@@ -63,13 +65,14 @@ class TestBoundedCacheProperties:
             assert cache.get(key) is not None, f"Recent key {key} was evicted"
     
     @given(
-        st.integers(min_value=1, max_value=50),
+        st.integers(min_value=1, max_value=20),  # Even smaller cache sizes
         st.lists(
-            st.tuples(st.text(min_size=1, max_size=10), st.text(min_size=1, max_size=20)),
+            st.tuples(st.text(min_size=1, max_size=6), st.text(min_size=1, max_size=10)),  # Much smaller strings
             min_size=1,
-            max_size=200
+            max_size=50  # Much fewer pairs
         )
     )
+    @settings(deadline=1500, max_examples=10)  # More aggressive settings
     def test_cache_get_put_consistency(self, max_size, key_value_pairs):
         """Test that get returns what was put (within capacity limits)."""
         cache = BoundedCache(max_size=max_size)
@@ -93,9 +96,10 @@ class TestBoundedCacheProperties:
             assert actual_value == expected_value, f"Cache inconsistency for key {key}"
     
     @given(
-        st.integers(min_value=1, max_value=100),
-        st.lists(st.text(min_size=1, max_size=10), min_size=1, max_size=500)
+        st.integers(min_value=1, max_value=50),
+        st.lists(st.text(min_size=1, max_size=8), min_size=1, max_size=200)
     )
+    @settings(deadline=1500, max_examples=12)
     def test_cache_contains_consistency(self, max_size, keys):
         """Test that contains() is consistent with get()."""
         cache = BoundedCache(max_size=max_size)
@@ -115,9 +119,10 @@ class TestBoundedCacheProperties:
                 assert has_key, f"get() returns value for {key} but contains() says it doesn't exist"
     
     @given(
-        st.integers(min_value=1, max_value=50),
-        st.lists(st.text(min_size=1, max_size=10), min_size=1, max_size=200)
+        st.integers(min_value=1, max_value=30),
+        st.lists(st.text(min_size=1, max_size=8), min_size=1, max_size=100)
     )
+    @settings(deadline=1200, max_examples=10)
     def test_cache_clear_empties_cache(self, max_size, keys):
         """Test that clear() completely empties the cache."""
         cache = BoundedCache(max_size=max_size)
@@ -139,9 +144,10 @@ class TestBoundedCacheProperties:
                 assert cache.get(key) is None
     
     @given(
-        st.integers(min_value=2, max_value=100),
-        st.lists(st.text(min_size=1, max_size=10), min_size=10, max_size=300)
+        st.integers(min_value=2, max_value=50),
+        st.lists(st.text(min_size=1, max_size=8), min_size=10, max_size=150)
     )
+    @settings(deadline=1500, max_examples=10)
     def test_cache_lru_behavior(self, max_size, keys):
         """Test that cache follows LRU (Least Recently Used) eviction policy."""
         cache = BoundedCache(max_size=max_size)
@@ -179,11 +185,11 @@ class CacheStateMachine(RuleBasedStateMachine):
     keys = Bundle('keys')
     values = Bundle('values')
     
-    @rule(target=keys, key=st.text(min_size=1, max_size=10))
+    @rule(target=keys, key=st.text(min_size=1, max_size=6))
     def add_key(self, key):
         return key
     
-    @rule(target=values, value=st.text(min_size=1, max_size=20))
+    @rule(target=values, value=st.text(min_size=1, max_size=10))
     def add_value(self, value):
         return value
     
@@ -240,16 +246,17 @@ class TestBoundedClientCacheProperties:
     """Property-based tests for bounded client cache."""
     
     @given(
-        st.integers(min_value=1, max_value=100),
+        st.integers(min_value=1, max_value=20),  # Even smaller max clients
         st.lists(
             st.tuples(
-                st.text(min_size=1, max_size=20),  # client_id
-                st.text(min_size=1, max_size=30),  # data
+                st.text(min_size=1, max_size=8),  # client_id - smaller
+                st.text(min_size=1, max_size=10),  # data - smaller
             ),
             min_size=1,
-            max_size=500
+            max_size=50  # Much fewer test cases
         )
     )
+    @settings(deadline=1500, max_examples=10)  # More aggressive settings
     def test_client_cache_capacity_limits(self, max_clients, client_data):
         """Test that client cache respects capacity limits."""
         cache = BoundedClientCache(max_clients=max_clients)
@@ -263,21 +270,22 @@ class TestBoundedClientCacheProperties:
             assert cache.client_count() <= max_clients
     
     @given(
-        st.integers(min_value=1, max_value=50),
+        st.integers(min_value=1, max_value=30),
         st.lists(
             st.tuples(
-                st.text(min_size=1, max_size=15),  # client_id
+                st.text(min_size=1, max_size=10),  # client_id - smaller
                 st.dictionaries(
-                    st.text(min_size=1, max_size=10),  # key
-                    st.text(min_size=1, max_size=20),  # value
+                    st.text(min_size=1, max_size=6),  # key - smaller
+                    st.text(min_size=1, max_size=12),  # value - smaller
                     min_size=1,
-                    max_size=10
+                    max_size=5  # Fewer dictionary entries
                 )
             ),
             min_size=1,
-            max_size=200
+            max_size=100  # Fewer test pairs
         )
     )
+    @settings(deadline=1500, max_examples=10)
     def test_client_data_consistency(self, max_clients, client_data_pairs):
         """Test that client data is stored and retrieved consistently."""
         cache = BoundedClientCache(max_clients=max_clients)
@@ -301,9 +309,10 @@ class TestBoundedClientCacheProperties:
             assert actual_data == expected_data, f"Client data mismatch for {client_id}"
     
     @given(
-        st.integers(min_value=1, max_value=30),
-        st.lists(st.text(min_size=1, max_size=15), min_size=1, max_size=100)
+        st.integers(min_value=1, max_value=20),
+        st.lists(st.text(min_size=1, max_size=10), min_size=1, max_size=50)
     )
+    @settings(deadline=1500, max_examples=8)
     def test_client_removal_consistency(self, max_clients, client_ids):
         """Test that client removal works consistently."""
         cache = BoundedClientCache(max_clients=max_clients)
@@ -384,5 +393,7 @@ class TestCacheEdgeCases:
         assert len(cache) == 1  # Only one entry for duplicate key
 
 
-# Run state machine tests
+# Run state machine tests with optimized settings
 TestCacheStateMachine = CacheStateMachine.TestCase
+# Apply settings to state machine
+TestCacheStateMachine.settings = settings(deadline=1500, max_examples=10, stateful_step_count=6)

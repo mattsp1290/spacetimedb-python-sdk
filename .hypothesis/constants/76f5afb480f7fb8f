@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/security_logger.py
+# hypothesis_version: 6.135.32
+
+[2.0, 5.0, 60.0, 100, 1000, '****', '...', 'anonymous', 'average_timing_ms', 'credential_clear', 'credential_store', 'critical', 'description', 'emergency', 'expected_time_ms', 'failure_count', 'failure_reason', 'info', 'operation', 'rate_limited_users', 'security_violation', 'spacetimedb.security', 'suspicious_activity', 'threshold', 'timing_anomaly', 'timing_samples', 'token_expired', 'token_hint', 'token_refresh', 'tracked_users', 'utf-8', 'violation_type', 'warning', 'window_seconds']

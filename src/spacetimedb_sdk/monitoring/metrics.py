@@ -137,6 +137,11 @@ class MetricsCollector:
         with self._lock:
             self._memory_samples.append(memory_usage)
     
+    def record_event(self, event_name: str) -> None:
+        """Record an event occurrence by incrementing its counter."""
+        with self._lock:
+            self._counters[event_name] += 1
+    
     def get_event_metrics(self) -> EventMetrics:
         """Calculate current event metrics."""
         with self._lock:
@@ -261,3 +266,79 @@ _global_collector: MetricsCollector = MetricsCollector()
 def get_global_collector() -> MetricsCollector:
     """Get the global metrics collector."""
     return _global_collector
+
+
+def monitor_performance(operation_name: str = None):
+    """
+    Decorator or context manager for performance monitoring.
+    
+    Usage as decorator:
+        @monitor_performance("my_function")
+        def my_function():
+            pass
+    
+    Usage as context manager:
+        with monitor_performance("operation"):
+            # do work
+            pass
+    """
+    def decorator(func):
+        nonlocal operation_name
+        if operation_name is None:
+            operation_name = func.__name__
+            
+        def wrapper(*args, **kwargs):
+            collector = get_global_collector()
+            collector.start_timer(operation_name)
+            try:
+                result = func(*args, **kwargs)
+                collector.record_event(f"{operation_name}_success")
+                return result
+            except Exception as e:
+                collector.record_event(f"{operation_name}_error")
+                raise
+            finally:
+                collector.end_timer(operation_name)
+        
+        return wrapper
+    
+    # If used as @monitor_performance without arguments
+    if callable(operation_name):
+        func = operation_name
+        operation_name = func.__name__
+        return decorator(func)
+    
+    # If used with arguments @monitor_performance("name") or as context manager
+    if operation_name is not None:
+        # Return decorator when used with arguments
+        return decorator
+    
+    # Used as context manager: with monitor_performance("name"):
+    class PerformanceContext:
+        def __init__(self, name):
+            self.name = name
+            
+        def __enter__(self):
+            collector = get_global_collector()
+            collector.start_timer(self.name)
+            return self
+            
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            collector = get_global_collector()
+            if exc_type is None:
+                collector.record_event(f"{self.name}_success")
+            else:
+                collector.record_event(f"{self.name}_error")
+            collector.end_timer(self.name)
+    
+    return PerformanceContext(operation_name)
+
+
+__all__ = [
+    'EventMetrics',
+    'ConnectionMetrics', 
+    'MemoryMetrics',
+    'MetricsCollector',
+    'get_global_collector',
+    'monitor_performance'
+]

@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/connection_manager.py
+# hypothesis_version: 6.135.32
+
+[0.0, 1.0, 2.0, 30.0, 60.0, 'Authorization', 'Connection closed', 'Connection timeout', 'No configuration set', 'attempts', 'authenticated', 'authenticating', 'authentication', 'auto_reconnect', 'bad request', 'closed', 'config', 'connected', 'connecting', 'connection refused', 'connection reset', 'connection timeout', 'connection_attempt', 'connection_attempts', 'connection_url', 'consecutive_failures', 'database', 'disconnected', 'disconnecting', 'error', 'failed_connections', 'forbidden', 'host', 'host is required', 'host unreachable', 'max_attempts', 'metrics', 'network unreachable', 'not found', 'protocol', 'reconnecting', 'reconnection', 'scheduled', 'ssl_enabled', 'state', 'success_rate', 'temporary failure', 'unauthorized', 'url', 'utf-8', 'v1.json.spacetimedb', 'ws', 'wss']

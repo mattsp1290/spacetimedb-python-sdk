@@ -459,7 +459,21 @@ class TestEventManager(unittest.TestCase):
     
     def tearDown(self):
         """Clean up after tests."""
-        self.manager.shutdown()
+        try:
+            # Try async shutdown first
+            import asyncio
+            loop = asyncio.get_running_loop()
+            asyncio.create_task(self.manager.shutdown())
+        except RuntimeError:
+            # No running loop, cleanup synchronously
+            if hasattr(self.manager, '_cleanup_event_loop'):
+                self.manager._is_shutting_down = True
+                if self.manager._thread_pool:
+                    self.manager._thread_pool.shutdown(wait=False)
+                self.manager._cleanup_event_loop()
+        except Exception as e:
+            import logging
+            logging.debug(f"Error during test manager cleanup: {e}")
     
     def test_handler_registration(self):
         """Test handler registration and removal."""

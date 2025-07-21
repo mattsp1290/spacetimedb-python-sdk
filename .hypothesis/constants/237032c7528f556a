@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/url_validator.py
+# hypothesis_version: 6.135.32
+
+[253, 1000, 65535, '\x00', '%2e%2e', '%2e%2e%2f', '.', '..', '/', '0.0.0.0', '127.0.0.1', ':', '::1', '<script', 'Null byte in path', 'URL cannot be empty', 'URLValidator', '[', '\\.\\./', ']', 'data:', 'file:', 'ftp:', 'javascript:', 'localhost', 'ws', 'wss']

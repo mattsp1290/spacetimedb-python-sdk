@@ -21,7 +21,7 @@ from types import ModuleType
 import urllib.parse
 
 # Import compression classes for builder configuration  
-from .compression import CompressionConfig, CompressionLevel
+from .compression_handlers.compression_manager import CompressionConfig, CompressionLevel
 
 # Import DbContext types
 from .db_context import DbContext, DbView, Reducers, SetReducerFlags

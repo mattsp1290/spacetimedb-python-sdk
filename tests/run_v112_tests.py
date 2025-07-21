@@ -10,6 +10,7 @@ import time
 import unittest
 import json
 import argparse
+import importlib  # Security fix: Use importlib instead of __import__
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
 
@@ -100,8 +101,8 @@ def run_test_suite(suite_module: str, suite_name: str, results: V112TestResults)
     print(f"{'=' * 60}")
     
     try:
-        # Import the test module
-        test_module = __import__(suite_module)
+        # Import the test module - Security fix: Use importlib instead of __import__
+        test_module = importlib.import_module(suite_module)
         
         # Create test suite
         loader = unittest.TestLoader()
@@ -232,7 +233,8 @@ def check_requirements():
     missing = []
     for module in required_modules:
         try:
-            __import__(module)
+            # Security fix: Use importlib instead of __import__
+            importlib.import_module(module)
         except ImportError:
             missing.append(module)
             

@@ -25,16 +25,17 @@ from typing import Optional, Dict, Any, Callable, List
 from dataclasses import dataclass, field
 from contextlib import contextmanager
 
-try:
-    from ..auth.storage import SecureAuthStorage, AuthCredentials
-except ImportError:
-    # Fallback to deprecated auth storage
-    from ..auth_storage import SpacetimeDBAuthStorage as SecureAuthStorage, AuthCredentials
+from ..auth.storage import SecureAuthStorage, AuthCredentials
 
 from ..events.enhanced_event_system import Event, EventType, EventPriority
 from ..exceptions import AuthenticationError
 from ..utils.error_formatting import ErrorFormatter
 from ..monitoring import get_global_monitor, monitor_performance
+from ..auth.secure_verification import (
+    SecureVerificationManager, 
+    verify_credentials_secure, 
+    verify_token_secure
+)
 
 
 class AuthenticationState(Enum):
@@ -148,6 +149,9 @@ class AuthenticationHandler:
         
         # Logging
         self.logger = logging.getLogger(f"{__name__}.AuthenticationHandler")
+        
+        # Secure verification manager for timing attack protection
+        self._verification_manager = SecureVerificationManager()
         
         # Initialize storage
         self._init_storage()
@@ -495,7 +499,7 @@ class AuthenticationHandler:
             headers["spacetime-identity"] = identity_match.group(1)
         
         # Extract token
-        token_match = re.search(r"spacetime-identity-token:\s*([\w.-]+)", error_message)
+        token_match = re.search(r"spacetime-identity-token:\s*([A-Za-z0-9+/=._-]+)", error_message)
         if token_match:
             headers["spacetime-identity-token"] = token_match.group(1)
         
@@ -632,6 +636,77 @@ class AuthenticationHandler:
                 info["storage_error"] = str(e)
             
             return info
+    
+    def _verify_credentials(self, stored: str, provided: str) -> bool:
+        """
+        Constant-time credential verification to prevent timing attacks.
+        
+        This method uses secrets.compare_digest() to ensure that credential
+        comparison takes the same amount of time regardless of where the
+        strings differ, preventing timing attack vulnerabilities.
+        
+        Args:
+            stored: Stored credential hash or value
+            provided: Provided credential for verification
+            
+        Returns:
+            True if credentials match, False otherwise
+            
+        Security Notes:
+            - Uses secrets.compare_digest() for constant-time comparison
+            - Execution time is consistent regardless of input differences
+            - Prevents timing-based credential enumeration attacks
+        """
+        if not isinstance(stored, str) or not isinstance(provided, str):
+            return False
+        
+        return verify_credentials_secure(stored, provided)
+    
+    def verify_token_secure(self, stored_token: str, provided_token: str) -> bool:
+        """
+        Secure token verification with timing attack protection.
+        
+        Args:
+            stored_token: Expected token value
+            provided_token: Token to verify
+            
+        Returns:
+            True if tokens match, False otherwise
+        """
+        return verify_token_secure(stored_token, provided_token)
+    
+    def verify_identity_credentials(
+        self,
+        expected_identity: str,
+        provided_identity: str,
+        expected_token: str,
+        provided_token: str
+    ) -> bool:
+        """
+        Secure verification of both identity and token credentials.
+        
+        Uses constant-time comparison to prevent timing attacks on either
+        the identity or token components.
+        
+        Args:
+            expected_identity: Expected identity value
+            provided_identity: Provided identity
+            expected_token: Expected token value
+            provided_token: Provided token
+            
+        Returns:
+            True if both identity and token are valid, False otherwise
+        """
+        from ..auth.secure_verification import VerificationResult
+        
+        result = self._verification_manager.verify_identity_token(
+            expected_identity,
+            provided_identity,
+            expected_token,
+            provided_token
+        )
+        
+        return result == VerificationResult.SUCCESS
     
     def shutdown(self) -> None:
         """Shutdown authentication handler and cleanup resources."""

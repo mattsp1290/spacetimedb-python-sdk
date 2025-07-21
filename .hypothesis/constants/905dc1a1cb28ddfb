@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/large_message_handler.py
+# hypothesis_version: 6.135.32
+
+[30.0, 1024, 'ChunkedMessage', 'MessageChunk', 'active_chunk_groups', 'chunk', 'chunk_count', 'chunk_id', 'complete', 'data', 'max_frame_size', 'max_message_size', 'message_type', 'received_chunks', 'sequence', 'size', 'start', 'start_time', 'timestamp', 'total_size', 'unknown', 'utf-8']

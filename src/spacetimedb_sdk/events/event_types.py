@@ -65,7 +65,7 @@ class Event(ABC):
     # Event data
     data: Dict[str, Any] = field(default_factory=dict)
     
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Post-initialization hook for validation."""
         self.validate()
     
@@ -130,10 +130,10 @@ EventT = TypeVar('EventT', bound=Event)
 class EventMetrics:
     """Event system metrics collector."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.reset()
     
-    def reset(self):
+    def reset(self) -> None:
         """Reset all metrics."""
         self.events_published = 0
         self.events_processed = 0
@@ -143,7 +143,7 @@ class EventMetrics:
         self.processing_times = []
         self.start_time = time.time()
     
-    def record_published_event(self, event: Event):
+    def record_published_event(self, event: Event) -> None:
         """Record an event being published."""
         self.events_published += 1
         event_type = event.event_type.value
@@ -152,7 +152,7 @@ class EventMetrics:
         self.events_by_type[event_type] = self.events_by_type.get(event_type, 0) + 1
         self.events_by_priority[priority] = self.events_by_priority.get(priority, 0) + 1
     
-    def record_processed_event(self, event: Event, processing_time: float):
+    def record_processed_event(self, event: Event, processing_time: float) -> None:
         """Record an event being processed."""
         self.events_processed += 1
         self.processing_times.append(processing_time)
@@ -161,7 +161,7 @@ class EventMetrics:
         if len(self.processing_times) > 1000:
             self.processing_times = self.processing_times[-1000:]
     
-    def record_failed_event(self, event: Event, error: Exception):
+    def record_failed_event(self, event: Event, error: Exception) -> None:
         """Record an event processing failure."""
         self.events_failed += 1
     

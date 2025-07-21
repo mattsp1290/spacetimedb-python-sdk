@@ -128,6 +128,8 @@ class UnifiedEventManager:
     - SDKEventManager from event_manager.py
     - EventEmitter from event_system.py  
     - EnhancedEventManager from events/enhanced_event_system.py
+    
+    Supports context manager protocol for proper resource cleanup.
     """
     
     def __init__(
@@ -163,7 +165,8 @@ class UnifiedEventManager:
         self._event_queue: Optional[asyncio.Queue] = None
         self._priority_queue: deque = deque()
         self._processing_task: Optional[asyncio.Task] = None
-        self._shutdown_event = asyncio.Event()
+        self._shutdown_event: Optional[asyncio.Event] = None
+        self._is_shutting_down = False
         
         # Event filters
         self._filters: List[EventFilter] = []
@@ -188,6 +191,7 @@ class UnifiedEventManager:
         # Async event loop for async handlers
         self._async_loop: Optional[asyncio.AbstractEventLoop] = None
         self._async_thread: Optional[threading.Thread] = None
+        self._owned_loop: Optional[asyncio.AbstractEventLoop] = None
         
         self.logger = logging.getLogger(f"{__name__}.{name}")
         self.logger.info(f"Unified event manager '{name}' initialized")
@@ -198,49 +202,102 @@ class UnifiedEventManager:
     
     def _start_async_processing(self):
         """Start async event processing."""
-        if self._event_queue is None:
-            self._event_queue = asyncio.Queue(maxsize=self.max_queue_size)
-        
-        if self._processing_task is None or self._processing_task.done():
+        if self._is_shutting_down:
+            return
+            
+        try:
             try:
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                self._processing_task = loop.create_task(self._process_events())
+                loop = asyncio.get_running_loop()
             except RuntimeError:
-                # No event loop running, will start when one is available
-                pass
+                # Create and store reference to new event loop for proper cleanup
+                self._owned_loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._owned_loop)
+                loop = self._owned_loop
+                # Initialize the loop's socket infrastructure properly
+                # by scheduling a no-op task to trigger internal setup
+                loop.call_soon(lambda: None)
+                self.logger.debug("Created new event loop for async processing")
+            
+            # Create shutdown event on the correct loop
+            if self._shutdown_event is None:
+                try:
+                    # Create directly on the current loop
+                    self._shutdown_event = asyncio.Event()
+                except RuntimeError:
+                    # If there's an issue, we'll create it later in the processing task
+                    pass
+            
+            if self._event_queue is None:
+                self._event_queue = asyncio.Queue(maxsize=self.max_queue_size)
+            
+            if self._processing_task is None or self._processing_task.done():
+                self._processing_task = loop.create_task(self._process_events())
+                
+        except RuntimeError as e:
+            # No event loop running, will start when one is available
+            self.logger.debug(f"No event loop available, will start async processing later: {e}")
+    
     
     async def _process_events(self):
         """Main event processing loop."""
         self.logger.info("Event processing started")
         
-        while not self._shutdown_event.is_set():
+        # Create shutdown event if it doesn't exist
+        if self._shutdown_event is None:
             try:
-                # Process priority events first
-                if self._priority_queue:
-                    event = self._priority_queue.popleft()
-                    await self._handle_event(event)
-                    continue
-                
-                # Wait for regular events with timeout
-                try:
-                    event = await asyncio.wait_for(
-                        self._event_queue.get(),
-                        timeout=1.0
-                    )
-                    await self._handle_event(event)
-                    self._event_queue.task_done()
-                except asyncio.TimeoutError:
-                    continue
-                    
+                self._shutdown_event = asyncio.Event()
             except Exception as e:
-                self.logger.error(ErrorFormatter.format_event_error("event processing loop", e), exc_info=True)
-                await asyncio.sleep(0.1)
+                self.logger.error(f"Failed to create shutdown event: {e}")
+                return
         
-        self.logger.info("Event processing stopped")
+        try:
+            while not self._is_shutting_down and not self._shutdown_event.is_set():
+                try:
+                    # Check for shutdown before processing
+                    if self._is_shutting_down:
+                        break
+                        
+                    # Process priority events first
+                    if self._priority_queue:
+                        event = self._priority_queue.popleft()
+                        await self._handle_event(event)
+                        continue
+                    
+                    # Wait for regular events with timeout
+                    try:
+                        if self._event_queue:
+                            event = await asyncio.wait_for(
+                                self._event_queue.get(),
+                                timeout=0.5  # Shorter timeout for more responsive shutdown
+                            )
+                            await self._handle_event(event)
+                            self._event_queue.task_done()
+                        else:
+                            # If no queue, just sleep
+                            await asyncio.sleep(0.5)
+                    except asyncio.TimeoutError:
+                        continue
+                    except asyncio.CancelledError:
+                        # Task was cancelled, break out of loop
+                        self.logger.debug("Event processing task cancelled")
+                        break
+                        
+                except asyncio.CancelledError:
+                    # Task was cancelled, break out of loop
+                    self.logger.debug("Event processing task cancelled")
+                    break
+                except Exception as e:
+                    if not self._is_shutting_down:
+                        self.logger.error(ErrorFormatter.format_event_error("event processing loop", e), exc_info=True)
+                    await asyncio.sleep(0.1)
+                    
+        except asyncio.CancelledError:
+            self.logger.debug("Event processing task cancelled during shutdown")
+        except Exception as e:
+            if not self._is_shutting_down:
+                self.logger.error(f"Event processing loop failed: {e}")
+        finally:
+            self.logger.info("Event processing stopped")
     
     async def _handle_event(self, event: Event):
         """Handle a single event."""
@@ -335,17 +392,21 @@ class UnifiedEventManager:
                     await handler_info.handler(context)
                 else:
                     # Run sync handler in thread pool
-                    if self._thread_pool:
+                    if self._thread_pool and not self._is_shutting_down:
                         try:
                             loop = asyncio.get_running_loop()
+                            await loop.run_in_executor(
+                                self._thread_pool,
+                                handler_info.handler,
+                                context
+                            )
                         except RuntimeError:
-                            loop = asyncio.new_event_loop()
-                            asyncio.set_event_loop(loop)
-                        await loop.run_in_executor(
-                            self._thread_pool,
-                            handler_info.handler,
-                            context
-                        )
+                            # No running loop or loop issues, fall back to direct execution
+                            try:
+                                handler_info.handler(context)
+                            except Exception as e:
+                                self.logger.error(f"Error executing sync handler directly: {e}")
+                                raise
                     else:
                         handler_info.handler(context)
                 
@@ -720,24 +781,142 @@ class UnifiedEventManager:
     
     async def shutdown(self) -> None:
         """Shutdown the event manager gracefully."""
+        if self._is_shutting_down:
+            return
+            
         self.logger.info("Shutting down unified event manager...")
+        self._is_shutting_down = True
         
-        # Signal shutdown
-        self._shutdown_event.set()
-        
-        # Wait for processing to complete
-        if self._processing_task:
+        try:
+            # Signal shutdown
+            if self._shutdown_event:
+                self._shutdown_event.set()
+            
+            # Wait for processing to complete
+            if self._processing_task and not self._processing_task.done():
+                try:
+                    # Give the task a chance to finish gracefully
+                    await asyncio.wait_for(self._processing_task, timeout=2.0)
+                except asyncio.TimeoutError:
+                    self.logger.warning("Event processing task didn't complete within timeout, cancelling...")
+                    self._processing_task.cancel()
+                    try:
+                        await self._processing_task
+                    except asyncio.CancelledError:
+                        pass  # Expected when cancelling
+                except Exception as e:
+                    self.logger.debug(f"Error during task shutdown: {e}")
+            
+            # Shutdown thread pool
+            if self._thread_pool:
+                self._thread_pool.shutdown(wait=True)
+                self._thread_pool = None
+            
+            # Clean up event loop resources
+            self._cleanup_event_loop()
+            
+        except Exception as e:
+            self.logger.error(f"Error during shutdown: {e}")
+        finally:
+            self.logger.info("Unified event manager shutdown complete")
+    
+    def _cleanup_event_loop(self):
+        """Clean up event loop resources."""
+        if self._owned_loop and not self._owned_loop.is_closed():
             try:
-                await asyncio.wait_for(self._processing_task, timeout=5.0)
-            except asyncio.TimeoutError:
-                self.logger.warning("Event processing task didn't complete within timeout")
-                self._processing_task.cancel()
+                # Get all tasks on this loop
+                all_tasks = []
+                try:
+                    all_tasks = [task for task in asyncio.all_tasks(self._owned_loop) if not task.done()]
+                except RuntimeError:
+                    # Loop might be closed, which is fine
+                    pass
+                
+                # Cancel remaining tasks
+                for task in all_tasks:
+                    if not task.done():
+                        task.cancel()
+                
+                # Try to run the loop briefly to allow cancelled tasks to finish
+                if not self._owned_loop.is_closed() and all_tasks:
+                    try:
+                        # Run the loop for a very short time to process cancellations
+                        self._owned_loop.run_until_complete(asyncio.sleep(0.001))
+                    except Exception:
+                        # If running fails, that's ok
+                        pass
+                
+                # Close the loop
+                if not self._owned_loop.is_closed():
+                    self._owned_loop.close()
+                    self.logger.debug("Closed owned event loop")
+                    
+            except Exception as e:
+                self.logger.warning(f"Error during event loop cleanup: {e}")
+            finally:
+                self._owned_loop = None
         
-        # Shutdown thread pool
-        if self._thread_pool:
-            self._thread_pool.shutdown(wait=True)
+        # Cancel processing task if it's from a different loop
+        if self._processing_task and not self._processing_task.done():
+            self._processing_task.cancel()
         
-        self.logger.info("Unified event manager shutdown complete")
+        # Reset other loop-related state
+        self._event_queue = None
+        self._processing_task = None
+        self._shutdown_event = None
+    
+    def __del__(self):
+        """Destructor to ensure proper cleanup."""
+        if not self._is_shutting_down:
+            try:
+                # Try to clean up synchronously for destructor
+                if self._thread_pool:
+                    self._thread_pool.shutdown(wait=False)
+                
+                # Cancel processing task if it exists
+                if self._processing_task and not self._processing_task.done():
+                    self._processing_task.cancel()
+                
+                # Clean up event loop
+                self._cleanup_event_loop()
+                
+            except Exception as e:
+                # Avoid raising exceptions in __del__
+                if hasattr(self, 'logger'):
+                    self.logger.debug(f"Error during cleanup in __del__: {e}")
+    
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with proper cleanup."""
+        await self.shutdown()
+        return False
+    
+    def __enter__(self):
+        """Sync context manager entry."""
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Sync context manager exit."""
+        # For sync context manager, we need to handle shutdown differently
+        try:
+            # Try to get running loop and schedule shutdown
+            try:
+                loop = asyncio.get_running_loop()
+                # Schedule shutdown as a task
+                asyncio.create_task(self.shutdown())
+            except RuntimeError:
+                # No running loop, clean up synchronously
+                self._is_shutting_down = True
+                if self._thread_pool:
+                    self._thread_pool.shutdown(wait=True)
+                self._cleanup_event_loop()
+        except Exception as e:
+            if hasattr(self, 'logger'):
+                self.logger.error(f"Error during sync context manager exit: {e}")
+        return False
 
 
 # Global event manager instance
@@ -758,7 +937,42 @@ def get_event_manager() -> UnifiedEventManager:
 def set_event_manager(manager: UnifiedEventManager) -> None:
     """Set the global unified event manager instance."""
     global _global_event_manager
+    
+    # Shutdown existing manager if it exists
+    if _global_event_manager and not _global_event_manager._is_shutting_down:
+        try:
+            # Try to shutdown properly
+            loop = asyncio.get_running_loop()
+            asyncio.create_task(_global_event_manager.shutdown())
+        except RuntimeError:
+            # No loop running, clean up synchronously
+            _global_event_manager._is_shutting_down = True
+            if _global_event_manager._thread_pool:
+                _global_event_manager._thread_pool.shutdown(wait=False)
+            _global_event_manager._cleanup_event_loop()
+    
     _global_event_manager = manager
+
+
+async def shutdown_global_event_manager() -> None:
+    """Shutdown the global event manager if it exists."""
+    global _global_event_manager
+    
+    if _global_event_manager and not _global_event_manager._is_shutting_down:
+        await _global_event_manager.shutdown()
+        _global_event_manager = None
+
+
+def cleanup_global_event_manager() -> None:
+    """Cleanup the global event manager synchronously."""
+    global _global_event_manager
+    
+    if _global_event_manager and not _global_event_manager._is_shutting_down:
+        _global_event_manager._is_shutting_down = True
+        if _global_event_manager._thread_pool:
+            _global_event_manager._thread_pool.shutdown(wait=False)
+        _global_event_manager._cleanup_event_loop()
+        _global_event_manager = None
 
 
 # Convenience functions

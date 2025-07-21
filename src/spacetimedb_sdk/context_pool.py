@@ -13,7 +13,7 @@ from typing import Dict, Optional, Any
 from collections import deque
 from dataclasses import dataclass, field
 
-from .event_system import EventContext, Event, EventType, EventMetadata
+from .events import EventContext, Event, EventType, EventMetadata
 
 logger = logging.getLogger(__name__)
 

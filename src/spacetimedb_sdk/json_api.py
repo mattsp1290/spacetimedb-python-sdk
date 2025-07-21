@@ -720,12 +720,8 @@ class SpacetimeDBJsonAPI:
     def list_databases_sync(self) -> ApiResponse[List[DatabaseInfo]]:
         """Synchronous version of list_databases."""
         if self.use_async:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(self.list_databases())
-            finally:
-                loop.close()
+            # Use asyncio.run() for proper event loop management
+            return asyncio.run(self.list_databases())
         else:
             response = self._sync_request(HttpMethod.GET, "/v1/databases")
             
@@ -740,12 +736,8 @@ class SpacetimeDBJsonAPI:
     def get_database_info_sync(self, database_name: str) -> ApiResponse[DatabaseInfo]:
         """Synchronous version of get_database_info."""
         if self.use_async:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(self.get_database_info(database_name))
-            finally:
-                loop.close()
+            # Use asyncio.run() for proper event loop management
+            return asyncio.run(self.get_database_info(database_name))
         else:
             response = self._sync_request(
                 HttpMethod.GET,
@@ -765,14 +757,10 @@ class SpacetimeDBJsonAPI:
     ) -> ApiResponse[ReducerCallResult]:
         """Synchronous version of call_reducer_http."""
         if self.use_async:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                return loop.run_until_complete(
-                    self.call_reducer_http(database_name, reducer_name, args)
-                )
-            finally:
-                loop.close()
+            # Use asyncio.run() for proper event loop management
+            return asyncio.run(
+                self.call_reducer_http(database_name, reducer_name, args)
+            )
         else:
             import uuid
             request_id = str(uuid.uuid4())
@@ -870,13 +858,8 @@ class SpacetimeDBJsonAPI:
     
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
-        # Run async close in new event loop
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self.close())
-        finally:
-            loop.close()
+        # Use asyncio.run() for proper event loop management
+        asyncio.run(self.close())
     
     async def __aenter__(self):
         """Async context manager entry."""

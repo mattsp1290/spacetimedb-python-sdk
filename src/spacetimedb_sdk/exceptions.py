@@ -469,8 +469,177 @@ class RetryableConnectionError(RetryableError):
         )
 
 
+# Security-related exceptions for secure exception handling
+class SecurityError(SpacetimeDBError):
+    """
+    Base class for security-related errors that should NEVER be silently caught.
+    
+    These errors indicate potential security violations, authentication failures,
+    or validation errors that require immediate attention and should always be logged.
+    """
+    
+    def __init__(self, message: str, security_context: Optional[Dict[str, Any]] = None, **kwargs):
+        self.security_context = security_context or {}
+        
+        # Always mark as critical security issue
+        enhanced_diagnostic_info = {
+            "security_event": True,
+            "requires_logging": True,
+            "security_context": self.security_context,
+            **kwargs.get("diagnostic_info", {})
+        }
+        
+        super().__init__(
+            message=message,
+            error_code=kwargs.get("error_code", "SECURITY_ERROR"),
+            diagnostic_info=enhanced_diagnostic_info,
+            recovery_hint=kwargs.get("recovery_hint", "Review security logs and validate input data")
+        )
+
+
+class ValidationSecurityError(SecurityError):
+    """
+    Raised when input validation fails due to potential security threats.
+    
+    This includes SQL injection attempts, XSS attempts, path traversal attempts,
+    oversized inputs, malformed data, etc.
+    """
+    
+    def __init__(self, message: str, field: Optional[str] = None, attempted_value: Any = None, **kwargs):
+        self.field = field
+        self.attempted_value = attempted_value
+        
+        security_context = {
+            "validation_failure": True,
+            "field": field,
+            "attempted_value_type": type(attempted_value).__name__ if attempted_value is not None else None,
+            "attempted_value_length": len(str(attempted_value)) if attempted_value is not None else 0
+        }
+        
+        super().__init__(
+            message=message,
+            security_context=security_context,
+            error_code="VALIDATION_SECURITY_ERROR",
+            recovery_hint="Validate and sanitize all user inputs",
+            **kwargs
+        )
+
+
+class AuthenticationSecurityError(SecurityError):
+    """
+    Raised when authentication-related security violations occur.
+    
+    This includes token tampering, expired tokens, invalid credentials,
+    privilege escalation attempts, etc.
+    """
+    
+    def __init__(self, message: str, auth_method: Optional[str] = None, **kwargs):
+        self.auth_method = auth_method
+        
+        security_context = {
+            "authentication_failure": True,
+            "auth_method": auth_method,
+            "timestamp": time.time()
+        }
+        
+        super().__init__(
+            message=message,
+            security_context=security_context,
+            error_code="AUTHENTICATION_SECURITY_ERROR",
+            recovery_hint="Verify authentication credentials and token validity",
+            **kwargs
+        )
+
+
+class ProtocolSecurityError(SecurityError):
+    """
+    Raised when protocol-level security violations are detected.
+    
+    This includes malformed messages, protocol injection attempts,
+    oversized messages, invalid message types, etc.
+    """
+    
+    def __init__(self, message: str, protocol: Optional[str] = None, message_type: Optional[str] = None, **kwargs):
+        self.protocol = protocol
+        self.message_type = message_type
+        
+        security_context = {
+            "protocol_violation": True,
+            "protocol": protocol,
+            "message_type": message_type
+        }
+        
+        super().__init__(
+            message=message,
+            security_context=security_context,
+            error_code="PROTOCOL_SECURITY_ERROR",
+            recovery_hint="Validate protocol compliance and message format",
+            **kwargs
+        )
+
+
+class ConnectionSecurityError(SecurityError):
+    """
+    Raised when connection-level security violations are detected.
+    
+    This includes connection flooding, unauthorized access attempts,
+    suspicious connection patterns, etc.
+    """
+    
+    def __init__(self, message: str, connection_info: Optional[Dict[str, Any]] = None, **kwargs):
+        self.connection_info = connection_info or {}
+        
+        security_context = {
+            "connection_security_violation": True,
+            **self.connection_info
+        }
+        
+        super().__init__(
+            message=message,
+            security_context=security_context,
+            error_code="CONNECTION_SECURITY_ERROR",
+            recovery_hint="Review connection patterns and access controls",
+            **kwargs
+        )
+
+
+# Operational errors that are expected and can be safely handled
+class OperationalError(SpacetimeDBError):
+    """
+    Base class for expected operational errors that can be safely caught and handled.
+    
+    These are non-security related errors like network timeouts, temporary
+    connection failures, resource exhaustion, etc.
+    """
+    pass
+
+
+class NetworkOperationalError(OperationalError):
+    """Network-related operational errors (timeouts, connection refused, etc.)."""
+    pass
+
+
+class ResourceOperationalError(OperationalError):
+    """Resource-related operational errors (memory, disk space, etc.)."""
+    pass
+
+
+class ConfigurationOperationalError(OperationalError):
+    """Configuration-related operational errors (missing config, invalid settings, etc.)."""
+    pass
+
+
+class ValidationError(SpacetimeDBError):
+    """General validation error."""
+    
+    def __init__(self, message: str, field: Optional[str] = None):
+        super().__init__(message)
+        self.field = field
+
+
 # Maintain backward compatibility
 __all__ = [
+    # Base exceptions
     'SpacetimeDBError',
     'DatabaseNotFoundError',
     'DatabaseNotPublishedError',
@@ -482,5 +651,21 @@ __all__ = [
     'SpacetimeDBConnectionError',
     'SpacetimeDBAuthHandshakeError',
     'RetryableError',
-    'RetryableConnectionError'
+    'RetryableConnectionError',
+    
+    # Security exceptions
+    'SecurityError',
+    'ValidationSecurityError',
+    'AuthenticationSecurityError',
+    'ProtocolSecurityError',
+    'ConnectionSecurityError',
+    
+    # Operational exceptions
+    'OperationalError',
+    'NetworkOperationalError',
+    'ResourceOperationalError',
+    'ConfigurationOperationalError',
+    
+    # Validation exceptions
+    'ValidationError'
 ]

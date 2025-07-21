@@ -508,9 +508,14 @@ class MockSpaceTimeDBServer:
         self.running = True
         
         def run_server():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(self._run_server())
+            self._server_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._server_loop)
+            try:
+                self._server_loop.run_until_complete(self._run_server())
+            finally:
+                # Ensure proper cleanup of event loop
+                if not self._server_loop.is_closed():
+                    self._server_loop.close()
             
         self.server_thread = threading.Thread(target=run_server, daemon=True)
         self.server_thread.start()
@@ -523,6 +528,15 @@ class MockSpaceTimeDBServer:
         self.running = False
         if self.server_thread:
             self.server_thread.join(timeout=2)
+        
+        # Clean up server event loop if it exists
+        if hasattr(self, '_server_loop') and self._server_loop:
+            if not self._server_loop.is_closed():
+                try:
+                    self._server_loop.close()
+                except Exception:
+                    pass  # Ignore cleanup errors
+            self._server_loop = None
             
     def reset_stats(self):
         """Reset server statistics."""

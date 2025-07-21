@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/go_factory.py
+# hypothesis_version: 6.135.32
+
+[0.05, 0.15, 0.3, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 10.0, 12.0, 15.0, 20.0, 25.0, 30.0, 40.0, 128, 200, 600, 1000, 1024, 100000, 240000, 280000, 320000, 'Go Factory', 'batch_size', 'binary_protocol', 'brotli_compression', 'buffer_size', 'compatibility check', 'compression', 'concurrent_requests', 'connection_pooling', 'connection_timeout', 'enable_pipelining', 'energy_budget', 'fast_startup', 'gzip_compression', 'heartbeat_interval', 'high_concurrency', 'high_energy_budget', 'high_throughput', 'keep_alive', 'low_latency', 'memory_efficient', 'pool_size', 'protocol', 'request_timeout', 'retry_policy', 'text_protocol']

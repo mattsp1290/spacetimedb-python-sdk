@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_system.py
+# hypothesis_version: 6.135.32
+
+['*', 'data', 'event', 'event_data', 'event_name']

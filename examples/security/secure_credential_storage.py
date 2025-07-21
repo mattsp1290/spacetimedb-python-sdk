@@ -13,6 +13,7 @@ Key concepts:
 - Token rotation and refresh
 - Secure memory handling
 - Audit logging for security events
+- Constant-time credential verification to prevent timing attacks
 
 Requirements:
 - spacetimedb-sdk
@@ -685,7 +686,7 @@ class SecureCredentialDemo:
         # Verify rotation
         print("\n3. Verifying rotation...")
         retrieved_token = self.manager.retrieve_credential('rotating_token')
-        if retrieved_token and retrieved_token['token'] == new_token['token']:
+        if retrieved_token and secrets.compare_digest(retrieved_token['token'], new_token['token']):
             print("   ✅ Rotation verified - new token retrieved")
         else:
             print("   ❌ Rotation verification failed")
@@ -757,7 +758,7 @@ class SecureCredentialDemo:
         
         print("\n2. Retrieving master password from keychain...")
         retrieved_password = self.keychain.retrieve_master_password(username)
-        if retrieved_password == master_password:
+        if retrieved_password and secrets.compare_digest(retrieved_password, master_password):
             print("   ✅ Master password retrieved successfully")
         else:
             print("   ❌ Failed to retrieve master password")

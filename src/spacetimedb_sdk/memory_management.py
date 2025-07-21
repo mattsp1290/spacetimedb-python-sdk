@@ -595,6 +595,362 @@ def get_global_memory_accountant() -> MemoryAccountant:
     return _global_memory_accountant
 
 
+class BoundedRequestTracker:
+    """
+    Advanced request tracker with bounded storage and automatic cleanup.
+    
+    Features:
+    - Maximum size limits (default 10,000 entries)
+    - Automatic cleanup of expired requests (every 5 minutes)
+    - LRU eviction when size limits reached
+    - Thread-safe operations for concurrent access
+    - Memory monitoring and alerting
+    """
+    
+    def __init__(
+        self,
+        max_size: int = 10000,
+        cleanup_interval: float = 300.0,  # 5 minutes
+        default_timeout: float = 30.0,
+        memory_accountant: Optional[MemoryAccountant] = None
+    ):
+        """
+        Initialize the bounded request tracker.
+        
+        Args:
+            max_size: Maximum number of concurrent requests
+            cleanup_interval: Cleanup interval in seconds (300s = 5 minutes)
+            default_timeout: Default timeout for requests in seconds
+            memory_accountant: Optional memory accountant for tracking
+        """
+        self.max_size = max_size
+        self.cleanup_interval = cleanup_interval
+        self.default_timeout = default_timeout
+        self.memory_accountant = memory_accountant
+        
+        # Request tracking with LRU eviction
+        self.pending_requests = OrderedDict()
+        self.response_futures = OrderedDict()
+        self.message_handlers = OrderedDict()
+        
+        # Cleanup timing
+        self._last_cleanup = time.time()
+        
+        # Thread safety
+        self._lock = threading.RLock()
+        
+        # Memory and performance tracking
+        self._total_requests = 0
+        self._evicted_requests = 0
+        self._expired_requests = 0
+        self._memory_bytes = 0
+        
+        # Logger for memory monitoring
+        self._logger = logging.getLogger(__name__)
+        
+        self._logger.info(f"BoundedRequestTracker initialized: max_size={max_size}, cleanup_interval={cleanup_interval}s")
+    
+    def add_request(self, request_id: int, future: Any, timeout: float = None) -> bool:
+        """
+        Add a request with bounded addition and LRU eviction.
+        
+        Args:
+            request_id: Unique request identifier
+            future: Future or event object for the request
+            timeout: Request timeout in seconds (uses default if None)
+            
+        Returns:
+            True if request was added successfully
+        """
+        timeout = timeout or self.default_timeout
+        request_timestamp = time.time()
+        
+        with self._lock:
+            # Check if cleanup is needed (every 5 minutes)
+            if request_timestamp - self._last_cleanup > self.cleanup_interval:
+                self._cleanup_expired()
+            
+            # Evict if at size limit
+            if len(self.pending_requests) >= self.max_size:
+                self._evict_lru_request()
+            
+            # Calculate memory size
+            request_size = self._estimate_request_size(future)
+            
+            # Check memory allocation
+            if self.memory_accountant and not self.memory_accountant.try_allocate('request', request_size):
+                self._logger.warning(f"Memory allocation failed for request {request_id}")
+                return False
+            
+            # Add request with timestamp
+            request_data = {
+                'future': future,
+                'timeout': timeout,
+                'timestamp': request_timestamp,
+                'size': request_size
+            }
+            
+            self.pending_requests[request_id] = request_data
+            self._total_requests += 1
+            self._memory_bytes += request_size
+            
+            # Move to end for LRU tracking
+            self.pending_requests.move_to_end(request_id)
+            
+            self._logger.debug(f"Added request {request_id}, total: {len(self.pending_requests)}")
+            return True
+    
+    def add_response_future(self, request_id: int, response: Any) -> bool:
+        """Add a response future/data for a request."""
+        with self._lock:
+            if len(self.response_futures) >= self.max_size:
+                self._evict_lru_response()
+            
+            response_size = self._estimate_response_size(response)
+            
+            if self.memory_accountant and not self.memory_accountant.try_allocate('request', response_size):
+                self._logger.warning(f"Memory allocation failed for response {request_id}")
+                return False
+            
+            self.response_futures[request_id] = {
+                'response': response,
+                'timestamp': time.time(),
+                'size': response_size
+            }
+            self.response_futures.move_to_end(request_id)
+            self._memory_bytes += response_size
+            return True
+    
+    def add_message_handler(self, handler_id: Any, handler: Callable) -> bool:
+        """Add a message handler with bounds checking."""
+        with self._lock:
+            if len(self.message_handlers) >= self.max_size:
+                self._evict_lru_handler()
+            
+            handler_size = self._estimate_handler_size(handler)
+            
+            if self.memory_accountant and not self.memory_accountant.try_allocate('request', handler_size):
+                self._logger.warning(f"Memory allocation failed for handler {handler_id}")
+                return False
+            
+            self.message_handlers[handler_id] = {
+                'handler': handler,
+                'timestamp': time.time(),
+                'size': handler_size
+            }
+            self.message_handlers.move_to_end(handler_id)
+            self._memory_bytes += handler_size
+            return True
+    
+    def get_request(self, request_id: int) -> Optional[Any]:
+        """Get a request and update LRU order."""
+        with self._lock:
+            if request_id in self.pending_requests:
+                # Move to end for LRU
+                self.pending_requests.move_to_end(request_id)
+                return self.pending_requests[request_id]['future']
+            return None
+    
+    def get_response(self, request_id: int) -> Optional[Any]:
+        """Get a response and update LRU order."""
+        with self._lock:
+            if request_id in self.response_futures:
+                # Move to end for LRU
+                self.response_futures.move_to_end(request_id)
+                return self.response_futures[request_id]['response']
+            return None
+    
+    def remove_request(self, request_id: int) -> bool:
+        """Remove a request and free memory."""
+        with self._lock:
+            if request_id in self.pending_requests:
+                request_data = self.pending_requests.pop(request_id)
+                size = request_data['size']
+                
+                if self.memory_accountant:
+                    self.memory_accountant.release_memory('request', size)
+                
+                self._memory_bytes -= size
+                self._logger.debug(f"Removed request {request_id}, freed {size} bytes")
+                return True
+            return False
+    
+    def remove_response(self, request_id: int) -> bool:
+        """Remove a response and free memory."""
+        with self._lock:
+            if request_id in self.response_futures:
+                response_data = self.response_futures.pop(request_id)
+                size = response_data['size']
+                
+                if self.memory_accountant:
+                    self.memory_accountant.release_memory('request', size)
+                
+                self._memory_bytes -= size
+                return True
+            return False
+    
+    def remove_handler(self, handler_id: Any) -> bool:
+        """Remove a message handler and free memory."""
+        with self._lock:
+            if handler_id in self.message_handlers:
+                handler_data = self.message_handlers.pop(handler_id)
+                size = handler_data['size']
+                
+                if self.memory_accountant:
+                    self.memory_accountant.release_memory('request', size)
+                
+                self._memory_bytes -= size
+                return True
+            return False
+    
+    def _cleanup_expired(self) -> None:
+        """Remove expired requests based on timeouts."""
+        current_time = time.time()
+        expired_ids = []
+        
+        # Find expired requests
+        for request_id, request_data in self.pending_requests.items():
+            age = current_time - request_data['timestamp']
+            if age > request_data['timeout']:
+                expired_ids.append(request_id)
+        
+        # Remove expired requests
+        for request_id in expired_ids:
+            self.remove_request(request_id)
+            self._expired_requests += 1
+        
+        # Find expired responses (use default timeout)
+        expired_response_ids = []
+        for request_id, response_data in self.response_futures.items():
+            age = current_time - response_data['timestamp']
+            if age > self.default_timeout * 2:  # Keep responses longer
+                expired_response_ids.append(request_id)
+        
+        for request_id in expired_response_ids:
+            self.remove_response(request_id)
+        
+        # Find expired handlers (use longer timeout)
+        expired_handler_ids = []
+        for handler_id, handler_data in self.message_handlers.items():
+            age = current_time - handler_data['timestamp']
+            if age > self.default_timeout * 10:  # Keep handlers much longer
+                expired_handler_ids.append(handler_id)
+        
+        for handler_id in expired_handler_ids:
+            self.remove_handler(handler_id)
+        
+        self._last_cleanup = current_time
+        
+        if expired_ids or expired_response_ids or expired_handler_ids:
+            self._logger.info(
+                f"Cleanup completed: {len(expired_ids)} requests, "
+                f"{len(expired_response_ids)} responses, "
+                f"{len(expired_handler_ids)} handlers expired"
+            )
+    
+    def _evict_lru_request(self) -> None:
+        """Evict least recently used request."""
+        if self.pending_requests:
+            # Get first (least recently used) item
+            lru_id = next(iter(self.pending_requests))
+            self.remove_request(lru_id)
+            self._evicted_requests += 1
+            self._logger.debug(f"Evicted LRU request {lru_id}")
+    
+    def _evict_lru_response(self) -> None:
+        """Evict least recently used response."""
+        if self.response_futures:
+            lru_id = next(iter(self.response_futures))
+            self.remove_response(lru_id)
+            self._logger.debug(f"Evicted LRU response {lru_id}")
+    
+    def _evict_lru_handler(self) -> None:
+        """Evict least recently used handler."""
+        if self.message_handlers:
+            lru_id = next(iter(self.message_handlers))
+            self.remove_handler(lru_id)
+            self._logger.debug(f"Evicted LRU handler {lru_id}")
+    
+    def _estimate_request_size(self, future: Any) -> int:
+        """Estimate memory size of a request future."""
+        try:
+            if hasattr(future, '__sizeof__'):
+                return future.__sizeof__()
+            return sys.getsizeof(future)
+        except:
+            return 64  # Default estimate
+    
+    def _estimate_response_size(self, response: Any) -> int:
+        """Estimate memory size of a response."""
+        try:
+            if hasattr(response, '__sizeof__'):
+                return response.__sizeof__()
+            elif isinstance(response, (dict, list)):
+                return sys.getsizeof(response) + sum(
+                    sys.getsizeof(item) for item in (
+                        response.values() if isinstance(response, dict) else response
+                    )
+                )
+            return sys.getsizeof(response)
+        except:
+            return 128  # Default estimate
+    
+    def _estimate_handler_size(self, handler: Callable) -> int:
+        """Estimate memory size of a handler."""
+        try:
+            return sys.getsizeof(handler)
+        except:
+            return 32  # Default estimate
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """Get comprehensive memory and performance statistics."""
+        with self._lock:
+            return {
+                'pending_requests': len(self.pending_requests),
+                'response_futures': len(self.response_futures),
+                'message_handlers': len(self.message_handlers),
+                'memory_bytes': self._memory_bytes,
+                'memory_mb': self._memory_bytes / (1024 * 1024),
+                'max_size': self.max_size,
+                'total_requests': self._total_requests,
+                'evicted_requests': self._evicted_requests,
+                'expired_requests': self._expired_requests,
+                'cleanup_interval': self.cleanup_interval,
+                'last_cleanup_age': time.time() - self._last_cleanup,
+                'memory_usage_percent': (self._memory_bytes / (100 * 1024 * 1024)) * 100  # Assume 100MB target
+            }
+    
+    def force_cleanup(self) -> Dict[str, int]:
+        """Force immediate cleanup and return statistics."""
+        with self._lock:
+            before_requests = len(self.pending_requests)
+            before_responses = len(self.response_futures)
+            before_handlers = len(self.message_handlers)
+            
+            self._cleanup_expired()
+            
+            return {
+                'requests_cleaned': before_requests - len(self.pending_requests),
+                'responses_cleaned': before_responses - len(self.response_futures),
+                'handlers_cleaned': before_handlers - len(self.message_handlers)
+            }
+    
+    def clear_all(self) -> None:
+        """Clear all requests, responses, and handlers."""
+        with self._lock:
+            total_size = self._memory_bytes
+            
+            self.pending_requests.clear()
+            self.response_futures.clear()
+            self.message_handlers.clear()
+            
+            if self.memory_accountant and total_size > 0:
+                self.memory_accountant.release_memory('request', total_size)
+            
+            self._memory_bytes = 0
+            self._logger.info(f"Cleared all tracked data, freed {total_size} bytes")
+
+
 def configure_memory_limits(
     memory_limit_mb: int = DEFAULT_MEMORY_LIMIT_MB,
     max_cache_size: int = DEFAULT_MAX_CACHE_SIZE,

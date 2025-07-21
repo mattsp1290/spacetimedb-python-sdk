@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 import sys
 import traceback
+import importlib  # Security fix: Use importlib instead of __import__
 from pathlib import Path
 
 # Add the src directory to Python path
@@ -46,10 +47,10 @@ def main():
     
     results = []
     
-    # Test 1: Basic SDK import
+    # Test 1: Basic SDK import - Security fix: Use importlib instead of __import__
     results.append(test_import(
         "Basic SDK Import",
-        lambda: __import__('spacetimedb_sdk')
+        lambda: importlib.import_module('spacetimedb_sdk')
     ))
     
     # Test 2: Import SpacetimeDBClient

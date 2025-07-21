@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/algebraic_type.py
+# hypothesis_version: 6.135.32
+
+[128, 256, 1000000, 'Address', 'AlgebraicType', 'Identity', 'RefType', 'T', 'Timestamp', 'V', '__bytes__', 'bool', 'bytes', 'f32', 'f64', 'string']

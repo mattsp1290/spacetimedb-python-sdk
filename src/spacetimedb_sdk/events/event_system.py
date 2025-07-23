@@ -37,13 +37,15 @@ class LegacyEventHandler:
         """Initialize legacy event handler."""
         self.event_name = event_name
         self.handler = handler
-        self.is_wildcard = event_name.endswith("*")
+        self.is_wildcard = event_name.endswith("*") and event_name != "*"
         if self.is_wildcard:
             self.prefix = event_name[:-1]  # Remove the *
     
     def _matches_event(self, event_name: str) -> bool:
         """Check if event name matches this handler's pattern."""
         if self.is_wildcard:
+            if self.event_name == "*":
+                return True  # True wildcard matches everything
             return event_name.startswith(self.prefix)
         else:
             return event_name == self.event_name

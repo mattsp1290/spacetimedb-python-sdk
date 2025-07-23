@@ -1235,3 +1235,17 @@ def create_secure_token(
         refresh_token=refresh_token,
         scopes=scopes or []
     )
+
+
+# Legacy compatibility alias
+SecureCredentialStorage = SecureStorage
+
+__all__ = [
+    'StorageBackend',
+    'TokenStatus', 
+    'SecureToken',
+    'StorageConfig',
+    'SecureStorage',
+    'SecureCredentialStorage',  # Legacy compatibility
+    'create_secure_token'
+]

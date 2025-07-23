@@ -237,7 +237,7 @@ class TestMessageThroughput(unittest.TestCase):
             ssl_enabled=False
         )
         
-        time.sleep(1)  # Ensure connection established
+        time.sleep(0.2)  # Reduced - ensure connection established
         
         # Test different message sizes
         message_sizes = [
@@ -290,7 +290,7 @@ class TestMessageThroughput(unittest.TestCase):
             ssl_enabled=False
         )
         
-        time.sleep(1)
+        time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
         
         # Simulate rapid updates
         start_time = time.perf_counter()
@@ -470,9 +470,11 @@ class TestConcurrentOperations(unittest.TestCase):
                 threads.append(thread)
                 thread.start()
                 
-            # Wait for all to complete
+            # Wait for all to complete with timeout
             for thread in threads:
-                thread.join()
+                thread.join(timeout=30.0)  # 30 second timeout to prevent infinite blocking
+                if thread.is_alive():
+                    print(f"Warning: Thread {thread.name} did not complete within timeout")
                 
             total_time = time.perf_counter() - start_time
             
@@ -486,12 +488,26 @@ class TestConcurrentOperations(unittest.TestCase):
             print(f"  Avg connection time: {avg_connection_time:.2f}ms")
             print(f"  Connections/sec: {len(clients) / total_time:.2f}")
             
-            # Clean up
-            for client in clients:
+            # Enhanced cleanup with timeout to prevent blocking
+            cleanup_threads = []
+            
+            def cleanup_client(client):
                 try:
                     client.disconnect()
-                except:
-                    pass
+                except Exception as e:
+                    print(f"Warning: Client cleanup error: {e}")
+            
+            # Start cleanup in parallel to avoid sequential blocking
+            for client in clients:
+                cleanup_thread = threading.Thread(target=cleanup_client, args=(client,))
+                cleanup_threads.append(cleanup_thread)
+                cleanup_thread.start()
+            
+            # Wait for all cleanup threads with timeout
+            for cleanup_thread in cleanup_threads:
+                cleanup_thread.join(timeout=5.0)  # 5 second timeout per cleanup
+                if cleanup_thread.is_alive():
+                    print(f"Warning: Client cleanup thread did not complete within timeout")
                     
     def test_concurrent_message_handling(self):
         """Test concurrent message handling performance."""
@@ -511,7 +527,7 @@ class TestConcurrentOperations(unittest.TestCase):
             )
             clients.append(client)
             
-        time.sleep(1)  # Ensure all connected
+        time.sleep(0.2)  # Reduced from 1s to 0.2s for testing  # Ensure all connected
         
         # Simulate concurrent message activity
         message_counts = {}

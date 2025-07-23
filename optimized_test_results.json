@@ -1,0 +1,21 @@
+{
+  "start_time": 1753243296.747217,
+  "end_time": 1753243304.933365,
+  "total_duration": 8.186148166656494,
+  "total_tests": 144,
+  "passed": 121,
+  "failed": 0,
+  "skipped": 23,
+  "errors": 0,
+  "timeout_prevented": false,
+  "execution_strategy": "optimized",
+  "worker_count": 8,
+  "detailed_results": {
+    "fast_unit": {
+      "passed": 121,
+      "failed": 0,
+      "skipped": 23,
+      "duration": 6.11594295501709
+    }
+  }
+}

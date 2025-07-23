@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 import logging
 from .utils.error_formatting import ErrorFormatter
+from .errors import error_handler, ErrorCategory, ErrorSeverity
 
 # Type definitions
 T = TypeVar('T')
@@ -681,26 +682,56 @@ performance_profiler = PerformanceProfiler()
 
 
 # Convenience functions
+@error_handler(
+    ErrorCategory.VALIDATION, 
+    ErrorSeverity.MEDIUM,
+    user_message="Failed to format identity bytes",
+    suggestions="Ensure identity_bytes is a valid bytes object and format_type is supported"
+)
 def format_identity(identity_bytes: bytes, format_type: IdentityFormat = IdentityFormat.HEX) -> str:
     """Format identity bytes. Convenience function."""
     return IdentityFormatter.format_identity(identity_bytes, format_type)
 
 
+@error_handler(
+    ErrorCategory.VALIDATION,
+    ErrorSeverity.MEDIUM,
+    user_message="Failed to parse identity string",
+    suggestions="Ensure identity_str is a valid identity string format"
+)
 def parse_identity(identity_str: str) -> bytes:
     """Parse identity string. Convenience function."""
     return IdentityFormatter.parse_identity(identity_str)
 
 
+@error_handler(
+    ErrorCategory.VALIDATION,
+    ErrorSeverity.MEDIUM,
+    user_message="Failed to format connection ID",
+    suggestions="Ensure connection_id is a valid int or bytes object and format_type is supported"
+)
 def format_connection_id(connection_id: Union[int, bytes], format_type: IdentityFormat = IdentityFormat.HEX) -> str:
     """Format connection ID. Convenience function."""
     return ConnectionIdFormatter.format_connection_id(connection_id, format_type)
 
 
+@error_handler(
+    ErrorCategory.VALIDATION,
+    ErrorSeverity.MEDIUM,
+    user_message="Failed to parse connection ID string",
+    suggestions="Ensure connection_id_str is a valid connection ID string format"
+)
 def parse_connection_id(connection_id_str: str) -> int:
     """Parse connection ID string. Convenience function."""
     return ConnectionIdFormatter.parse_connection_id(connection_id_str)
 
 
+@error_handler(
+    ErrorCategory.VALIDATION,
+    ErrorSeverity.MEDIUM,
+    user_message="Failed to parse URI",
+    suggestions="Ensure the URI is properly formatted"
+)
 def parse_uri(uri: str) -> ParsedURI:
     """Parse URI. Convenience function."""
     return URIParser.parse_uri(uri)

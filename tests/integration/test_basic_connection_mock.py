@@ -42,7 +42,7 @@ def test_basic_connection_mock():
         try:
             client.connect_instance(
                 host="localhost:3000",
-                database_address="test_db"
+                database_address="testdb"
             )
         except Exception as e:
             # Some errors are expected in test mode
@@ -122,7 +122,7 @@ def test_connection_lifecycle_mock():
     client.register_on_identity(on_identity_callback)
     
     # Connect in test mode - this should call _simulate_test_connection
-    client.connect_instance("localhost:3000", "test_db")
+    client.connect_instance("localhost:3000", "testdb")
     
     # Verify connection simulation worked
     assert client.is_connected, "Client should be connected in test mode"

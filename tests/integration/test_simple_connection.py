@@ -43,7 +43,7 @@ class TestSimpleConnection:
             None, 
             client.connect_instance,
             "localhost:3000",
-            "test_db"
+            "testdb"
         )
         
         # Verify connection completed without real network calls
@@ -74,7 +74,7 @@ class TestSimpleConnection:
             None,
             client.connect_instance,
             "localhost:3000", 
-            "test_db"
+            "testdb"
         )
         
         # Wait for events to be processed using the proper helper
@@ -120,7 +120,7 @@ class TestSimpleConnection:
             None,
             client.connect_instance,
             "localhost:3000",
-            "test_db"
+            "testdb"
         )
         
         # Wait for connection and identity events

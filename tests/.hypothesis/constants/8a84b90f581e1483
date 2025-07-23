@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/reducer_interface.py
+# hypothesis_version: 6.135.32
+
+[10.0, 'cancelled', 'critical', 'executing', 'failed', 'high', 'low', 'normal', 'pending', 'rate_limited', 'success', 'timeout']

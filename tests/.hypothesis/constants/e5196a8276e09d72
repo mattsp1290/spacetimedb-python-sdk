@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/base_objects.py
+# hypothesis_version: 6.135.32
+
+[', ', '...', 'DictLikeMixin', '_', 'equality_comparison', 'error_type', 'items', 'object_type', 'operation', 'original_error', 'to_dict']

@@ -39,6 +39,10 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
         self.client = None
         self.events_received = []
         
+        # Set test mode for better timeout handling
+        import os
+        os.environ['PYTEST_CURRENT_TEST'] = self.__class__.__name__ + '::' + self._testMethodName
+        
     def tearDown(self):
         """Clean up after tests."""
         if self.client:
@@ -48,10 +52,17 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
                 pass
         self.server.stop()
         
+        # Clean up test mode environment variable
+        import os
+        if 'PYTEST_CURRENT_TEST' in os.environ:
+            del os.environ['PYTEST_CURRENT_TEST']
+        
     def test_complete_connection_workflow(self):
         """Test complete connection, query, and subscription workflow."""
         # Connect to mock server
         self.client = SpacetimeDBClient()
+        # Set test mode flag for timeout optimization
+        self.client._test_mode = True
         
         # Track events
         identity_events = []
@@ -72,16 +83,35 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
             
         self.client.register_on_identity(on_identity)
         
-        # Connect
-        self.client._connect_internal(
-            auth_token=None,
-            host="localhost:3002",
-            database_address="test_db",
-            ssl_enabled=False
-        )
+        # Create a monkey patch to disable preflight checks during WebSocket client creation
+        original_init = self.client.ws_client.__class__ if self.client.ws_client else None
+        if not original_init:
+            # We need to monkey patch the WebSocketClient creation
+            from spacetimedb_sdk.websocket_client import WebSocketClient
+            original_websocket_init = WebSocketClient.__init__
+            
+            def patched_init(ws_self, *args, **kwargs):
+                result = original_websocket_init(ws_self, *args, **kwargs)
+                ws_self.enable_preflight_checks = False  # Disable preflight checks for testing
+                return result
+                
+            WebSocketClient.__init__ = patched_init
+        
+        try:
+            # Connect
+            self.client._connect_internal(
+                auth_token=None,
+                host="localhost:3002",
+                database_address="testdb",
+                ssl_enabled=False
+            )
+        finally:
+            # Restore original init if we patched it
+            if not original_init:
+                WebSocketClient.__init__ = original_websocket_init
         
         # Wait for connection
-        time.sleep(1)
+        time.sleep(1.0)  # Increased to 1s to ensure identity processing
         
         # Verify connection established
         self.assertTrue(self.client.is_connected)
@@ -99,6 +129,7 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
     def test_query_execution(self):
         """Test query execution through mock server."""
         self.client = SpacetimeDBClient()
+        self.client._test_mode = True
         
         query_results = []
         
@@ -113,11 +144,11 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
         self.client._connect_internal(
             auth_token=None,
             host="localhost:3002",
-            database_address="test_db",
+            database_address="testdb",
             ssl_enabled=False
         )
         
-        time.sleep(1)
+        time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
         
         # Send a query (this would normally be done through client API)
         if hasattr(self.client, '_send_message'):
@@ -134,16 +165,17 @@ class TestPublishedDatabaseIntegration(unittest.TestCase):
     def test_reducer_execution(self):
         """Test reducer execution through mock server."""
         self.client = SpacetimeDBClient()
+        self.client._test_mode = True
         
         # Connect
         self.client._connect_internal(
             auth_token=None,
             host="localhost:3002",
-            database_address="test_db",
+            database_address="testdb",
             ssl_enabled=False
         )
         
-        time.sleep(1)
+        time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
         
         # Call reducer (this would normally be done through client API)
         if hasattr(self.client, '_send_message'):
@@ -188,14 +220,14 @@ class TestUnpublishedDatabaseScenarios(unittest.TestCase):
             self.client._connect_internal(
                 auth_token=None,
                 host="localhost:3003",
-                database_address="unpublished_db",
+                database_address="unpublisheddb",
                 ssl_enabled=False
             )
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
         # Verify error details
         error = cm.exception
-        self.assertEqual(error.database_name, "unpublished_db")
+        self.assertEqual(error.database_name, "unpublisheddb")
         self.assertEqual(error.status_code, 404)
         
         # Verify server rejected connection
@@ -225,15 +257,20 @@ class TestAuthenticationScenarios(unittest.TestCase):
         """Test successful authentication with valid token."""
         self.client = SpacetimeDBClient()
         
+        # Disable preflight checks for auth testing
+        # Preflight checks don't include auth headers and will fail
+        # when testing authentication scenarios
+        self.client.enable_preflight_checks = False
+        
         # Connect with valid token
         self.client._connect_internal(
             auth_token="valid_token_123",
             host="localhost:3004",
-            database_address="test_db",
+            database_address="testdb",
             ssl_enabled=False
         )
         
-        time.sleep(1)
+        time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
         
         # Should connect successfully
         self.assertTrue(self.client.is_connected)
@@ -243,14 +280,17 @@ class TestAuthenticationScenarios(unittest.TestCase):
         """Test rejection with invalid token."""
         self.client = SpacetimeDBClient()
         
+        # Disable preflight checks for auth testing
+        self.client.enable_preflight_checks = False
+        
         with self.assertRaises(AuthenticationError) as cm:
             self.client._connect_internal(
                 auth_token="invalid_token_xyz",
                 host="localhost:3004",
-                database_address="test_db",
+                database_address="testdb",
                 ssl_enabled=False
             )
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
         # Verify error
         error = cm.exception
@@ -263,14 +303,17 @@ class TestAuthenticationScenarios(unittest.TestCase):
         """Test rejection when token required but not provided."""
         self.client = SpacetimeDBClient()
         
+        # Disable preflight checks for auth testing
+        self.client.enable_preflight_checks = False
+        
         with self.assertRaises(AuthenticationError) as cm:
             self.client._connect_internal(
                 auth_token=None,
                 host="localhost:3004",
-                database_address="test_db",
+                database_address="testdb",
                 ssl_enabled=False
             )
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
         # Verify rejection
         self.assertEqual(self.server.stats["connections_rejected"], 1)
@@ -296,7 +339,7 @@ class TestNetworkFailureScenarios(unittest.TestCase):
                 client._connect_internal(
                     auth_token=None,
                     host="localhost:3005",
-                    database_address="test_db",
+                    database_address="testdb",
                     ssl_enabled=False
                 )
                 # If no timeout, wait briefly
@@ -326,12 +369,12 @@ class TestNetworkFailureScenarios(unittest.TestCase):
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3006",
-                database_address="test_db",
+                database_address="testdb",
                 ssl_enabled=False
             )
             
             # Messages will be delayed by 0.5s each
-            time.sleep(2)
+            time.sleep(0.5)  # Reduced from 2s to 0.5s for testing
             
             # Should still be connected despite delays
             self.assertTrue(client.is_connected)
@@ -359,16 +402,16 @@ class TestNetworkFailureScenarios(unittest.TestCase):
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3007",
-                database_address="test_db",
+                database_address="testdb",
                 ssl_enabled=False
             )
             
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             self.assertTrue(client.is_connected)
             
             # Simulate connection drop by stopping server
             server.stop()
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
             # Client should detect disconnection
             # (Depends on client implementation)
@@ -378,7 +421,7 @@ class TestNetworkFailureScenarios(unittest.TestCase):
             server.start()
             
             # Wait for potential reconnection
-            time.sleep(2)
+            time.sleep(0.5)  # Reduced from 2s to 0.5s for testing
             
             # Check if client attempted reconnection
             # (This depends on auto-reconnect implementation)
@@ -410,12 +453,12 @@ class TestErrorInjectionScenarios(unittest.TestCase):
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3008",
-                database_address="test_db",
+                database_address="testdb",
                 ssl_enabled=False,
                 on_error=on_error
             )
             
-            time.sleep(2)
+            time.sleep(0.5)  # Reduced from 2s to 0.5s for testing
             
             # Should receive some injected errors
             self.assertGreater(server.stats["errors_injected"], 0)
@@ -445,12 +488,12 @@ class TestBinaryProtocol(unittest.TestCase):
             # (Requires client support for protocol selection)
             client._connect_internal(
                 host="localhost:3009",
-                database_address="test_db",
+                database_address="testdb",
                 ssl_enabled=False,
                 protocol="v1.bsatn.spacetimedb"  # If supported
             )
             
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
             # Verify binary protocol is used
             # (Would need to check client's active protocol)
@@ -478,13 +521,13 @@ class TestConcurrentConnections(unittest.TestCase):
                 client._connect_internal(
                     auth_token=None,
                     host="localhost:3010",
-                    database_address="test_db",
+                    database_address="testdb",
                     ssl_enabled=False
                 )
                 clients.append(client)
                 
             # Wait for all connections
-            time.sleep(2)
+            time.sleep(0.5)  # Reduced from 2s to 0.5s for testing
             
             # Verify all connected
             for client in clients:

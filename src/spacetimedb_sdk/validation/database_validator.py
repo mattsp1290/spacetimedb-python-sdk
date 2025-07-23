@@ -86,10 +86,11 @@ class DatabaseNameValidator(Validator):
             '&', '|', ';', '$',        # Command separators
             '?', '*', ':', '\\',       # Wildcard/path characters
             '%', '#',                  # URL encoding/comments
+            '_',                       # Underscore not allowed
         }
         
-        # Valid database name pattern (letters, numbers, underscore, dash, dot)
-        self._valid_name_pattern = re.compile(r'^[a-zA-Z0-9_.-]+$')
+        # Valid database name pattern (letters, numbers, dash, dot) - underscores not allowed
+        self._valid_name_pattern = re.compile(r'^[a-zA-Z0-9.-]+$')
         
         # Maximum reasonable database name length
         self._max_db_name_length = 100
@@ -304,7 +305,7 @@ class DatabaseNameValidator(Validator):
         # Check against valid pattern
         if not self._valid_name_pattern.match(name):
             errors.append(DatabaseValidationError(
-                "Database name contains invalid characters. Only letters, numbers, underscore, dash, and dot are allowed",
+                "Database name contains invalid characters. Only letters, numbers, dash, and dot are allowed",
                 field=field,
                 value=name
             ))

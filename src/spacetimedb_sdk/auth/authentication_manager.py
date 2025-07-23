@@ -24,33 +24,12 @@ from dataclasses import dataclass
 from .storage import SecureAuthStorage, AuthCredentials
 from .secure_verification import SecureVerificationManager, verify_credentials_secure
 
-# Import AuthenticationState and Handler directly to avoid circular imports
-try:
-    from ..connection.authentication_handler import AuthenticationState, AuthenticationHandler
-except ImportError:
-    # Create fallback for when the full connection module isn't available
-    from enum import Enum
-    class AuthenticationState(Enum):
-        UNAUTHENTICATED = "unauthenticated"
-        AUTHENTICATING = "authenticating"
-        AUTHENTICATED = "authenticated"
-        FAILED = "failed"
-        EXPIRED = "expired"
-    
-    class AuthenticationHandler:
-        def __init__(self, storage):
-            self.storage = storage
-            self.state = AuthenticationState.UNAUTHENTICATED
-            
-        def authenticate(self, token, identity=None):
-            return True
-            
-        def get_state(self):
-            return self.state
-            
-        def refresh_credentials(self, identity, token):
-            # Fallback handler doesn't support refresh
-            return False
+# Import AuthenticationState and Handler directly - fixed circular import issue
+# The circular import was caused by websocket_client importing authentication_manager
+# while authentication_manager imports from connection.authentication_handler
+# which depends on modules that indirectly lead back to websocket_client.
+# We avoid the fallback enum that was creating duplicate AuthenticationState classes.
+from ..connection.authentication_handler import AuthenticationState, AuthenticationHandler
 
 # Import these conditionally to avoid circular imports
 try:
@@ -149,14 +128,9 @@ class AuthenticationManager:
     
     def _get_global_storage(self) -> Optional[SecureAuthStorage]:
         """Get global auth storage instance."""
-        try:
-            # Import here to avoid circular imports
-            from ..websocket_client import _global_auth_storage
-            if _global_auth_storage is None:
-                return SecureAuthStorage()
-            return _global_auth_storage
-        except ImportError:
-            return SecureAuthStorage()
+        # Create a new SecureAuthStorage instance instead of importing from websocket_client
+        # to avoid circular import. The global storage pattern can be handled at a higher level.
+        return SecureAuthStorage()
     
     def _load_stored_credentials(self) -> None:
         """Load stored credentials if available."""
@@ -451,17 +425,26 @@ class AuthenticationManager:
                 current_token = self._token
             
             if self._handler:
-                # Use Phase 2 authentication handler for refresh
-                refresh_result = self._handler.refresh_credentials(
-                    current_identity, 
-                    current_token
-                )
-                
-                if refresh_result:
+                # Check if handler has refresh capabilities
+                if hasattr(self._handler, 'refresh_credentials'):
+                    # Use Phase 2 authentication handler for refresh
+                    refresh_result = self._handler.refresh_credentials(
+                        current_identity, 
+                        current_token
+                    )
+                    
+                    if refresh_result:
+                        return AuthenticationResult(
+                            success=True,
+                            identity=current_identity,
+                            token=current_token
+                        )
+                else:
+                    # Handler doesn't support refresh - requires handshake
                     return AuthenticationResult(
-                        success=True,
-                        identity=current_identity,
-                        token=current_token
+                        success=False,
+                        error="Token refresh not supported - requires re-authentication",
+                        requires_handshake=True
                     )
             
             # Currently, SpacetimeDB requires full re-authentication

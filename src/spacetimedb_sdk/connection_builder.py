@@ -1008,3 +1008,7 @@ class SpacetimeDBConnectionBuilder:
         )
         
         return client, ctx
+
+
+# Backwards compatibility alias
+ConnectionBuilder = SpacetimeDBConnectionBuilder

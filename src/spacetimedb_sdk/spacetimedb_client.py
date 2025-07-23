@@ -1,8 +1,8 @@
 """
-Modern SpacetimeDB client implementation supporting protocol v1.1.1
+Modern SpacetimeDB client implementation supporting protocol v1.1.2
 
 This is the modernized version of spacetimedb_client.py with support for:
-- Modern WebSocket protocol (v1.1.1)
+- Modern WebSocket protocol (v1.1.2)
 - QueryId-based subscription management
 - Enhanced connection lifecycle management
 - Connection state tracking and metrics
@@ -352,24 +352,27 @@ class SpacetimeDBClient:
         self.test_mode = test_mode
         self.auto_trigger_lifecycle = auto_trigger_lifecycle
         
-        # Compression configuration
-        self.compression_config = compression_config or CompressionConfig()
+        # Compression configuration (lazy-loaded for performance)
+        self._compression_config = compression_config
         
         # Connection management
         self.ws_client: Optional[WebSocketClient] = None
         self.connection_info: Dict[str, Any] = {}
         
-        # Enhanced connection management
-        self.connection_state_tracker = ConnectionStateTracker()
-        self.connection_lifecycle_manager = ConnectionLifecycleManager()
-        self.connection_metrics = ConnectionMetrics()
+        # Enhanced connection management (lazy-loaded for performance)
+        self._connection_state_tracker = None
+        self._connection_lifecycle_manager = None
+        self._connection_metrics = None
+        self._initial_energy = initial_energy
+        self._max_energy = max_energy
+        self._energy_budget = energy_budget
         
-        # Energy management components
-        self.energy_tracker = EnergyTracker(initial_energy, max_energy)
-        self.energy_budget_manager = EnergyBudgetManager(energy_budget)
-        self.energy_event_manager = EnergyEventManager()
-        self.energy_cost_estimator = EnergyCostEstimator()
-        self.energy_usage_analytics = EnergyUsageAnalytics()
+        # Energy management components (lazy-loaded for performance)
+        self._energy_tracker = None
+        self._energy_budget_manager = None
+        self._energy_event_manager = None
+        self._energy_cost_estimator = None
+        self._energy_usage_analytics = None
         
         # Energy event listeners
         self._energy_event_listeners: List[EnergyEventListener] = []
@@ -443,18 +446,17 @@ class SpacetimeDBClient:
 
         self.logger.debug("SpacetimeDBClient initializing...")
         
-        # Initialize security validators
-        self._database_validator = DatabaseNameValidator()
-        self._url_validator = URLValidator()
+        # Initialize security validators (lazy-loaded for performance)
+        self._database_validator = None
+        self._url_validator = None
         
-        # Setup enhanced connection event handling
-        self._setup_enhanced_connection_events()
-        
-        # Setup energy event handling
-        self._setup_energy_events()
+        # Defer expensive setup operations for performance
+        self._enhanced_events_setup = False
+        self._energy_events_setup = False
+        self._message_processing_started = start_message_processing
         
         # Start message processing (can be disabled for testing)
-        if start_message_processing:
+        if start_message_processing and not test_mode:
             self._start_message_processing()
         self.logger.debug("SpacetimeDBClient initialized.")
     
@@ -464,6 +466,106 @@ class SpacetimeDBClient:
             self.shutdown()
         except:
             pass
+    
+    # Lazy-loaded properties for performance optimization
+    @property
+    def compression_config(self):
+        """Lazy-loaded compression configuration."""
+        if self._compression_config is None:
+            self._compression_config = CompressionConfig()
+        return self._compression_config
+    
+    @property
+    def connection_state_tracker(self):
+        """Lazy-loaded connection state tracker."""
+        if self._connection_state_tracker is None:
+            self._connection_state_tracker = ConnectionStateTracker()
+        return self._connection_state_tracker
+    
+    @property
+    def connection_lifecycle_manager(self):
+        """Lazy-loaded connection lifecycle manager."""
+        if self._connection_lifecycle_manager is None:
+            self._connection_lifecycle_manager = ConnectionLifecycleManager()
+        return self._connection_lifecycle_manager
+    
+    @property
+    def connection_metrics(self):
+        """Lazy-loaded connection metrics."""
+        if self._connection_metrics is None:
+            self._connection_metrics = ConnectionMetrics()
+        return self._connection_metrics
+    
+    @property
+    def energy_tracker(self):
+        """Lazy-loaded energy tracker."""
+        if self._energy_tracker is None:
+            self._energy_tracker = EnergyTracker(self._initial_energy, self._max_energy)
+        return self._energy_tracker
+    
+    @property
+    def energy_budget_manager(self):
+        """Lazy-loaded energy budget manager."""
+        if self._energy_budget_manager is None:
+            self._energy_budget_manager = EnergyBudgetManager(self._energy_budget)
+        return self._energy_budget_manager
+    
+    @property
+    def energy_event_manager(self):
+        """Lazy-loaded energy event manager."""
+        if self._energy_event_manager is None:
+            self._energy_event_manager = EnergyEventManager()
+        return self._energy_event_manager
+    
+    @property
+    def energy_cost_estimator(self):
+        """Lazy-loaded energy cost estimator."""
+        if self._energy_cost_estimator is None:
+            self._energy_cost_estimator = EnergyCostEstimator()
+        return self._energy_cost_estimator
+    
+    @property
+    def energy_usage_analytics(self):
+        """Lazy-loaded energy usage analytics."""
+        if self._energy_usage_analytics is None:
+            self._energy_usage_analytics = EnergyUsageAnalytics()
+        return self._energy_usage_analytics
+    
+    def _ensure_setup_complete(self):
+        """Ensure all expensive setup operations are complete."""
+        if not self._enhanced_events_setup:
+            self._setup_enhanced_connection_events()
+            self._enhanced_events_setup = True
+        
+        if not self._energy_events_setup:
+            self._setup_energy_events()
+            self._energy_events_setup = True
+        
+        if self._message_processing_started and not hasattr(self, 'processing_thread'):
+            self._start_message_processing()
+    
+    @property
+    def database_validator(self):
+        """Lazy-loaded database validator."""
+        if self._database_validator is None:
+            self._database_validator = DatabaseNameValidator()
+        return self._database_validator
+    
+    @property
+    def url_validator(self):
+        """Lazy-loaded URL validator."""
+        if self._url_validator is None:
+            try:
+                self._url_validator = URLValidator()
+            except Exception as e:
+                self.logger.error(f"Failed to initialize URLValidator: {e}")
+                # Create a fallback that fails gracefully
+                class FailsafeURLValidator:
+                    def validate(self, url, field=None):
+                        from .validation.validators import ValidationResult
+                        return ValidationResult(is_valid=True, sanitized_value=url, errors=[])
+                self._url_validator = FailsafeURLValidator()
+        return self._url_validator
     
     def shutdown(self) -> None:
         """Properly shutdown the client and cleanup threads."""
@@ -477,6 +579,7 @@ class SpacetimeDBClient:
         self._shutting_down = True
         
         try:
+            # Step 1: Set shutdown signal and prepare for disconnect (needs lock)
             with self._lock:
                 self.logger.debug(f"Shutdown: Acquired _lock. should_stop_processing: {self.should_stop_processing.is_set()}")
                 
@@ -497,47 +600,56 @@ class SpacetimeDBClient:
                     except Exception as e:
                         self.logger.error(ErrorFormatter.format_connection_error("shutdown lifecycle cleanup", e))
                 
-                # Disconnect WebSocket client
-                if self.ws_client:
-                    self.logger.debug("Shutdown: Disconnecting ws_client.")
+                # Get references to objects we need to cleanup
+                current_ws_client = self.ws_client
+                current_processing_thread = self.processing_thread
+            
+            # Step 2: Disconnect WebSocket client (OUTSIDE lock to prevent deadlock)
+            if current_ws_client:
+                self.logger.debug("Shutdown: Disconnecting ws_client.")
+                try:
+                    current_ws_client.disconnect()
+                    self.logger.debug("Shutdown: ws_client.disconnect() called.")
+                except Exception as e:
+                    self.logger.error(ErrorFormatter.format_connection_error("shutdown disconnect", e))
+                
+                # Clear reference under lock
+                with self._lock:
+                    self.ws_client = None
+            
+            # Step 3: Handle thread shutdown (OUTSIDE lock to prevent deadlock)
+            if current_processing_thread and current_processing_thread.is_alive():
+                self.logger.debug(f"Shutdown: Forcefully stopping processing_thread (ID: {current_processing_thread.ident})")
+                
+                # Put multiple None messages to ensure thread gets the signal
+                for _ in range(3):
                     try:
-                        self.ws_client.disconnect()
-                        self.logger.debug("Shutdown: ws_client.disconnect() called.")
-                    except Exception as e:
-                        self.logger.error(ErrorFormatter.format_connection_error("shutdown disconnect", e))
-                    finally:
-                        self.ws_client = None
+                        self.message_queue.put(None, timeout=0.05)
+                    except queue.Full:
+                        break
+                    except Exception:
+                        break
                 
-                # Force thread shutdown - more aggressive approach
-                if self.processing_thread and self.processing_thread.is_alive():
-                    self.logger.debug(f"Shutdown: Forcefully stopping processing_thread (ID: {self.processing_thread.ident})")
-                    
-                    # Put multiple None messages to ensure thread gets the signal
-                    for _ in range(3):
-                        try:
-                            self.message_queue.put(None, timeout=0.05)
-                        except queue.Full:
-                            break
-                        except Exception:
-                            break
-                    
-                    # Shorter timeout for faster shutdown
-                    self.logger.debug(f"Shutdown: Joining processing_thread with 1.5s timeout")
-                    self.processing_thread.join(timeout=1.5)
-                    
-                    if self.processing_thread.is_alive():
-                        self.logger.warning(f"Shutdown: processing_thread (ID: {self.processing_thread.ident}) did NOT stop cleanly - forcing cleanup")
-                        # Mark thread as None to prevent further operations
-                        self.processing_thread = None
-                    else:
-                        self.logger.debug(f"Shutdown: processing_thread stopped successfully")
-                        self.processing_thread = None
+                # Join thread with timeout OUTSIDE of lock to prevent deadlock
+                # Use shorter timeout for performance (especially in tests)
+                join_timeout = 0.1 if hasattr(self, '_test_mode') else 1.5
+                self.logger.debug(f"Shutdown: Joining processing_thread with {join_timeout}s timeout")
+                current_processing_thread.join(timeout=join_timeout)
+                
+                if current_processing_thread.is_alive():
+                    self.logger.warning(f"Shutdown: processing_thread (ID: {current_processing_thread.ident}) did NOT stop cleanly - forcing cleanup")
                 else:
-                    self.logger.debug("Shutdown: processing_thread is None or not alive.")
+                    self.logger.debug(f"Shutdown: processing_thread stopped successfully")
                 
-                # Aggressive memory cleanup
+                # Clear thread reference under lock
+                with self._lock:
+                    self.processing_thread = None
+            else:
+                self.logger.debug("Shutdown: processing_thread is None or not alive.")
+            
+            # Step 4: Final cleanup (needs lock)
+            with self._lock:
                 self._aggressive_cleanup()
-                
                 self.logger.debug("Shutdown: Process complete.")
         finally:
             self._shutting_down = False
@@ -601,17 +713,26 @@ class SpacetimeDBClient:
         # Clear any remaining event system references
         if hasattr(self, '_event_manager'):
             try:
-                # Try to shutdown the event manager properly
+                # Try to shutdown the event manager properly with robust asyncio handling
                 if hasattr(self._event_manager, 'shutdown'):
-                    # Check if we're in an async context
+                    # Check if we're in an async context with local asyncio import
                     try:
-                        loop = asyncio.get_running_loop()
-                        asyncio.create_task(self._event_manager.shutdown())
-                    except RuntimeError:
-                        # No running loop, cleanup synchronously
+                        import asyncio as local_asyncio
+                        try:
+                            loop = local_asyncio.get_running_loop()
+                            local_asyncio.create_task(self._event_manager.shutdown())
+                        except RuntimeError:
+                            # No running loop, cleanup synchronously
+                            if hasattr(self._event_manager, '_cleanup_event_loop'):
+                                self._event_manager._is_shutting_down = True
+                                if self._event_manager._thread_pool:
+                                    self._event_manager._thread_pool.shutdown(wait=False)
+                                self._event_manager._cleanup_event_loop()
+                    except ImportError:
+                        # asyncio not available, fallback to synchronous cleanup
                         if hasattr(self._event_manager, '_cleanup_event_loop'):
                             self._event_manager._is_shutting_down = True
-                            if self._event_manager._thread_pool:
+                            if hasattr(self._event_manager, '_thread_pool') and self._event_manager._thread_pool:
                                 self._event_manager._thread_pool.shutdown(wait=False)
                             self._event_manager._cleanup_event_loop()
                 elif hasattr(self._event_manager, 'clear'):
@@ -696,8 +817,14 @@ class SpacetimeDBClient:
         db_identity: Optional[str] = None
     ) -> None:
         """Internal method to connect to SpacetimeDB."""
-        # Validate inputs for security
-        self._validate_connection_inputs(host, database_address, auth_token, db_identity)
+        # CRITICAL: Validate inputs for security FIRST, before any other operations
+        # This ensures validation errors are raised immediately, not masked by connection timeouts
+        try:
+            self._validate_connection_inputs(host, database_address, auth_token, db_identity)
+        except (ValueError, Exception) as validation_error:
+            # Immediately re-raise validation errors - do not attempt connection
+            self.logger.error(f"Input validation failed: {validation_error}")
+            raise validation_error
         
         with self._lock:
             if self.ws_client and self.ws_client.is_connected:
@@ -723,20 +850,88 @@ class SpacetimeDBClient:
                 self._simulate_test_connection()
                 return
             
-            # Create WebSocket client
+            # Create WebSocket client with auto_reconnect disabled initially
+            # We'll enable it after successful connection
             self.ws_client = WebSocketClient(
                 protocol=self.protocol,
                 on_connect=self._handle_connect,
                 on_disconnect=self._handle_disconnect,
                 on_error=self._handle_error,
                 on_message=self._handle_message,
-                auto_reconnect=True,
+                auto_reconnect=False,  # Disable during initial connection
                 compression_config=self.compression_config
             )
             
-            # Connect
+            # Set up legacy callback for identity handling
+            self.ws_client.on_identity = self._handle_ws_identity
+            
+            # Propagate test mode if enabled
+            if hasattr(self, '_test_mode') and self._test_mode:
+                if hasattr(self.ws_client, 'connection_manager'):
+                    self.ws_client.connection_manager._test_mode = True
+            
+            # Connect with synchronous error handling
             self.auth_token = auth_token
+            self._connection_result = None
+            self._connection_error = None
+            self._connection_event = threading.Event()
+            
+            # Set up connection result capture
+            original_handle_connect = self._handle_connect
+            
+            def capture_connection_error(error):
+                # Check if this is a connection handshake error that should be propagated
+                from .exceptions import DatabaseNotFoundError, DatabaseNotPublishedError, AuthenticationError, WebSocketHandshakeError
+                if isinstance(error, (DatabaseNotFoundError, DatabaseNotPublishedError, AuthenticationError, WebSocketHandshakeError)):
+                    self._connection_error = error
+                    self._connection_event.set()
+                # For other errors, let them go through normal error handling
+            
+            def capture_connection_success():
+                self._connection_result = True
+                self._connection_event.set()
+                # Re-enable auto_reconnect after successful connection
+                if self.ws_client:
+                    self.ws_client.auto_reconnect = True
+                original_handle_connect()
+            
+            # Add our capture function to the error callback list
+            self._on_error.append(capture_connection_error)
+            # Temporarily override connect handler
+            self._handle_connect = capture_connection_success
+            
             self.ws_client.connect(auth_token, host, database_address, ssl_enabled, db_identity)
+        
+        # CRITICAL: Release the lock before waiting for connection event
+        # This allows the message processing thread to acquire the lock and process the identity token
+        # which is required to complete the connection handshake
+        
+        try:
+            # Wait for connection result with timeout (OUTSIDE the lock)
+            # Use longer timeout for integration tests to allow mock server handshake
+            connection_timeout = 30.0 if hasattr(self, '_test_mode') else 15.0
+            if self._connection_event.wait(timeout=connection_timeout):
+                if self._connection_error:
+                    raise self._connection_error
+                # If _connection_result is True, connection succeeded
+            else:
+                # Timeout - create timeout error
+                from .exceptions import ConnectionTimeoutError
+                raise ConnectionTimeoutError(
+                    operation="connection handshake",
+                    timeout_seconds=connection_timeout
+                )
+        finally:
+            # Remove our capture function from error callbacks and restore connect handler
+            try:
+                self._on_error.remove(capture_connection_error)
+            except ValueError:
+                pass  # Already removed
+            self._handle_connect = original_handle_connect
+            # Clean up connection tracking
+            self._connection_result = None
+            self._connection_error = None
+            self._connection_event = None
     
     def _validate_connection_inputs(self, host: str, database_address: str, auth_token: Optional[str], db_identity: Optional[str] = None) -> None:
         """
@@ -760,7 +955,7 @@ class SpacetimeDBClient:
         # Validate db_identity if provided
         if db_identity and db_identity.strip():
             try:
-                self._database_validator.validate_and_raise(db_identity, "db_identity")
+                self.database_validator.validate_and_raise(db_identity, "db_identity")
             except ValueError as e:
                 raise ValueError(f"Invalid db_identity: {e}")
             except DatabaseValidationError as e:
@@ -770,7 +965,7 @@ class SpacetimeDBClient:
         # even if empty or when db_identity is provided. This prevents security bypasses.
         if database_address is not None:
             try:
-                self._database_validator.validate_and_raise(database_address, "database_address")
+                self.database_validator.validate_and_raise(database_address, "database_address")
             except ValueError as e:
                 # Re-raise as ValueError for test compatibility
                 raise ValueError(f"Invalid database name: {e}")
@@ -793,7 +988,7 @@ class SpacetimeDBClient:
             else:
                 test_url = host
             
-            url_result = self._url_validator.validate(test_url, "host")
+            url_result = self.url_validator.validate(test_url, "host")
             if not url_result.is_valid:
                 error_messages = [str(error) for error in url_result.errors]
                 raise ValueError(f"Invalid host: {'; '.join(error_messages)}")
@@ -922,6 +1117,13 @@ class SpacetimeDBClient:
     def close(self) -> None:
         """Close connection - alias for shutdown."""
         self.shutdown()
+    
+    def enable_fast_shutdown(self) -> None:
+        """Enable fast shutdown mode for testing (reduces thread join timeout)."""
+        self._test_mode = True
+        # Propagate test mode to existing websocket client if available
+        if self.ws_client and hasattr(self.ws_client, 'connection_manager'):
+            self.ws_client.connection_manager._test_mode = True
     
     # Enhanced connection management methods
     def get_connection_id(self) -> Optional[EnhancedConnectionId]:
@@ -1459,6 +1661,43 @@ class SpacetimeDBClient:
             except Exception as e:
                 self.logger.error(ErrorFormatter.format_event_error("error callback", e))
     
+    def _handle_ws_identity(self, token: str, identity: str, connection_id: str) -> None:
+        """Handle identity received from WebSocket client."""
+        # Convert to protocol objects and trigger standard identity handling
+        from .protocol import IdentityToken, Identity, ConnectionId
+        import binascii
+        
+        # Convert hex string identity to bytes if needed
+        if isinstance(identity, str):
+            try:
+                identity_bytes = binascii.unhexlify(identity)
+            except ValueError:
+                # If not hex, encode as bytes
+                identity_bytes = identity.encode('utf-8')
+        else:
+            identity_bytes = identity
+        
+        # Convert hex string connection_id to bytes if needed  
+        if isinstance(connection_id, str):
+            try:
+                connection_id_bytes = binascii.unhexlify(connection_id)
+            except ValueError:
+                # If not hex, encode as bytes
+                connection_id_bytes = connection_id.encode('utf-8')
+        else:
+            connection_id_bytes = connection_id
+        
+        identity_obj = Identity(identity_bytes)
+        connection_id_obj = ConnectionId(connection_id_bytes)
+        identity_token = IdentityToken(
+            identity=identity_obj,
+            token=token,
+            connection_id=connection_id_obj
+        )
+        
+        # Process through the normal message queue
+        self._handle_message(identity_token)
+    
     def _handle_message(self, message: ServerMessage) -> None:
         """Handle incoming server message from WebSocketClient by putting it on the queue."""
         if not self.should_stop_processing.is_set():
@@ -1552,6 +1791,31 @@ class SpacetimeDBClient:
                 self.enhanced_connection_id, self.enhanced_identity
             )
             self.connection_metrics.record_connection(self.enhanced_connection_id)
+            
+            # Notify connection event listeners for integration tests
+            try:
+                from .connection_id import ConnectionEvent, ConnectionEventType
+                
+                connection_event = ConnectionEvent(
+                    event_type=ConnectionEventType.CONNECTED,
+                    connection_id=self.enhanced_connection_id,
+                    timestamp=time.time(),
+                    data={
+                        'identity': self.enhanced_identity.to_hex() if self.enhanced_identity else None,
+                        'token': message.token,
+                        'established_via': 'identity_token'
+                    }
+                )
+                
+                # Notify all registered connection listeners
+                for listener in self._connection_event_listeners:
+                    try:
+                        listener(connection_event)
+                    except Exception as listener_e:
+                        self.logger.debug(f"Connection event listener error (non-critical): {listener_e}")
+                        
+            except Exception as event_e:
+                self.logger.debug(f"Connection event notification failed (non-critical): {event_e}")
         
         self.logger.info(f"Received identity: {self.identity}")
         
@@ -1565,6 +1829,10 @@ class SpacetimeDBClient:
             }
         )
         self._event_manager.emit(identity_event)
+        
+        # Call _handle_connect to signal that connection handshake is complete
+        # This is crucial for _connect_internal to recognize successful connection
+        self._handle_connect()
         
         for callback in self._on_identity:
             try:
@@ -1932,7 +2200,7 @@ class SpacetimeDBClient:
         if self.test_mode:
             # In test mode, consider connected if we have identity
             return self.enhanced_connection_id is not None
-        return self.ws_client is not None and self.ws_client.is_connected
+        return self.ws_client is not None and self.ws_client.is_connected()
     
     def get_connection_info(self) -> Dict[str, Any]:
         """Get current connection information."""

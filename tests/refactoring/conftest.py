@@ -664,8 +664,7 @@ def memory_monitor():
 @pytest.fixture
 def mock_connected_websocket_client():
     """Create a properly mocked and connected WebSocket client for performance testing"""
-    from spacetimedb_sdk.websocket_client import WebSocketClient
-    from spacetimedb_sdk.connection.connection_manager import ConnectionState
+    from spacetimedb_sdk.websocket_client import WebSocketClient, ConnectionState
     from unittest.mock import Mock, patch
     
     client = WebSocketClient()
@@ -674,15 +673,18 @@ def mock_connected_websocket_client():
     with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
         mock_ws_app.return_value = mock_instance
         
+        # Initialize the connection manager by accessing the property
+        connection_manager = client.connection_manager
+        
         # Mock the connection manager to be properly connected
-        with patch.object(client._connection_manager, 'is_connected', return_value=True):
-            with patch.object(client._connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
-                with patch.object(client._connection_manager, 'send_data', return_value=None):
+        with patch.object(connection_manager, 'is_connected', return_value=True):
+            with patch.object(connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
+                with patch.object(connection_manager, 'send_data', return_value=None):
                     # Set up mock WebSocket and ensure connection reference is set
                     client.ws = mock_instance
                     client.state = ConnectionState.CONNECTED
                     client.ws_app = mock_instance
-                    client._connection_manager._connection = mock_instance
+                    connection_manager._connection = mock_instance
                     
                     yield client, mock_instance
 

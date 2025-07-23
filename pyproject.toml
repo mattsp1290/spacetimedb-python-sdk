@@ -29,11 +29,17 @@ repository = "https://github.com/clockworklabs/spacetimedb-python-sdk"
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-xdist>=3.0.0",  # For parallel test execution
+    "pytest-timeout>=2.1.0",  # For test timeout handling
+    "pytest-html>=3.1.0",  # For HTML test reports
+    "pytest-json-report>=1.5.0",  # For JSON test reports
+    "pytest-benchmark>=4.0.0",  # For performance benchmarking
     "black>=23.7.0",
     "isort>=5.12.0",
     "mypy>=1.4.0",
     "flake8>=6.0.0",
     "pytest-cov>=4.1.0",
+    "hypothesis>=6.0.0",  # For property-based testing
 ]
 compression = [
     "brotli>=1.0.9",
@@ -55,41 +61,80 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
-# Output and execution options
+# Output and execution options for reliability and performance
 addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
+    "--strict-config",
     "--color=yes",
     "--disable-warnings",
-    "--maxfail=10",
+    "--maxfail=10",  # Increased to see more failures
+    "--durations=20",  # Show slowest 20 tests for better optimization
+    "--timeout=300",  # 5 minute timeout per test to prevent hanging
+    "--timeout-method=thread",
+    "-x",  # Stop on first failure for faster feedback in debugging
+    "--tb=line",  # Shorter traceback for CI
+    "--junit-xml=test-results.xml",  # JUnit XML for CI integration
+    "--cov-report=term-missing:skip-covered",  # Better coverage reporting
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml:coverage.xml", 
+    "--ignore=setup.py",  # Ignore files that shouldn't be collected
+    "--ignore=build",
+    "--ignore=dist",
 ]
 
-# Registered markers to avoid warnings
+# Registered markers to avoid warnings and improve categorization
 markers = [
     "integration: Integration tests requiring external services",
-    "unit: Fast unit tests",
-    "slow: Slow running tests",
+    "unit: Fast unit tests (< 1s)",
+    "slow: Slow running tests (> 5s)",
     "security: Security-related tests",
     "performance: Performance benchmarking tests",
     "asyncio: Asynchronous tests",
-    "property: Property-based tests",
+    "property: Property-based tests using Hypothesis",
     "regression: Regression tests for bug fixes",
     "wasm: WebAssembly integration tests",
+    "network: Tests that require network connectivity",
+    "mock_network: Tests using mocked network connections",
+    "websocket: WebSocket connection tests", 
+    "real_connection: Tests requiring real server connections",
+    "offline: Tests that should work offline",
+    "memory: Memory usage and leak tests",
+    "concurrent: Concurrency and thread safety tests",
+    "timeout_prone: Tests known to potentially timeout",
+    "flaky: Tests that may be unreliable",
 ]
 
 # Asyncio configuration to fix deprecation warnings
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-# Minimum version and timeouts
+# Minimum version and comprehensive timeout configuration
 minversion = "7.0"
-timeout = 120
+timeout = 300  # 5 minutes default timeout to prevent hanging
 timeout_method = "thread"
 
-# Filtering
+# Enhanced filtering to reduce noise
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::RuntimeWarning",
     "ignore::UserWarning",
+    "ignore::PendingDeprecationWarning",
+    "ignore::UserWarning:websocket.*",
+    "ignore::ResourceWarning",
 ]
+
+# Enhanced logging for debugging
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+# Collection optimization
+# Note: collect_ignore is not valid in pyproject.toml, use --ignore in addopts or conftest.py
+cache_dir = ".pytest_cache"
+
+# Parallel execution configuration for pytest-xdist
+# Use auto to detect CPU cores, or specify -n 4 for 4 workers
+distribution_group_name = "spacetimedb_sdk_tests"

@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/spacetimedb_events.py
+# hypothesis_version: 6.135.32
+
+[0.0, 'AuthenticationEvent', 'ConnectionEvent', 'DebugEvent', 'Error', 'ErrorEvent', 'Failed', 'PerformanceEvent', 'Query', 'QueryEvent', 'ReducerCallEvent', 'Subscription', 'SubscriptionEvent', 'Success', 'SystemEvent', 'TableUpdateEvent', 'Transaction', 'TransactionEvent', 'UnknownError', 'Update', 'begin', 'commit', 'create_error_event', 'debug', 'delete', 'info', 'insert', 'rollback', 'update', 'warning']

@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security_logger.py
+# hypothesis_version: 6.135.32
+
+[100, '...[TRUNCATED]', 'SecurityEventType', 'SecurityLogger', 'actual_size', 'attempted_value', 'attempted_value_type', 'auth_method', 'connection_info', 'connection_violation', 'context', 'critical', 'details', 'detection_rules', 'event_id', 'event_type', 'exception_message', 'exception_type', 'failure_reason', 'field', 'get_security_logger', 'high', 'inf', 'injection_attempt', 'injection_type', 'low', 'malformed_data', 'max_allowed_size', 'medium', 'message', 'message_type', 'operation', 'oversized_input', 'payload_length', 'privilege_escalation', 'protocol', 'protocol_violation', 'security_context', 'severity', 'size_ratio', 'spacetimedb.security', 'timestamp', 'token_tampering', 'unauthorized_access', 'unknown', 'user_identifier', 'user_input_length', 'user_input_preview', 'user_input_type', 'validation_failure', 'violation_type']

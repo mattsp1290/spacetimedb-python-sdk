@@ -48,7 +48,7 @@ class TestCompleteWorkflows:
         )
         # Store connection parameters for later use
         client._test_host = "localhost:3000"
-        client._test_database = "test_db"
+        client._test_database = "testdb"
         
         # Add a connect method that actually connects for test compatibility
         def test_connect():
@@ -461,7 +461,7 @@ class TestEdgeCaseWorkflows:
                     None,
                     client.connect_instance,
                     "localhost:3000",
-                    f"test_db_{i}"
+                    f"testdb{i}"
                 )
                 await asyncio.sleep(0.1)
                 client.shutdown()
@@ -493,7 +493,7 @@ class TestEdgeCaseWorkflows:
                 None,
                 client.connect_instance,
                 "localhost:3000",
-                "test_db"
+                "testdb"
             )
             # Should either fail or handle gracefully
         except Exception:

@@ -1,0 +1,104 @@
+{
+  "timestamp": "2025-07-22 13:40:11",
+  "total_duration": 25.565768003463745,
+  "summary": {
+    "total_tests": 0,
+    "passed": 0,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "success_rate": 0
+  },
+  "categories": [
+    {
+      "category": "Integration Smoke",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 1.1859321594238281,
+      "exit_code": 0,
+      "success": true
+    },
+    {
+      "category": "SDK Client Integration",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 1.2806572914123535,
+      "exit_code": 1,
+      "success": false
+    },
+    {
+      "category": "V112 Integration",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 2.462480068206787,
+      "exit_code": 1,
+      "success": false
+    },
+    {
+      "category": "V112 Identity",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 1.3839099407196045,
+      "exit_code": 1,
+      "success": false
+    },
+    {
+      "category": "Connection Manager",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 7.5488669872283936,
+      "exit_code": 1,
+      "success": false
+    },
+    {
+      "category": "Protocol Handler",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 1.2236089706420898,
+      "exit_code": 0,
+      "success": true
+    },
+    {
+      "category": "Compression Manager",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 1.6077322959899902,
+      "exit_code": 0,
+      "success": true
+    },
+    {
+      "category": "Security Suite",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 6.122637748718262,
+      "exit_code": 1,
+      "success": false
+    },
+    {
+      "category": "Performance",
+      "passed": 0,
+      "failed": 0,
+      "errors": 0,
+      "skipped": 0,
+      "duration": 2.748433828353882,
+      "exit_code": 1,
+      "success": false
+    }
+  ]
+}

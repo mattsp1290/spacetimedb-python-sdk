@@ -272,8 +272,10 @@ class TestPerformanceRegression:
                     mock_ws_app.return_value = mock_instance
                     
                     # Properly synchronize connection state
-                    client._connection_manager._connection = mock_instance
-                    client._connection_manager._on_ws_open(mock_instance)
+                    # Access connection_manager property to trigger lazy initialization
+                    connection_manager = client.connection_manager
+                    connection_manager._connection = mock_instance
+                    connection_manager._on_ws_open(mock_instance)
                     client._on_ws_open(mock_instance)
                     
                     start_time = time.time()
@@ -344,14 +346,17 @@ class TestPerformanceRegression:
             mock_instance = Mock()
             mock_ws_app.return_value = mock_instance
             
+            # Access connection_manager property to trigger lazy initialization
+            connection_manager = client.connection_manager
+            
             # Mock the connection manager to be properly connected
-            with patch.object(client._connection_manager, 'is_connected', return_value=True):
-                with patch.object(client._connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
-                    with patch.object(client._connection_manager, 'send_data', return_value=None):
+            with patch.object(connection_manager, 'is_connected', return_value=True):
+                with patch.object(connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
+                    with patch.object(connection_manager, 'send_data', return_value=None):
                         # Set up mock WebSocket and ensure connection reference is set
                         client.ws = mock_instance
                         client.state = ConnectionState.CONNECTED
-                        client._connection_manager._connection = mock_instance
+                        connection_manager._connection = mock_instance
                         
                         # Memory usage over time
                         memory_snapshots = []
@@ -417,14 +422,17 @@ class TestPerformanceRegression:
             mock_instance = Mock()
             mock_ws_app.return_value = mock_instance
             
+            # Access connection_manager property to trigger lazy initialization
+            connection_manager = client.connection_manager
+            
             # Mock the connection manager to be properly connected
-            with patch.object(client._connection_manager, 'is_connected', return_value=True):
-                with patch.object(client._connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
-                    with patch.object(client._connection_manager, 'send_data', return_value=None):
+            with patch.object(connection_manager, 'is_connected', return_value=True):
+                with patch.object(connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
+                    with patch.object(connection_manager, 'send_data', return_value=None):
                         # Set up mock WebSocket and ensure connection reference is set
                         client.ws = mock_instance
                         client.state = ConnectionState.CONNECTED
-                        client._connection_manager._connection = mock_instance
+                        connection_manager._connection = mock_instance
                         
                         # Baseline CPU measurement
                         monitor.process.cpu_percent()  # Initialize
@@ -479,14 +487,17 @@ class TestPerformanceRegression:
                 mock_instance = Mock()
                 mock_ws_app.return_value = mock_instance
                 
+                # Access connection_manager property to trigger lazy initialization
+                connection_manager = client.connection_manager
+                
                 # Mock the connection manager to be properly connected
-                with patch.object(client._connection_manager, 'is_connected', return_value=True):
-                    with patch.object(client._connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
-                        with patch.object(client._connection_manager, 'send_data', return_value=None):
+                with patch.object(connection_manager, 'is_connected', return_value=True):
+                    with patch.object(connection_manager, 'get_connection_state', return_value=ConnectionState.CONNECTED):
+                        with patch.object(connection_manager, 'send_data', return_value=None):
                             # Set up mock WebSocket and ensure connection reference is set
                             client.ws = mock_instance
                             client.state = ConnectionState.CONNECTED
-                            client._connection_manager._connection = mock_instance
+                            connection_manager._connection = mock_instance
                             
                             start_data = monitor.start_monitoring(f"scale_{scale}")
                             

@@ -1,43 +1,54 @@
 import importlib
 import pkgutil
+from typing import Dict, Any, Optional, Type, TypeVar, ValuesView
+from types import ModuleType
 
+T = TypeVar('T')
 
-def snake_to_camel(snake_case_string):
+def snake_to_camel(snake_case_string: str) -> str:
+    """Convert snake_case to CamelCase."""
     return snake_case_string.replace("_", " ").title().replace(" ", "")
 
 
 class TableCache:
-    def __init__(self, table_class):
-        self.entries = {}
+    def __init__(self, table_class: Type[T]) -> None:
+        self.entries: Dict[Any, T] = {}
         self.table_class = table_class
 
-    def decode(self, value):
+    def decode(self, value: Any) -> T:
+        """Decode a raw value into a table entry."""
         return self.table_class(value)
 
-    def set_entry(self, key, value):
+    def set_entry(self, key: Any, value: Any) -> None:
+        """Set an entry by decoding the raw value."""
         self.entries[key] = self.decode(value)
 
-    def set_entry_decoded(self, key, decoded_value):
+    def set_entry_decoded(self, key: Any, decoded_value: T) -> None:
+        """Set an entry with an already decoded value."""
         self.entries[key] = decoded_value
 
-    def delete_entry(self, key):
+    def delete_entry(self, key: Any) -> None:
+        """Delete an entry by key."""
         if key in self.entries:
             del self.entries[key]
         else:
             print(f"[delete_entry] Error, key not found. ({key})")
 
-    def get_entry(self, key):
+    def get_entry(self, key: Any) -> Optional[T]:
+        """Get an entry by key, returning None if not found."""
         if key in self.entries:
             return self.entries[key]
+        return None
 
-    def values(self):
+    def values(self) -> ValuesView[T]:
+        """Get all cached values."""
         return self.entries.values()
 
 
 class ClientCache:
-    def __init__(self, autogen_package):
-        self.tables = {}
-        self.reducer_cache = {}
+    def __init__(self, autogen_package: ModuleType) -> None:
+        self.tables: Dict[str, TableCache] = {}
+        self.reducer_cache: Dict[str, Any] = {}
 
         for importer, module_name, is_package in pkgutil.iter_modules(
             autogen_package.__path__

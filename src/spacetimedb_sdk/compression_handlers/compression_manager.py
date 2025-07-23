@@ -369,6 +369,9 @@ class CompressionManager:
             
             return compressed_data, compression_type
             
+        except UnsupportedCompressionError:
+            # Re-raise unsupported compression errors directly
+            raise
         except Exception as e:
             with self._lock:
                 self.metrics.compression_errors += 1
@@ -455,6 +458,9 @@ class CompressionManager:
             
         except ZipBombError:
             # Re-raise zip bomb errors
+            raise
+        except UnsupportedCompressionError:
+            # Re-raise unsupported compression errors
             raise
         except Exception as e:
             with self._lock:

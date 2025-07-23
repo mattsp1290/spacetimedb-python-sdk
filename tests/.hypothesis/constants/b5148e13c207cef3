@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/serialization.py
+# hypothesis_version: 6.135.32
+
+['DatabaseUpdate', 'IdentityToken', 'InitialSubscription', 'SubscribeApplied', 'SubscriptionError', 'SubscriptionUpdate', 'TableUpdate', 'TransactionCommit', 'TransactionUpdate', '_', '__class__', '__dataclass_fields__', '__dict__', '__getitem__', 'args', 'connection_id', 'data', 'database_update', 'deletes', 'get', 'id', 'identity', 'identity_token', 'initial_subscription', 'inserts', 'nanos', 'nanos_since_epoch', 'num_rows', 'quanta', 'query_id', 'reducer_id', 'reducer_name', 'request_id', 'serialize_for_client', 'subscribe_applied', 'subscription_error', 'subscription_update', 'table_id', 'table_name', 'table_update', 'tables', 'to_dict', 'token', 'transaction_commit', 'transaction_update', 'type']

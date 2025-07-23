@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/base.py
+# hypothesis_version: 6.135.32
+
+[2.0, 5.0, 10.0, 15.0, 30.0, 60.0, 100, 500, 1000, 'auto_reconnect', 'balanced', 'batch_size', 'binary_protocol', 'compression', 'compression_type', 'connection_pooling', 'connection_timeout', 'csharp', 'energy_management', 'go', 'max_connections', 'minimal', 'performance', 'protocol', 'python', 'query_timeout', 'reliability', 'retry_attempts', 'retry_delay', 'retry_policies', 'rust', 'v1.json.spacetimedb']

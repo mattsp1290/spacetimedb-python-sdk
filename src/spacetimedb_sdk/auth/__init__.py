@@ -12,7 +12,7 @@ Features:
 - Cross-platform compatibility
 """
 
-from .storage import SecureAuthStorage, AuthCredentials
+from .storage import SecureAuthStorage, AuthCredentials, AuthStorage
 from .providers import AuthProvider, JWTAuthProvider, IdentityAuthProvider
 from .validators import TokenValidator, CredentialsValidator
 
@@ -55,8 +55,13 @@ def clear_all_credentials() -> None:
     storage.clear_all_credentials()
 
 
+# Backward compatibility aliases
+SpacetimeDBAuthStorage = SecureAuthStorage
+
 __all__ = [
     'SecureAuthStorage',
+    'AuthStorage',  # Legacy compatibility
+    'SpacetimeDBAuthStorage',  # Backward compatibility
     'AuthCredentials',
     'AuthProvider',
     'JWTAuthProvider',

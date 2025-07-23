@@ -145,7 +145,7 @@ class TestRealServerConnection:
                 on_identity=save_identity
             )
             
-            time.sleep(2)
+            time.sleep(0.5)  # Reduced from 2s to 0.5s for testing
             assert saved_identity is not None, "Failed to get identity from first connection"
             
         finally:
@@ -219,7 +219,7 @@ class TestDataOperations:
             assert subscribed.wait(timeout=10), "Subscription not applied"
             
             # Give time for initial data
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
             print(f"✓ Received {len(subscription_data)} subscription events")
             
@@ -259,7 +259,7 @@ class TestDataOperations:
             print(f"✓ Sent reducer call with request ID: {request_id}")
             
             # Wait for response
-            time.sleep(2)
+            time.sleep(0.5)  # Reduced from 2s to 0.5s for testing
             
             # Note: Response depends on whether the reducer exists
             if reducer_responses:
@@ -410,7 +410,7 @@ class TestRealWorldScenarios:
             
             # Disconnect
             client.disconnect()
-            time.sleep(1)
+            time.sleep(0.2)  # Reduced from 1s to 0.2s for testing
             
             # Reconnect
             client._connect_internal(

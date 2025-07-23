@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/remote_module.py
+# hypothesis_version: 6.135.32
+
+['TArgsType', 'TDbView', 'TEventContext', 'TReducers', 'TRowType', 'TSetReducerFlags', 'Table', '__annotations__', '__name__', '__primary_key__', '__reducer__', '__tablename__', '__unique__', 'indexes', 'name', 'params', 'primary_key', 'reducer_', 'reducers', 'requires_auth', 'self', 'tables', 'type', 'unique_columns', 'unknown']

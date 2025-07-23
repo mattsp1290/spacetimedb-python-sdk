@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/python_factory.py
+# hypothesis_version: 6.135.32
+
+[0.2, 0.5, 1.0, 1.8, 2.0, 10.0, 15.0, 20.0, 25.0, 30.0, 45.0, 60.0, 100, 300, 500, 1024, 150000, 300000, 350000, 400000, 'Python Factory', 'async_operations', 'batch_processing', 'batch_size', 'binary_protocol', 'brotli_compression', 'buffer_size', 'compatibility check', 'compression', 'concurrent_requests', 'connection_pooling', 'connection_timeout', 'energy_budget', 'good_reliability', 'gzip_compression', 'heartbeat_interval', 'high_energy_budget', 'keep_alive', 'moderate_latency', 'pool_size', 'protocol', 'request_timeout', 'retry_policy', 'text_protocol']

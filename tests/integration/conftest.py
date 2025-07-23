@@ -525,17 +525,36 @@ def integration_client_factory(mock_websocket_comprehensive):
             # First shutdown the event manager if it has async components
             if hasattr(client, '_event_manager') and hasattr(client._event_manager, 'shutdown'):
                 try:
-                    # Check if we can run async shutdown
+                    # Check if we can run async shutdown properly
                     import asyncio
-                    loop = asyncio.get_running_loop()
-                    asyncio.create_task(client._event_manager.shutdown())
-                except RuntimeError:
-                    # No running loop, cleanup synchronously
-                    if hasattr(client._event_manager, '_cleanup_event_loop'):
-                        client._event_manager._is_shutting_down = True
-                        if client._event_manager._thread_pool:
-                            client._event_manager._thread_pool.shutdown(wait=False)
-                        client._event_manager._cleanup_event_loop()
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # Create task and ensure it's awaited before cleanup
+                        shutdown_task = asyncio.create_task(client._event_manager.shutdown())
+                        # Give the shutdown task time to complete
+                        import time
+                        time.sleep(0.1)
+                    except RuntimeError:
+                        # No running loop, use async.run for proper cleanup
+                        try:
+                            asyncio.run(client._event_manager.shutdown())
+                        except Exception:
+                            # If asyncio.run fails, fall back to synchronous cleanup
+                            if hasattr(client._event_manager, '_cleanup_event_loop'):
+                                client._event_manager._is_shutting_down = True
+                                if client._event_manager._thread_pool:
+                                    client._event_manager._thread_pool.shutdown(wait=False)
+                                client._event_manager._cleanup_event_loop()
+                except Exception as cleanup_error:
+                    # If async cleanup fails, force synchronous cleanup
+                    try:
+                        if hasattr(client._event_manager, '_cleanup_event_loop'):
+                            client._event_manager._is_shutting_down = True
+                            if client._event_manager._thread_pool:
+                                client._event_manager._thread_pool.shutdown(wait=False)
+                            client._event_manager._cleanup_event_loop()
+                    except Exception:
+                        pass
             
             # Then shutdown the client
             if hasattr(client, 'close'):

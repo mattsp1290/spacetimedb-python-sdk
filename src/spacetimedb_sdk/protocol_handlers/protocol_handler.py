@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     )
 
 # Import constants directly to avoid circular dependency
-TEXT_PROTOCOL = "v1.text.spacetimedb"
+TEXT_PROTOCOL = "v1.json.spacetimedb"
 BIN_PROTOCOL = "v1.bsatn.spacetimedb"
 
 # Import compression support
@@ -327,14 +327,16 @@ class ProtocolHandler:
                 
                 return encoded_data
                 
-        except (ValidationSecurityError, SecurityValidationError) as e:
-            if self.enable_metrics:
-                self.metrics.record_security_violation()
-            raise ProtocolSecurityError(f"Security validation failed: {e}") from e
         except Exception as e:
             if self.enable_metrics:
                 self.metrics.record_error()
-            raise ProtocolError(f"Message encoding failed: {e}") from e
+            # Check if it's a security validation error (only if available)
+            if (SECURITY_VALIDATION_AVAILABLE and 
+                isinstance(e, (ValidationSecurityError, SecurityValidationError))):
+                self.metrics.record_security_violation()
+                raise ProtocolSecurityError(f"Security validation failed: {e}") from e
+            else:
+                raise ProtocolError(f"Message encoding failed: {e}") from e
     
     def decode_message(self, data: bytes) -> 'ServerMessage':
         """
@@ -387,14 +389,16 @@ class ProtocolHandler:
                 
                 return server_message
                 
-        except (ValidationSecurityError, SecurityValidationError) as e:
-            if self.enable_metrics:
-                self.metrics.record_security_violation()
-            raise ProtocolSecurityError(f"Security validation failed: {e}") from e
         except Exception as e:
             if self.enable_metrics:
                 self.metrics.record_error()
-            raise ProtocolError(f"Message decoding failed: {e}") from e
+            # Check if it's a security validation error (only if available)
+            if (SECURITY_VALIDATION_AVAILABLE and 
+                isinstance(e, (ValidationSecurityError, SecurityValidationError))):
+                self.metrics.record_security_violation()
+                raise ProtocolSecurityError(f"Security validation failed: {e}") from e
+            else:
+                raise ProtocolError(f"Message decoding failed: {e}") from e
     
     def validate_message(self, message: Any) -> bool:
         """
@@ -412,6 +416,10 @@ class ProtocolHandler:
         try:
             with self._lock_context():
                 # Basic type validation
+                # Check for invalid message types
+                if message is None or isinstance(message, str):
+                    raise MessageValidationError(f"Invalid message type: {type(message)}")
+                
                 # We can't check specific types due to circular imports, so just check for basic structure
                 if not hasattr(message, '__class__'):
                     raise MessageValidationError(f"Invalid message type: {type(message)}")

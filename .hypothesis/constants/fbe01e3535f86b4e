@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bounded_cache.py
+# hypothesis_version: 6.135.32
+
+[300.0, 100, 1000, 'All caches cleared', 'Cache', '_', '_decode_args', '_reducer', 'cache_bytes', 'cleanup', 'client_cache', 'client_count', 'entry_count', 'evictions', 'is_table_class', 'memory_usage', 'oom_prevented', 'peak_bytes', 'reducer_cache', 'reducer_name', 'table_caches', 'table_class', 'total_bytes', 'usage_percentage']

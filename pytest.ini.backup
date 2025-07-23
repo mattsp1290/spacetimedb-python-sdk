@@ -1,0 +1,27 @@
+[tool:pytest]
+# Fast test configuration
+# Use: pytest --fast to run only fast tests
+# Use: pytest --slow to run slow tests 
+# Use: pytest (default) to run all tests
+
+# Test discovery - only look in tests directory
+testpaths = tests
+
+# Ignore patterns to exclude standalone scripts and other directories
+norecursedirs = standalone_scripts .git .tox venv env build dist *.egg
+
+# Test markers
+markers =
+    fast: Fast unit tests (< 1 second each)
+    slow: Slow tests that may take longer
+    integration: Integration tests with external dependencies
+    performance: Performance benchmarking tests
+    security: Security-related tests
+    
+# Filter configurations  
+addopts = --strict-markers
+
+# Custom CLI options
+# --fast: Run only fast tests (default for development)
+# --slow: Run only slow tests  
+# --all: Run all tests (CI/production)

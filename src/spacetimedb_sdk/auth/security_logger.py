@@ -27,8 +27,11 @@ from datetime import datetime, timezone
 import threading
 from collections import defaultdict, deque
 
+# Import our serializable enum base class
+from ..base_enum import SerializableEnum
 
-class SecurityEventType(Enum):
+
+class SecurityEventType(SerializableEnum):
     """Types of security events to log."""
     AUTH_SUCCESS = "authentication_success"
     AUTH_FAILURE = "authentication_failure"
@@ -42,7 +45,7 @@ class SecurityEventType(Enum):
     SECURITY_VIOLATION = "security_violation"
 
 
-class SecurityLevel(Enum):
+class SecurityLevel(SerializableEnum):
     """Security event severity levels."""
     INFO = "info"
     WARNING = "warning"
@@ -85,7 +88,13 @@ class SecurityEvent:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for logging."""
-        return asdict(self)
+        data = asdict(self)
+        # Ensure enum values are serialized properly
+        if isinstance(data.get('event_type'), SecurityEventType):
+            data['event_type'] = data['event_type'].value
+        if isinstance(data.get('level'), SecurityLevel):
+            data['level'] = data['level'].value
+        return data
     
     def to_json(self) -> str:
         """Convert to JSON string for structured logging."""

@@ -13,8 +13,11 @@ from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Any, Dict, Optional, TypeVar
 
+# Import our serializable enum base class
+from ..base_enum import SerializableEnum
 
-class EventType(Enum):
+
+class EventType(SerializableEnum):
     """Event type enumeration for categorizing SpacetimeDB events."""
     # Connection events
     CONNECTION = "connection"
@@ -34,7 +37,7 @@ class EventType(Enum):
     PERFORMANCE = "performance"
 
 
-class EventPriority(IntEnum):
+class EventPriority(SerializableEnum):
     """Event priority levels (higher numbers = higher priority)."""
     LOW = 1
     NORMAL = 5

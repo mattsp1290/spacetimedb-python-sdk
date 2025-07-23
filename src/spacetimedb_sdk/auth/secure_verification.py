@@ -348,6 +348,23 @@ class SecureVerificationManager:
                     error="Token contains invalid control characters"
                 )
             
+            # Check for dangerous patterns similar to the client validation
+            import re
+            dangerous_patterns = [
+                r'<script',  # XSS attempts
+                r'javascript:',  # JavaScript injection
+                r'[\r\n]',  # CRLF injection
+                r'\x00',  # Null bytes
+                r'[;&|`$]',  # Command injection
+            ]
+            
+            for pattern in dangerous_patterns:
+                if re.search(pattern, token, re.IGNORECASE):
+                    return TokenFormatResult(
+                        is_valid=False,
+                        error=f"Token contains dangerous pattern: {pattern}"
+                    )
+            
             # Additional format validation could be added here for specific
             # SpacetimeDB token formats (e.g., JWT structure validation)
             

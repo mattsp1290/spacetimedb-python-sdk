@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/compression_handlers/compression_manager.py
+# hypothesis_version: 6.135.32
+
+[b'\x1f\x8b', 0.0, 0.001, 0.01, 0.7, 0.9, 1.0, 30.0, 60.0, 100.0, 1000.0, 100, 512, 1000, 1024, 4096, ',', ', ', 'Accept-Encoding', 'Content-Encoding', 'Invalid gzip header', 'adaptive', 'adaptive_threshold', 'balanced', 'best', 'brotli', 'brotli_available', 'brotli_compressions', 'capabilities', 'compression_errors', 'compression_input', 'compression_level', 'compression_ratio', 'config', 'current_threshold', 'decompression_errors', 'decompression_output', 'deflate', 'enabled', 'fastest', 'gzip', 'gzip_compressions', 'lz4', 'lz4_available', 'lz4_compressions', 'messages_compressed', 'metrics', 'minimum_threshold', 'none', 'prefer_brotli', 'rate_limiting', 'rb', 'recent_samples', 'security', 'security_violations', 'supported_types', 'wb', 'zip_bomb_attempts', 'zip_bomb_protection']

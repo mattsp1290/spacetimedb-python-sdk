@@ -1,0 +1,4 @@
+# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/authentication_handler.py
+# hypothesis_version: 6.135.32
+
+[1.0, 300.0, 400, 401, 403, 86400, '...', 'Authorization', '_retry_count', 'authenticated', 'authenticating', 'authentication_flow', 'auto_refresh_enabled', 'automatic_refresh', 'cleared', 'credential clearing', 'credential retrieval', 'credential storage', 'credentials_expired', 'current_database', 'current_host', 'current_identity', 'error_type', 'event handling', 'expired', 'failed', 'handshake', 'last_error', 'max_retry_attempts', 'operation_context', 'previous_state', 'reason', 'retry_count', 'shutdown', 'spacetime-identity', 'state', 'storage', 'storage_error', 'stored', 'time_until_expiry', 'unauthenticated', 'utf-8', 'warmup_provided', 'warmup_stored']

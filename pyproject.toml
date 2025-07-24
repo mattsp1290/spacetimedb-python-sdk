@@ -55,13 +55,13 @@ secure-storage = [
 ]
 
 [tool.pytest.ini_options]
-# Test discovery
+# Test discovery - comprehensive patterns for all test types
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*", "*Tests"]
+python_functions = ["test_*", "*_test"]
 
-# Output and execution options for reliability and performance
+# Output and execution options optimized for performance
 addopts = [
     "-v",
     "--tb=short",
@@ -69,72 +69,103 @@ addopts = [
     "--strict-config",
     "--color=yes",
     "--disable-warnings",
-    "--maxfail=10",  # Increased to see more failures
-    "--durations=20",  # Show slowest 20 tests for better optimization
-    "--timeout=300",  # 5 minute timeout per test to prevent hanging
+    "--maxfail=5",  # Reduced from 10 to fail faster
+    "--durations=10",  # Reduced from 20 for faster output
+    "--timeout=60",  # Reduced from 300s to 60s for faster feedback
     "--timeout-method=thread",
-    "-x",  # Stop on first failure for faster feedback in debugging
+    "-x",  # Stop on first failure for faster feedback
     "--tb=line",  # Shorter traceback for CI
-    "--junit-xml=test-results.xml",  # JUnit XML for CI integration
-    "--cov-report=term-missing:skip-covered",  # Better coverage reporting
-    "--cov-report=html:htmlcov",
-    "--cov-report=xml:coverage.xml", 
-    "--ignore=setup.py",  # Ignore files that shouldn't be collected
+    "--junit-xml=tests/test-results.xml",
+    # Removed HTML and JSON reports for faster execution - enable only when needed
+    # "--html=tests/test-report.html", "--self-contained-html",
+    # "--json-report", "--json-report-file=tests/test-report.json",
+    # Removed coverage reports for faster execution - enable only when needed
+    # "--cov-report=term-missing:skip-covered",
+    # "--cov-report=html:htmlcov",
+    # "--cov-report=xml:coverage.xml", 
+    "--ignore=setup.py",
     "--ignore=build",
     "--ignore=dist",
+    "--ignore=.hypothesis",  # Ignore hypothesis cache for faster collection
+    "--ignore=htmlcov",  # Ignore coverage reports
 ]
 
-# Registered markers to avoid warnings and improve categorization
+# Comprehensive markers for all test types - single source of truth
 markers = [
-    "integration: Integration tests requiring external services",
+    # Test execution speed and complexity
     "unit: Fast unit tests (< 1s)",
     "slow: Slow running tests (> 5s)",
-    "security: Security-related tests",
-    "performance: Performance benchmarking tests",
-    "asyncio: Asynchronous tests",
-    "property: Property-based tests using Hypothesis",
-    "regression: Regression tests for bug fixes",
-    "wasm: WebAssembly integration tests",
-    "network: Tests that require network connectivity",
-    "mock_network: Tests using mocked network connections",
-    "websocket: WebSocket connection tests", 
-    "real_connection: Tests requiring real server connections",
-    "offline: Tests that should work offline",
-    "memory: Memory usage and leak tests",
-    "concurrent: Concurrency and thread safety tests",
+    "very_slow: Very slow tests (> 30s)",
     "timeout_prone: Tests known to potentially timeout",
     "flaky: Tests that may be unreliable",
+    
+    # Test categories by scope
+    "integration: Integration tests requiring external services",
+    "end_to_end: Complete end-to-end scenario tests",
+    "regression: Regression tests for bug fixes",
+    "api_compatibility: API backward compatibility tests",
+    
+    # Technology and component specific
+    "asyncio: Asynchronous tests",
+    "wasm: WebAssembly integration tests",
+    "websocket: WebSocket connection tests",
+    "protocol: Protocol-level tests",
+    "client: Client functionality tests",
+    "bsatn: Tests for BSATN encoding/decoding",
+    "v112: Tests specific to v1.1.2 compatibility",
+    
+    # Network and connectivity
+    "network: Tests that require network connectivity",
+    "mock_network: Tests using mocked network connections",
+    "real_connection: Tests requiring real server connections",
+    "offline: Tests that should work offline",
+    "mock_server: Tests using mock server infrastructure",
+    
+    # Security and performance
+    "security: Security-related tests",
+    "auth: Authentication and authorization tests",
+    "performance: Performance benchmarking tests",
+    "memory: Memory usage and leak tests",
+    "concurrent: Concurrency and thread safety tests",
+    
+    # Testing methodology
+    "property: Property-based tests using Hypothesis",
 ]
 
 # Asyncio configuration to fix deprecation warnings
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-# Minimum version and comprehensive timeout configuration
+# Optimized timeout configuration for faster feedback
 minversion = "7.0"
-timeout = 300  # 5 minutes default timeout to prevent hanging
+timeout = 60  # 1 minute default timeout for faster feedback
 timeout_method = "thread"
 
-# Enhanced filtering to reduce noise
+# Optimize test collection - use standard pytest configuration
+norecursedirs = "build dist *.egg-info .git .tox .pytest_cache __pycache__ .hypothesis htmlcov"
+
+# Enhanced filtering to reduce noise while preserving important warnings
 filterwarnings = [
     "ignore::DeprecationWarning",
-    "ignore::RuntimeWarning",
-    "ignore::UserWarning",
-    "ignore::PendingDeprecationWarning",
+    "ignore::PendingDeprecationWarning",  
     "ignore::UserWarning:websocket.*",
     "ignore::ResourceWarning",
+    "ignore::RuntimeWarning:.*unclosed.*",
+    "default::UserWarning:spacetimedb_sdk.*",  # Keep our own warnings
 ]
 
-# Enhanced logging for debugging
-log_cli = true
-log_cli_level = "INFO"
-log_cli_format = "%(asctime)s [%(levelname)8s] %(name)s: %(message)s"
-log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+# Optimized logging for performance (reduced verbosity)
+log_cli = false  # Disabled for performance
+log_cli_level = "WARNING"  # Only show warnings and errors
+log_cli_format = "%(levelname)s: %(message)s"  # Simplified format
+log_cli_date_format = "%H:%M:%S"  # Shorter date format
 
 # Collection optimization
 # Note: collect_ignore is not valid in pyproject.toml, use --ignore in addopts or conftest.py
+# norecursedirs equivalent handled via --ignore in addopts: build dist *.egg-info .git .tox .pytest_cache __pycache__
 cache_dir = ".pytest_cache"
 
-# Parallel execution configuration for pytest-xdist
-# Use auto to detect CPU cores, or specify -n 4 for 4 workers
-distribution_group_name = "spacetimedb_sdk_tests"
+# Parallel execution configuration for pytest-xdist (optimized)
+# Use -n auto for automatic CPU detection or -n logical for all logical cores
+# To enable parallel execution, use: pytest -n auto
+# To disable parallel execution, use: pytest -n 0

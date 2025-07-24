@@ -12,3 +12,8 @@ venv/
 # dist folder
 /dist/
 /src/spacetimedb_sdk.egg-info/proompts/
+
+# Testing - Hypothesis generated constants
+# Exclude Hypothesis constant files to prevent repository bloat
+.hypothesis/
+.hypothesis/constants/

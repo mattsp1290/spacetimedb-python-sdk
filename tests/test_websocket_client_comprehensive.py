@@ -51,6 +51,7 @@ class TestValidateDatabaseIdentifier:
             "database_name_with_underscores",
             "db-with-hyphens",
             "mixed_123-database",
+            "db.name",  # Dots are allowed for namespacing
             "a" * 255,  # Max length
         ]
         
@@ -72,7 +73,6 @@ class TestValidateDatabaseIdentifier:
             "database with spaces",  # Spaces not allowed
             "db@name",  # Special characters not allowed
             "db#hash",  # Hash character not allowed
-            "db.name",  # Dot might be problematic
             "../../secrets",  # Multiple path traversal
             "db/../../../etc/passwd",  # Complex path traversal
         ]

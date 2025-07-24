@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/data_structures.py
-# hypothesis_version: 6.135.32
-
-[0.0, 1000, 'ConcurrentSet[T]', 'K', 'T', 'V', '__hash__', 'average_time', 'clear', 'collision_count', 'concurrent_map', 'current_size', 'get_metrics', 'hash_map', 'hit_count', 'hit_ratio', 'inf', 'max_size', 'max_time', 'memory_optimized', 'memory_usage', 'min_time', 'miss_count', 'operation_count', 'ordered_map', 'total_time']

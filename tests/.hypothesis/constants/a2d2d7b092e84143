@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/alerts.py
-# hypothesis_version: 6.135.32
-
-[0.0, 0.0001, 0.001, 0.01, 0.1, 0.3, 0.5, 0.7, 0.8, 0.9, 0.95, 100, 1000, 1024, 10000, 'component_counts', 'connection', 'connection_pool', 'critical', 'error', 'event_system', 'general', 'info', 'memory', 'memory_growth_rate', 'monitoring_enabled', 'pool_utilization', 'recent_critical', 'severity_counts', 'total_alerts', 'warning']

@@ -771,8 +771,8 @@ class ProtocolEncoder:
         writer = BsatnWriter()
         
         if isinstance(message, CallReducer):
-            # Encode as enum variant 0 (CallReducer) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 0))
+            # Encode as enum variant 0 (CallReducer) using proper BSATN enum encoding
+            writer.write_enum_header(0)  # CallReducer variant
             writer.write_struct_header(4)  # reducer, args, request_id, flags
             
             writer.write_field_name("reducer")
@@ -788,8 +788,8 @@ class ProtocolEncoder:
             writer.write_u8(message.flags.value)
             
         elif isinstance(message, Subscribe):
-            # Encode as enum variant 1 (Subscribe) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 1))
+            # Encode as enum variant 1 (Subscribe) using proper BSATN enum encoding
+            writer.write_enum_header(1)  # Subscribe variant
             writer.write_struct_header(2)  # query_strings, request_id
             
             writer.write_field_name("query_strings")
@@ -801,8 +801,8 @@ class ProtocolEncoder:
             writer.write_u32(message.request_id)
             
         elif isinstance(message, SubscribeSingleMessage):
-            # Encode as enum variant 2 (SubscribeSingle) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 2))
+            # Encode as enum variant 2 (SubscribeSingle) using proper BSATN enum encoding
+            writer.write_enum_header(2)  # SubscribeSingle variant
             writer.write_struct_header(3)  # query, request_id, query_id
             
             writer.write_field_name("query")
@@ -817,8 +817,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, SubscribeMultiMessage):
-            # Encode as enum variant 3 (SubscribeMulti) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 3))
+            # Encode as enum variant 3 (SubscribeMulti) using proper BSATN enum encoding
+            writer.write_enum_header(3)  # SubscribeMulti variant
             writer.write_struct_header(3)  # query_strings, request_id, query_id
             
             writer.write_field_name("query_strings")
@@ -835,8 +835,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, Unsubscribe):
-            # Encode as enum variant 4 (Unsubscribe) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 4))
+            # Encode as enum variant 4 (Unsubscribe) using proper BSATN enum encoding
+            writer.write_enum_header(4)  # Unsubscribe variant
             writer.write_struct_header(2)  # request_id, query_id
             
             writer.write_field_name("request_id")
@@ -848,8 +848,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, UnsubscribeMultiMessage):
-            # Encode as enum variant 5 (UnsubscribeMulti) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 5))
+            # Encode as enum variant 5 (UnsubscribeMulti) using proper BSATN enum encoding
+            writer.write_enum_header(5)  # UnsubscribeMulti variant
             writer.write_struct_header(2)  # request_id, query_id
             
             writer.write_field_name("request_id")
@@ -861,8 +861,8 @@ class ProtocolEncoder:
             writer.write_u32(message.query_id.id)
             
         elif isinstance(message, OneOffQuery):
-            # Encode as enum variant 6 (OneOffQuery) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 6))
+            # Encode as enum variant 6 (OneOffQuery) using proper BSATN enum encoding
+            writer.write_enum_header(6)  # OneOffQuery variant
             writer.write_struct_header(2)  # message_id, query_string
             
             writer.write_field_name("message_id")
@@ -872,8 +872,8 @@ class ProtocolEncoder:
             writer.write_string(message.query_string)
             
         elif isinstance(message, OneOffQueryMessage):
-            # Encode as enum variant 7 (OneOffQueryMessage) - direct variant encoding
-            writer._write_bytes(struct.pack('<I', 7))
+            # Encode as enum variant 7 (OneOffQueryMessage) using proper BSATN enum encoding
+            writer.write_enum_header(7)  # OneOffQueryMessage variant
             writer.write_struct_header(2)  # message_id, query_string
             
             writer.write_field_name("message_id")
@@ -1582,11 +1582,20 @@ class ProtocolDecoder:
         for _ in range(field_count):
             field_name = reader.read_field_name()
             if field_name == "identity":
-                identity_data = reader.read_bytes()
+                tag = reader.read_tag()
+                if tag != 0x0E:  # TAG_BYTES
+                    raise ValueError(f"Expected bytes tag for identity field, got {tag}")
+                identity_data = reader.read_bytes_raw()
             elif field_name == "token":
+                tag = reader.read_tag()
+                if tag != 0x0D:  # TAG_STRING
+                    raise ValueError(f"Expected string tag for token field, got {tag}")
                 token = reader.read_string()
             elif field_name == "connection_id":
-                connection_id_data = reader.read_bytes()
+                tag = reader.read_tag()
+                if tag != 0x0E:  # TAG_BYTES
+                    raise ValueError(f"Expected bytes tag for connection_id field, got {tag}")
+                connection_id_data = reader.read_bytes_raw()
             else:
                 # Skip unknown fields for forward compatibility
                 reader.skip_value()
@@ -1619,8 +1628,14 @@ class ProtocolDecoder:
         for _ in range(field_count):
             field_name = reader.read_field_name()
             if field_name == "request_id":
+                tag = reader.read_tag()
+                if tag != 0x07:  # TAG_U32
+                    raise ValueError(f"Expected u32 tag for request_id field, got {tag}")
                 request_id = reader.read_u32()
             elif field_name == "total_host_execution_duration_micros":
+                tag = reader.read_tag()
+                if tag != 0x09:  # TAG_U64
+                    raise ValueError(f"Expected u64 tag for total_host_execution_duration_micros field, got {tag}")
                 total_host_execution_duration_micros = reader.read_u64()
             elif field_name == "query_id":
                 # Read QueryId struct
@@ -1630,12 +1645,21 @@ class ProtocolDecoder:
                     for _ in range(qid_fields):
                         qid_field = reader.read_field_name()
                         if qid_field == "id":
+                            inner_tag = reader.read_tag()
+                            if inner_tag != 0x07:  # TAG_U32
+                                raise ValueError(f"Expected u32 tag for query_id.id field, got {inner_tag}")
                             query_id = QueryId(reader.read_u32())
                         else:
                             reader.skip_value()
             elif field_name == "table_id":
+                tag = reader.read_tag()
+                if tag != 0x07:  # TAG_U32
+                    raise ValueError(f"Expected u32 tag for table_id field, got {tag}")
                 table_id = reader.read_u32()
             elif field_name == "table_name":
+                tag = reader.read_tag()
+                if tag != 0x0D:  # TAG_STRING
+                    raise ValueError(f"Expected string tag for table_name field, got {tag}")
                 table_name = reader.read_string()
             elif field_name == "table_rows":
                 # For now, skip table rows parsing (complex structure)
@@ -1789,14 +1813,29 @@ class ProtocolDecoder:
         for _ in range(field_count):
             field_name = reader.read_field_name()
             if field_name == "total_host_execution_duration_micros":
+                tag = reader.read_tag()
+                if tag != 0x09:  # TAG_U64
+                    raise ValueError(f"Expected u64 tag for total_host_execution_duration_micros field, got {tag}")
                 total_host_execution_duration_micros = reader.read_u64()
             elif field_name == "request_id":
+                tag = reader.read_tag()
+                if tag != 0x07:  # TAG_U32
+                    raise ValueError(f"Expected u32 tag for request_id field, got {tag}")
                 request_id = reader.read_u32()
             elif field_name == "query_id":
+                tag = reader.read_tag()
+                if tag != 0x07:  # TAG_U32
+                    raise ValueError(f"Expected u32 tag for query_id field, got {tag}")
                 query_id = reader.read_u32()
             elif field_name == "table_id":
+                tag = reader.read_tag()
+                if tag != 0x07:  # TAG_U32
+                    raise ValueError(f"Expected u32 tag for table_id field, got {tag}")
                 table_id = reader.read_u32()
             elif field_name == "error":
+                tag = reader.read_tag()
+                if tag != 0x0D:  # TAG_STRING
+                    raise ValueError(f"Expected string tag for error field, got {tag}")
                 error = reader.read_string()
             else:
                 reader.skip_value()

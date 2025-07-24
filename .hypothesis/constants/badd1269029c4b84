@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/memory_management.py
-# hypothesis_version: 6.135.32
-
-[30.0, 300.0, 100, 128, 512, 1000, 1024, 3600, 5000, 10000, 'K', 'MemoryAccountant', 'V', '__sizeof__', 'active_subscriptions', 'average_data_size', 'cache', 'cleanup_interval', 'evicted_requests', 'expired_requests', 'future', 'handler', 'handlers_cleaned', 'last_cleanup_age', 'max_cache_size', 'max_recursion_depth', 'max_size', 'max_subscriptions', 'memory_bytes', 'memory_limit_mb', 'memory_mb', 'memory_usage_percent', 'message', 'message_handlers', 'oldest_access', 'pending_requests', 'request', 'requests_cleaned', 'response', 'response_futures', 'responses_cleaned', 'size', 'subscription', 'timeout', 'timestamp', 'total_data_size', 'total_requests', 'value']

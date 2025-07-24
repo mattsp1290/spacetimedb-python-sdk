@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/timeout_cache_utils.py
-# hypothesis_version: 6.135.32
-
-[0.5, 5.0, 300.0, 100, 1000, 'F', 'T', 'completed', 'exception', 'expired_entries', 'max_size', 'size', 'ttl_seconds', 'value', 'win32', '|']

@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/csharp_factory.py
-# hypothesis_version: 6.135.32
-
-[0.1, 0.3, 0.5, 1.0, 1.6, 2.0, 5.0, 10.0, 12.0, 15.0, 18.0, 20.0, 25.0, 30.0, 35.0, 45.0, 100, 200, 400, 750, 1024, 120000, 220000, 250000, 280000, 'C# Factory', 'async_operations', 'batch_size', 'binary_protocol', 'brotli_compression', 'buffer_size', 'compatibility check', 'compression', 'concurrent_requests', 'connection_pooling', 'connection_timeout', 'energy_budget', 'good_latency', 'gzip_compression', 'heartbeat_interval', 'high_energy_budget', 'high_reliability', 'keep_alive', 'pool_size', 'protocol', 'request_timeout', 'retry_policy', 'text_protocol', 'thread_safety']

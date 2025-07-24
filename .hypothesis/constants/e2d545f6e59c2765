@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/spacetimedb_types.py
-# hypothesis_version: 6.135.32
-
-[1000000, '<QQ', 'BsatnReader', 'BsatnWriter', 'SpacetimeDBAddress', 'SpacetimeDBIdentity', 'SpacetimeDBTimestamp']

@@ -116,7 +116,7 @@ class TestPerformanceRegression:
                 # Lightweight connection setup for test mode
                 client.connect_instance(
                     host="localhost:3000",
-                    database_address="test_db",
+                    database_address="test-db",
                     auth_token=None,
                     ssl_enabled=False
                 )
@@ -225,7 +225,7 @@ class TestPerformanceRegression:
                         )
                         client.connect_instance(
                             host="localhost:3000",
-                            database_address=f"test_db_{i}",
+                            database_address=f"test-db-{i}",
                             auth_token=None,
                             ssl_enabled=False
                         )
@@ -327,7 +327,7 @@ class TestPerformanceRegression:
                     )
                     client.connect_instance(
                         host="localhost:3000",
-                        database_address=f"test_db_{op_id}",
+                        database_address=f"test-db-{op_id}",
                         auth_token=None,
                         ssl_enabled=False
                     )
@@ -485,7 +485,7 @@ class TestScalabilityLimits:
                         )
                         client.connect_instance(
                             host="localhost:3000",
-                            database_address=f"test_db_{i}",
+                            database_address=f"test-db-{i}",
                             auth_token=None,
                             ssl_enabled=False
                         )

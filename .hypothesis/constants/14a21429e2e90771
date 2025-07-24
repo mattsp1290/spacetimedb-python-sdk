@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/logger.py
-# hypothesis_version: 6.135.32
-
-[0.1, 100, 1000, '\x1b[0m', '\x1b[31m', '\x1b[32m', '\x1b[33m', '\x1b[35m', '\x1b[36m', '%Y-%m-%d %H:%M:%S.%f', '[REDACTED]', 'a', 'args', 'auth', 'avg_ms', 'connection_id', 'count', 'extra', 'identity', 'key', 'level', 'max_ms', 'message', 'metrics', 'metrics.summary', 'min_ms', 'operation', 'password', 'queries', 'query_count', 'query_id', 'reducer_name', 'request_id', 'row_count', 'sample_rate', 'sampled', 'secret', 'spacetimedb', 'stack', 'table_name', 'timestamp', 'timestamp_ms', 'token', 'total_ms']

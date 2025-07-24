@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_types.py
-# hypothesis_version: 6.135.32
-
-[-1000, 100, 1000, 'EventT', 'authentication', 'connection', 'correlation_id', 'data', 'debug', 'error', 'event_id', 'event_name', 'event_type', 'events_by_priority', 'events_by_type', 'events_failed', 'events_per_second', 'events_processed', 'events_published', 'performance', 'priority', 'query', 'queue_length', 'reducer_call', 'source', 'subscription', 'success_rate', 'system', 'table_update', 'timestamp', 'transaction', 'uptime_seconds']

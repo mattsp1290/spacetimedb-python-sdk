@@ -61,7 +61,7 @@ class TestProtocolSwitching:
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3000",
-                database_address=f"test_db_{i}",
+                database_address=f"test-db_{i}",
                 ssl_enabled=False
             )
             clients.append(client)

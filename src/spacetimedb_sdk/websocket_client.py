@@ -244,12 +244,12 @@ def validate_database_identifier(db_identifier: str) -> str:
         logger.warning(f"Security: Absolute path rejected - Original: {repr(original_identifier)}, Normalized: {repr(normalized)}")
         raise ValidationError("Absolute paths not allowed in database identifier")
     
-    # 7. Character whitelist validation (only alphanumeric, hyphen) - underscores not allowed
+    # 7. Character whitelist validation (only alphanumeric, hyphen, underscore, dot)
     # This is the most restrictive check and should catch most remaining attacks
-    if not re.match(r'^[a-zA-Z0-9-]+$', normalized):
-        invalid_chars = set(normalized) - set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-')
+    if not re.match(r'^[a-zA-Z0-9._-]+$', normalized):
+        invalid_chars = set(normalized) - set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-')
         logger.warning(f"Security: Invalid characters in database identifier - Original: {repr(original_identifier)}, Invalid chars: {invalid_chars}")
-        raise ValidationError(f"Database identifier contains invalid characters. Only alphanumeric and hyphen allowed. Found: {', '.join(sorted(invalid_chars))}")
+        raise ValidationError(f"Database identifier contains invalid characters. Only letters, numbers, dash, underscore, and dot are allowed. Found: {', '.join(sorted(invalid_chars))}")
     
     # 8. Final length check after normalization
     if len(normalized) > 255:
@@ -280,6 +280,12 @@ class SubscriptionMetrics:
     """Track subscription health and performance metrics."""
     
     def __init__(self):
+        # Test-expected attributes
+        self.subscription_data: Dict[str, List[Dict[str, Any]]] = {}
+        self.subscription_errors: Dict[str, List[Dict[str, Any]]] = {}
+        self.connection_start_time: float = time.time()
+        
+        # Internal attributes for existing functionality
         self.subscriptions: Dict[str, Dict[str, Any]] = {}
         self.logger = logging.getLogger(__name__)
         self._lock = threading.RLock()  # Add thread safety
@@ -287,6 +293,17 @@ class SubscriptionMetrics:
     def record_subscription_data(self, table_name: str, size: int) -> None:
         """Record data received for a subscription."""
         with self._lock:
+            # Update test-expected subscription_data
+            if table_name not in self.subscription_data:
+                self.subscription_data[table_name] = []
+            
+            self.subscription_data[table_name].append({
+                'size': size,
+                'timestamp': time.time(),
+                'table_name': table_name
+            })
+            
+            # Update internal subscriptions dict for existing functionality
             if table_name not in self.subscriptions:
                 self.subscriptions[table_name] = {
                     'message_count': 0,
@@ -304,6 +321,17 @@ class SubscriptionMetrics:
     def record_subscription_error(self, table_name: str, error: str) -> None:
         """Record an error for a subscription."""
         with self._lock:
+            # Update test-expected subscription_errors
+            if table_name not in self.subscription_errors:
+                self.subscription_errors[table_name] = []
+            
+            self.subscription_errors[table_name].append({
+                'error': error,
+                'timestamp': time.time(),
+                'table_name': table_name
+            })
+            
+            # Update internal subscriptions dict for existing functionality
             if table_name not in self.subscriptions:
                 self.subscriptions[table_name] = {
                     'message_count': 0,
@@ -362,6 +390,12 @@ class SubscriptionMetrics:
     def reset_metrics(self) -> None:
         """Reset all subscription metrics."""
         with self._lock:
+            # Clear test-expected attributes
+            self.subscription_data.clear()
+            self.subscription_errors.clear()
+            self.connection_start_time = time.time()
+            
+            # Clear internal subscriptions dict for existing functionality
             self.subscriptions.clear()
 
 

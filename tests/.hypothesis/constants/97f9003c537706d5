@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/wasm_integration.py
-# hypothesis_version: 6.135.32
-
-[0.1, 5.0, 30.0, 200, 3000, '--no-telemetry', '--quiet', '--skip-clippy', '--yes', '-s', ':', '=', 'SPACETIMEDB_DATA_DIR', 'WASMModule', 'count', 'database address:', 'info', 'max', 'mean', 'min', 'publish', 'sdk_test', 'spacetimedb', 'spacetimedb_test_', 'start', 'total']

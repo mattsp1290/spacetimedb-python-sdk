@@ -14,9 +14,9 @@ import asyncio
 import concurrent.futures
 from unittest.mock import Mock, patch
 
-from src.spacetimedb_sdk.events.event_manager import UnifiedEventManager, get_event_manager
-from src.spacetimedb_sdk.connection.connection_manager import ConnectionManager, ConnectionConfig
-from src.spacetimedb_sdk.events.core_events import BaseEvent as Event, EventType, EventPriority
+from spacetimedb_sdk.events.event_manager import UnifiedEventManager, get_event_manager
+from spacetimedb_sdk.connection.connection_manager import ConnectionManager, ConnectionConfig
+from spacetimedb_sdk.events.core_events import BaseEvent as Event, EventType, EventPriority
 
 
 class TestAsyncioCleanupStability:
@@ -49,13 +49,13 @@ class TestAsyncioCleanupStability:
     
     def test_global_event_manager_cleanup_robustness(self):
         """Test that global event manager cleanup handles errors gracefully."""
-        from src.spacetimedb_sdk.events.event_manager import cleanup_global_event_manager
+        from spacetimedb_sdk.events.event_manager import cleanup_global_event_manager
         
         # Should not raise exceptions even if global manager is None
         cleanup_global_event_manager()
         
         # Should not raise exceptions even if cleanup fails
-        with patch('src.spacetimedb_sdk.events.event_manager._global_event_manager') as mock_manager:
+        with patch('spacetimedb_sdk.events.event_manager._global_event_manager') as mock_manager:
             mock_manager._is_shutting_down = False
             mock_manager._cleanup_event_loop.side_effect = Exception("Cleanup error")
             
@@ -264,7 +264,7 @@ class TestConcurrentOperationsStability:
     
     def test_memory_cleanup_under_load(self):
         """Test that memory cleanup works correctly under concurrent load."""
-        from src.spacetimedb_sdk.events.event_manager import get_event_manager
+        from spacetimedb_sdk.events.event_manager import get_event_manager
         
         manager = get_event_manager()
         initial_handler_count = len(manager._handlers)

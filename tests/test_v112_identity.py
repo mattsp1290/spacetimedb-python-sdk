@@ -194,13 +194,13 @@ class TestIdentityValidation:
         """Test error handling for invalid database name characters"""
         client = SpacetimeDBClient(autogen_package=None, test_mode=False)
         
-        # Database names with underscores should be rejected immediately during validation
+        # Database names with invalid characters should be rejected immediately during validation
         # This test expects a ValueError to be raised before any connection attempt
         with pytest.raises(ValueError, match="invalid characters"):
             client._connect_internal(
                 auth_token=None,
                 host="localhost:3000",
-                database_address="test_module",  # Underscore not allowed
+                database_address="test@module",  # @ symbol not allowed
                 ssl_enabled=False,
                 on_error=connection_tracker.on_error
             )

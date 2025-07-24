@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/providers.py
-# hypothesis_version: 6.135.32
-
-[24.0, 3600, '.', 'HS256', 'age_seconds', 'aud', 'audience', 'error', 'exp', 'expires_at', 'expires_in_seconds', 'iat', 'identity', 'is_expired', 'iss', 'issued_at', 'issuer', 'jwt', 'options', 'sub', 'verify_signature']

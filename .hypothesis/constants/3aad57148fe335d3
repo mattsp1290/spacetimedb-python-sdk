@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/local_config.py
-# hypothesis_version: 6.135.32
-
-['--client', '.', 'main', 'settings.ini', 'w', '{}_{}.{}', '~']

@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/client_interface.py
-# hypothesis_version: 6.135.32
-
-[1.0, 10.0, 30.0, 'INFO', 'all_tables', 'brotli', 'json', 'rust', 'v1.json.spacetimedb']

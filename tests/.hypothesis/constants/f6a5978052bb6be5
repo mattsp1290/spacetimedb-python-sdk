@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/subscription_interface.py
-# hypothesis_version: 6.135.32
-
-[1.0, 100, 'active', 'batch', 'delete', 'failed', 'inactive', 'insert', 'paused', 'real_time', 'resubscribing', 'subscribing', 'throttled', 'update']

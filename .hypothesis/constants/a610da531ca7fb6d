@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/database_validator.py
-# hypothesis_version: 6.135.32
-
-[100, 8203, 8204, 8205, 9728, 9983, 9984, 10175, 65279, 127744, 128511, 128512, 128591, 128640, 128767, '\x00', '"', '".*?"', '#', '$', '%', '%2e%2e%2f', '%2e%2e%5c', '&', "'", "'.*?'", '*', '-', '--', '.', '..', '/\\*.*?\\*/', ':', ';', ';\\s*\\w+', '<', '<script', '>', '?', 'C', 'Co', 'Cs', '[;&|`$]', '[\\r\\n]', '\\', '\\$\\(.*?\\)', '\\.\\./', '\\.\\.\\\\', '\\band\\b.*?=.*?', '\\bdrop\\b.*?\\btable\\b', '\\bexec\\b', '\\bor\\b.*?=.*?', '\\bsp_\\w+', '\\bupdate\\b.*?\\bset\\b', '\\x00', '^[a-zA-Z0-9_.-]+$', '^admin', '^root', '^test', '`', '`.*?`', 'data:', 'file:', 'javascript:', 'key', 'password', 'secret', 'utf-8', 'vbscript:', '|']

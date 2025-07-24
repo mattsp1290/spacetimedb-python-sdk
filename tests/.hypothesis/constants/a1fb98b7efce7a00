@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/config.py
-# hypothesis_version: 6.135.32
-
-[0.1, 0.7, 0.9, 1.0, 5.0, 10.0, 30.0, 60.0, 100.0, 300.0, 1000, './monitoring_data', '.json', '1', 'MonitoringConfig', 'WARNING', 'csv', 'debug_mode', 'development', 'enable_alerts', 'enable_auto_tuning', 'enable_tracemalloc', 'enabled', 'export_path', 'json', 'minimal', 'on', 'production', 'prometheus', 'r', 'testing', 'true', 'w', 'yes']

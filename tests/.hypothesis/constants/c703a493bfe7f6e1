@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/data_validator.py
-# hypothesis_version: 6.135.32
-
-[3.0, 5.0, 300.0, 600.0, 100, 990, 1000, 10000, '"', '(.)\\1{10000,}', '[', '\\', ']', '__len__', 'message_id', 'timestamp', 'utf-8', '{', '{[', '}', '}]']

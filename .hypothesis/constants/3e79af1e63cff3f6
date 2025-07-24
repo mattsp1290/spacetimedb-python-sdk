@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/__init__.py
-# hypothesis_version: 6.135.32
-
-['Address', 'BsatnError', 'BsatnInvalidTagError', 'BsatnOverflowError', 'BsatnReader', 'BsatnTooLargeError', 'BsatnWriter', 'ConnectionId', 'Identity', 'MAX_PAYLOAD_LEN', 'SpacetimeDBAddress', 'SpacetimeDBIdentity', 'SpacetimeDBTimestamp', 'TAG_ARRAY', 'TAG_BOOL_FALSE', 'TAG_BOOL_TRUE', 'TAG_BYTES', 'TAG_ENUM', 'TAG_F32', 'TAG_F64', 'TAG_I128', 'TAG_I16', 'TAG_I256', 'TAG_I32', 'TAG_I64', 'TAG_I8', 'TAG_LIST', 'TAG_OPTION_NONE', 'TAG_OPTION_SOME', 'TAG_STRING', 'TAG_STRUCT', 'TAG_U128', 'TAG_U16', 'TAG_U256', 'TAG_U32', 'TAG_U64', 'TAG_U8', 'TimeDuration', 'Timestamp', 'decode', 'decode_from_reader', 'encode', 'encode_to_writer']

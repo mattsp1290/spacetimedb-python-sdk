@@ -82,7 +82,7 @@ class MockWebSocketApp:
         self._event_queue = queue.Queue()
         self._should_fail = False
         self._failure_reason = None
-        self._connection_delay = 0.001  # Optimized minimal delay for tests
+        self._connection_delay = 0.0001  # Ultra-minimal delay for tests
         self._auto_send_identity = True
         self._mock_server_responses = True
         self._state = MockConnectionState.DISCONNECTED
@@ -465,7 +465,7 @@ def wait_for_connection():
                 return True
             elif not check_connected and (tracker.disconnected or tracker.error):
                 return True
-            time.sleep(0.01)  # Reduced from 0.1s to 0.01s for testing
+            time.sleep(0.001)  # Ultra-reduced for test speed
         return False
     
     return _wait
@@ -686,7 +686,7 @@ def cleanup_threads():
     yield
     
     # Allow some time for cleanup
-    time.sleep(0.01)  # Reduced from 0.1s to 0.01s for testing
+    time.sleep(0.001)  # Ultra-reduced for test speed
     
     # Check for thread leaks (allow some tolerance)
     final_threads = threading.active_count()
@@ -734,19 +734,9 @@ def ensure_event_loop():
 
 
 def pytest_configure(config):
-    """Configure pytest with custom markers."""
-    config.addinivalue_line("markers", "slow: marks tests as slow running")
-    config.addinivalue_line("markers", "integration: marks tests as integration tests")
-    config.addinivalue_line("markers", "property: marks tests as property-based tests")
-    config.addinivalue_line("markers", "security: marks tests as security tests")
-    config.addinivalue_line("markers", "performance: marks tests as performance tests")
-    config.addinivalue_line("markers", "regression: marks tests as regression tests")
-    config.addinivalue_line("markers", "network: marks tests requiring network connectivity")
-    config.addinivalue_line("markers", "mock_network: marks tests using mocked network")
-    config.addinivalue_line("markers", "websocket: marks tests for WebSocket connections")
-    config.addinivalue_line("markers", "real_connection: marks tests requiring real connections")
-    config.addinivalue_line("markers", "offline: marks tests that should work offline")
-    config.addinivalue_line("markers", "asyncio: marks tests as asyncio tests")
+    """Configure pytest session - markers are now defined in pyproject.toml."""
+    # All markers are now centrally defined in pyproject.toml
+    # This function only handles session-level setup
     
     # Ensure there's an event loop available for the session
     try:
@@ -806,7 +796,7 @@ def pytest_runtest_setup(item):
 def pytest_runtest_teardown(item, nextitem):
     """Cleanup after each test."""
     # Allow time for background operations to complete
-    time.sleep(0.005)  # Reduced from 0.05s to 0.005s for testing
+    time.sleep(0.001)  # Ultra-reduced for test speed
     
     # Clean up any lingering event loops
     try:
@@ -831,3 +821,42 @@ def pytest_runtest_teardown(item, nextitem):
             UnifiedEventManager._instances.clear()
     except (ImportError, AttributeError):
         pass
+
+
+@pytest.fixture
+def mock_websocket():
+    """
+    WebSocket mock fixture for protocol tests.
+    
+    This is an alias for the comprehensive WebSocket mock but with the 
+    expected interface for the protocol tests.
+    """
+    with patch('spacetimedb_sdk.websocket_client.websocket') as mock_ws_client:
+        with patch('spacetimedb_sdk.connection.connection_manager.websocket') as mock_ws_manager:
+            with patch('websocket.WebSocketApp', MockWebSocketApp):
+                # Set up both mocks
+                mock_ws_client.WebSocketApp = MockWebSocketApp
+                mock_ws_client.WebSocketException = websocket.WebSocketException
+                mock_ws_client.ABNF = websocket.ABNF
+                
+                mock_ws_manager.WebSocketApp = MockWebSocketApp
+                mock_ws_manager.WebSocketException = websocket.WebSocketException
+                mock_ws_manager.ABNF = websocket.ABNF
+                
+                yield mock_ws_manager
+
+
+@pytest.fixture
+def test_client_params():
+    """
+    Test client parameters fixture for protocol tests.
+    
+    Provides standard test parameters for client connection tests.
+    """
+    return {
+        "auth_token": "test_auth_token_12345",
+        "host": "localhost:3000",
+        "database_address": "test-database",
+        "ssl_enabled": False,
+        "db_identity": "test-identity"  # Use dash instead of underscore for database name validation
+    }

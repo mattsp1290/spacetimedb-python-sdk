@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/security_manager.py
-# hypothesis_version: 6.135.32
-
-[100, 1000, 'JSON Data', 'Message', 'SQL Query', 'Security Manager', 'URL', 'WebSocket URL', 'auth_token', 'blocked_requests', 'database', 'host', 'hostname', 'sanitized_inputs', 'security_violations', 'validation_failure', 'validation_failures']

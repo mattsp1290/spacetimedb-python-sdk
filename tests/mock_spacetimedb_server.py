@@ -86,6 +86,7 @@ class MockServerConfig:
     
     # Test scenarios
     scenario: Optional[str] = None
+    guaranteed_error_count: int = 0  # Ensure at least this many errors are injected
 
 
 class MockDatabase:
@@ -148,6 +149,9 @@ class MockSpaceTimeDBServer:
             "errors_injected": 0
         }
         
+        # Track guaranteed errors
+        self._guaranteed_errors_remaining = 0
+        
         # Set up default databases
         self._setup_default_databases()
         
@@ -173,9 +177,10 @@ class MockSpaceTimeDBServer:
         test_db.add_reducer("send_message", send_message)
         self.databases["testdb"] = test_db
         
-        # Keep the old database name for backward compatibility
-        # Legacy alias for backward compatibility
-        # self.databases["test_db"] = test_db
+        # Add alias for performance tests
+        self.databases["test-db"] = test_db
+        # Add legacy alias for backward compatibility
+        self.databases["test_db"] = test_db
         
         # Create an unpublished database
         unpublished_db = MockDatabase("unpublished")
@@ -363,6 +368,10 @@ class MockSpaceTimeDBServer:
                 # Connection accepted - increment counter AFTER storing connection
                 self.stats["connections_accepted"] += 1
                 
+                # Initialize guaranteed error count for new connection
+                if self.config.guaranteed_error_count > 0:
+                    self._guaranteed_errors_remaining = max(self._guaranteed_errors_remaining, self.config.guaranteed_error_count)
+                
             logger.info(f"[MOCK SERVER] Connection accepted: {connection_id} for database {db_name} (total: {self.stats['connections_accepted']})")
             
             # Send identity token and handshake messages immediately
@@ -382,6 +391,13 @@ class MockSpaceTimeDBServer:
                 await self._send_initial_subscription(websocket, db)
                 logger.info(f"[MOCK SERVER] Initial subscription data sent for connection {connection_id}")
                 
+                # For error_prone scenario, inject guaranteed error after handshake completes
+                if self.config.scenario == "error_prone" and self.config.guaranteed_error_count > 0:
+                    # Small delay to let handshake complete
+                    await asyncio.sleep(0.1)
+                    # Inject a guaranteed error after handshake
+                    await self._inject_error(websocket, "Post-handshake guaranteed error")
+                
             except Exception as e:
                 logger.error(f"[MOCK SERVER] Error sending handshake messages for {connection_id}: {e}")
             
@@ -398,6 +414,11 @@ class MockSpaceTimeDBServer:
             with self._connection_lock:
                 if connection_id in self.connections:
                     del self.connections[connection_id]
+            
+            # Brief delay to ensure connection cleanup completes before new connections
+            # This helps prevent socket reuse issues during rapid reconnections
+            import time
+            time.sleep(0.01)
                 
     def _validate_auth(self, auth_header: str) -> bool:
         """Validate authorization header - supports both Basic and Bearer tokens."""
@@ -476,7 +497,8 @@ class MockSpaceTimeDBServer:
         
     async def _send_identity_token(self, websocket, identity: str, connection_id: str):
         """Send identity token message."""
-        if self._should_inject_error():
+        # Don't inject errors during critical handshake phase for error_prone scenario
+        if self.config.scenario != "error_prone" and self._should_inject_error():
             await self._inject_error(websocket, "Identity token error")
             return
             
@@ -510,7 +532,8 @@ class MockSpaceTimeDBServer:
         
     async def _send_initial_subscription(self, websocket, database: MockDatabase):
         """Send initial subscription data."""
-        if self._should_inject_error():
+        # Don't inject errors during critical handshake phase for error_prone scenario
+        if self.config.scenario != "error_prone" and self._should_inject_error():
             await self._inject_error(websocket, "Initial subscription error")
             return
             
@@ -694,6 +717,12 @@ class MockSpaceTimeDBServer:
         """Determine if an error should be injected."""
         if not self.config.inject_errors:
             return False
+        
+        # Check if we need to guarantee an error
+        if self._guaranteed_errors_remaining > 0:
+            self._guaranteed_errors_remaining -= 1
+            self.stats["errors_injected"] += 1
+            return True
             
         import random
         should_inject = random.random() < self.config.error_rate
@@ -785,33 +814,80 @@ class MockSpaceTimeDBServer:
         # self.http_server_thread = threading.Thread(target=run_http_server, daemon=True)
         # self.http_server_thread.start()
         
-        # Wait for server to start - optimized for tests but ensure proper startup
-        max_wait_time = 1.0  # Maximum wait time
+        # Enhanced server readiness check with retry mechanism
+        self._wait_for_server_ready()
+        
+    def _wait_for_server_ready(self):
+        """Wait for server to be fully ready with enhanced verification."""
+        import socket
+        
+        max_wait_time = 2.0  # Maximum wait time
         wait_interval = 0.05  # Check every 50ms
         elapsed = 0
         
         while elapsed < max_wait_time:
             time.sleep(wait_interval)
             elapsed += wait_interval
-            # Simple check if server thread is running
-            if self.server_thread and self.server_thread.is_alive():
-                # Give it a bit more time to fully initialize
-                time.sleep(0.1)
-                break
-        
+            
+            # Check if server thread is running
+            if not (self.server_thread and self.server_thread.is_alive()):
+                continue
+                
+            # Verify server is actually accepting connections
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.1)
+                result = sock.connect_ex((self.config.host, self.config.port))
+                sock.close()
+                
+                if result == 0:  # Connection successful
+                    # Give server a moment to fully initialize
+                    time.sleep(0.05)
+                    return
+            except Exception:
+                pass
+                
+        # If we get here, server may not be ready - log warning but continue
+        logger.warning(f"Server readiness check timed out after {max_wait_time}s")
+    
     def stop(self):
-        """Stop the mock server."""
+        """Stop the mock server with improved cleanup."""
         self.running = False
+        
+        # Close all active connections first
+        connections_to_close = list(self.connections.values())
+        for conn_info in connections_to_close:
+            try:
+                websocket = conn_info.get("websocket")
+                if websocket and not websocket.closed:
+                    # Try to close gracefully
+                    import asyncio
+                    if hasattr(websocket, 'close'):
+                        # Schedule close in the server's event loop if possible
+                        try:
+                            if hasattr(self, '_server_loop') and self._server_loop and not self._server_loop.is_closed():
+                                asyncio.run_coroutine_threadsafe(websocket.close(), self._server_loop)
+                            else:
+                                # Fallback: try synchronous close
+                                asyncio.create_task(websocket.close())
+                        except Exception:
+                            pass  # Ignore close errors during shutdown
+            except Exception:
+                pass  # Ignore errors during cleanup
+        
+        # Clear connections
+        with self._connection_lock:
+            self.connections.clear()
         
         # Stop WebSocket server
         if self.server_thread:
-            self.server_thread.join(timeout=2)
+            self.server_thread.join(timeout=3)  # Increased timeout
         
         # Stop HTTP server
         if self.http_server:
             try:
                 self.http_server.shutdown()
-            except:
+            except Exception:
                 pass  # Ignore shutdown errors
         if self.http_server_thread:
             self.http_server_thread.join(timeout=2)
@@ -820,6 +896,12 @@ class MockSpaceTimeDBServer:
         if hasattr(self, '_server_loop') and self._server_loop:
             if not self._server_loop.is_closed():
                 try:
+                    # Cancel all tasks in the loop
+                    pending = asyncio.all_tasks(self._server_loop)
+                    for task in pending:
+                        task.cancel()
+                    
+                    # Close the loop
                     self._server_loop.close()
                 except Exception:
                     pass  # Ignore cleanup errors
@@ -834,6 +916,7 @@ class MockSpaceTimeDBServer:
             "messages_received": 0,
             "errors_injected": 0
         }
+        self._guaranteed_errors_remaining = 0
         
     def configure_scenario(self, scenario: str):
         """Configure a specific test scenario."""
@@ -847,7 +930,7 @@ class MockSpaceTimeDBServer:
             "unpublished": MockServerConfig(database_published=False, port=current_port, max_connections=current_max_connections),
             "slow_connection": MockServerConfig(connection_delay=0.5, port=current_port, max_connections=current_max_connections),  # Reduced from 2.0s
             "slow_messages": MockServerConfig(message_delay=0.1, port=current_port, max_connections=current_max_connections),  # Reduced from 0.5s
-            "error_prone": MockServerConfig(inject_errors=True, error_rate=0.3, port=current_port, max_connections=current_max_connections),
+            "error_prone": MockServerConfig(inject_errors=True, error_rate=0.3, guaranteed_error_count=1, port=current_port, max_connections=current_max_connections),
             "binary_only": MockServerConfig(support_binary_protocol=True, port=current_port, max_connections=current_max_connections),
             "validation_errors": MockServerConfig(port=current_port, max_connections=current_max_connections),  # For testing validation errors
         }

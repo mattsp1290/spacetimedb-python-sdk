@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/enhanced_connection_manager.py
-# hypothesis_version: 6.135.32
-
-[0.0, 0.5, 2.0, 5.0, 30.0, 60.0, 300.0, 'ConnectionMetrics', 'ConnectionPool', 'HealthStatus', 'PoolConfiguration', 'PoolState', 'PooledConnection', 'ServerConfig', 'SpacetimeDBClient', 'active', 'active_connections', 'aggregate', 'config', 'connection_count', 'degraded', 'draining', 'failed_connections', 'failed_requests', 'final_metrics', 'get_connection', 'health_status', 'healthy', 'idle_connections', 'inactive', 'initializing', 'last_health_check', 'max_connections', 'max_idle_time', 'min_connections', 'ping', 'pool_initialized', 'pool_shutdown', 'pools', 'previous_state', 'shutdown', 'state', 'success_rate', 'successful_requests', 'total_connections', 'total_pools', 'total_requests', 'unhealthy', 'unknown']

@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/authentication_manager.py
-# hypothesis_version: 6.135.32
-
-['AUTHENTICATED', 'Authorization', 'ErrorFormatter', 'Logout completed', 'auth_authenticate', 'auth_handshake', 'auth_refresh_token', 'authenticate', 'authenticated', 'authentication', 'database', 'error', 'handshake_completed', 'has_identity', 'has_token', 'host', 'identity', 'is_authenticated', 'logout', 'name', 'refresh_credentials', 'refresh_token', 'state', 'value']

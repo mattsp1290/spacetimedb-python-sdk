@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security/json_validator.py
-# hypothesis_version: 6.135.32
-
-[100, 900, 1000, 1024, 10000, '"', '\\', 'attack_type', 'excessive_depth', 'excessive_size', 'has_value', 'invalid_key_type', 'json_bomb', 'parsing_error', 'timestamp', 'unknown', 'utf-8', '{[', '}]']

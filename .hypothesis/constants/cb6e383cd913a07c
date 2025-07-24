@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/testing.py
-# hypothesis_version: 6.135.32
-
-[0.0, 0.01, 30.0, 60.0, 100, 123, 1000, 1000000, 4294967295, '=', 'F', 'FAIL', 'FROM', 'Not connected', 'PASS', 'SELECT * FROM test', 'T', 'active', 'arg1', 'binary', 'connect', 'connection_id', 'content', 'created_at', 'data', 'disconnect', 'edited', 'email', 'energy_used', 'error', 'id', 'identity', 'inserts', 'lifecycle', 'messages', 'query_id', 'query_id_format', 'reducer', 'reducer_call', 'request_id', 'request_id_format', 'result', 'subscribe', 'subscription', 'tables', 'test_module', 'test_reducer', 'timestamp', 'to_hex', 'token', 'type', 'unsubscribe', 'user_id', 'username', 'users', 'utf-8']

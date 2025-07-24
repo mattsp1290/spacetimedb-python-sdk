@@ -535,7 +535,7 @@ def temp_database():
     # Create mock database files
     db_config = {
         'path': temp_dir,
-        'name': 'test_db',
+        'name': 'test-db',
         'schema': TestDataGenerator.generate_schema(['users', 'messages', 'logs'])
     }
     

@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/rust_factory.py
-# hypothesis_version: 6.135.32
-
-[0.05, 0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 10.0, 15.0, 16.0, 20.0, 30.0, 100, 128, 500, 1000, 1024, 100000, 200000, 250000, 300000, 'Rust Factory', 'batch_size', 'binary_protocol', 'brotli_compression', 'buffer_size', 'compatibility check', 'compression', 'concurrent_requests', 'connection_pooling', 'connection_timeout', 'energy_budget', 'fast_reconnect', 'gzip_compression', 'heartbeat_interval', 'high_energy_budget', 'high_throughput', 'keep_alive', 'low_latency', 'pool_size', 'protocol', 'retry_policy']

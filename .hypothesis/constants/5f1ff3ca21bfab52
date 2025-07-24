@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/performance_monitor.py
-# hypothesis_version: 6.135.32
-
-[0.0, 0.0001, 0.001, 0.1, 0.2, 0.5, 0.8, 0.9, 1.0, 5.0, 10.0, 100.0, 100, 1024, '_size', 'background_sample', 'cache_hit_rate', 'cache_hits', 'cache_misses', 'connection', 'connections_active', 'connections_failed', 'connections_total', 'default', 'event', 'events_batched', 'events_failed', 'events_per_second', 'events_processed', 'frame_size', 'general', 'memory_growth_rate', 'memory_usage', 'pool_', 'pool_utilization']

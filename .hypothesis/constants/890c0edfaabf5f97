@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/storage.py
-# hypothesis_version: 6.135.32
-
-[24.0, 384, 448, 3600, 100000, '.backup', '.spacetimedb', '.tmp', '0', '0x', 'AuthCredentials', 'AuthStorage', 'SecureAuthStorage', 'age_seconds', 'auto_cleanup', 'cache_loaded', 'cached_credentials', 'credential clearing', 'credential loading', 'credentials.enc', 'credentials.json', 'credentials_file', 'database', 'file loading', 'file saving', 'file_exists', 'get_auth_storage', 'get_credentials', 'host', 'identity', 'is_anonymous', 'is_expired', 'keyring removal', 'keyring retrieval', 'keyring storage', 'keyring_available', 'master_password', 'plaintext migration', 'r', 'rb', 'salt', 'storage_dir', 'store_credentials', 'test', 'timestamp', 'token', 'using_keyring', 'wb']

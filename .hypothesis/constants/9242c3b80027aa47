@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/secure_verification.py
-# hypothesis_version: 6.135.32
-
-[60.0, 1000, 'credential', 'duration_ms', 'failure', 'identifier_hash', 'invalid_format', 'rate_limited', 'success', 'timestamp', 'unknown', 'verification_result', 'verification_type']

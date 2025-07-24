@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/auth_interface.py
-# hypothesis_version: 6.135.32
-
-['api_key', 'authenticated', 'authenticating', 'bearer', 'custom', 'failed', 'identity', 'refreshing', 'token_expired', 'unauthenticated']

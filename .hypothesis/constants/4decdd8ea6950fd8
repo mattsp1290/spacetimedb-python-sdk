@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/message_validator.py
-# hypothesis_version: 6.135.32
-
-['CallReducer', 'CallReducerMessage', 'OneOffQuery', 'OneOffQueryMessage', 'SELECT 1', 'Subscribe', 'SubscribeMulti', 'SubscribeSingle', 'Unsubscribe', 'UnsubscribeMulti', '__class__', '__dict__', 'args', 'close', 'connect', 'connection_test', 'disconnect', 'health_check', 'heartbeat', 'keep_alive', 'message_id', 'ping', 'pong', 'purpose', 'query', 'query_id', 'query_string', 'query_strings', 'reducer', 'request_id', 'status', 'timestamp', 'type']

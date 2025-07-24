@@ -407,7 +407,7 @@ class ConnectionManager:
             except Exception as e:
                 self.logger.error(f"Error closing connection: {e}")
         
-        # Enhanced thread cleanup with multiple strategies
+        # Enhanced thread cleanup with multiple strategies and async task awareness
         if current_thread and current_thread.is_alive():
             self.logger.debug(f"Waiting for connection thread to stop...")
             
@@ -415,69 +415,53 @@ class ConnectionManager:
             first_timeout = 0.05 if hasattr(self, '_test_mode') else 0.5
             current_thread.join(timeout=first_timeout)
             
+            # Strategy 2: If thread is still alive, implement graceful shutdown with state verification
             if current_thread.is_alive():
-                self.logger.debug("Thread still alive, attempting more aggressive cleanup...")
+                self.logger.debug("Thread still alive, attempting enhanced cleanup...")
                 
-                # Strategy 2: Force close connection and socket
-                if current_connection:
-                    try:
-                        # Force close WebSocket connection
-                        current_connection.close()
-                        self.logger.debug("Forced connection close")
-                        
-                        # Force close the underlying socket if available
-                        if hasattr(current_connection, 'sock') and current_connection.sock:
-                            current_connection.sock.close()
-                            self.logger.debug("Forced socket close")
-                            
-                        # Also try to close the raw socket if available
-                        if hasattr(current_connection, 'socket') and current_connection.socket:
-                            current_connection.socket.close()
-                            self.logger.debug("Forced raw socket close")
-                            
-                    except Exception as e:
-                        self.logger.debug(f"Error forcing connection/socket close: {e}")
+                # Force connection close if not already done
+                with self._lock:
+                    if self._connection:
+                        try:
+                            self._connection.close()
+                        except Exception:
+                            pass
+                        self._connection = None
                 
-                # Strategy 3: Try join with shorter timeout after cleanup (optimized for test mode)
-                second_timeout = 0.1 if hasattr(self, '_test_mode') else 1.0
+                # Wait with longer timeout for graceful shutdown
+                second_timeout = 0.2 if hasattr(self, '_test_mode') else 1.0
                 current_thread.join(timeout=second_timeout)
                 
+                # Strategy 3: Final cleanup - ensure state is properly reset
                 if current_thread.is_alive():
-                    self.logger.debug("Thread still alive after cleanup, trying final interrupt strategy...")
+                    self.logger.warning("Connection thread did not stop gracefully, forcing state cleanup")
+                
+                # Always reset state and connection references
+                with self._lock:
+                    self._connection = None
+                    self._connection_thread = None
+                    self._state = ConnectionState.CLOSED
                     
-                    # Strategy 4: Try to interrupt the WebSocket run_forever loop
-                    if current_connection:
-                        try:
-                            # Call keep_running = False to interrupt the loop
-                            if hasattr(current_connection, 'keep_running'):
-                                current_connection.keep_running = False
-                            # Also try calling close again with force
-                            current_connection.close()
-                        except Exception as e:
-                            self.logger.debug(f"Error interrupting connection: {e}")
-                    
-                    # Final join attempt with very short timeout (optimized for test mode)
-                    final_timeout = 0.05 if hasattr(self, '_test_mode') else 0.5
-                    current_thread.join(timeout=final_timeout)
-                    
-                    if current_thread.is_alive():
-                        self.logger.warning(f"Connection thread did not stop cleanly after all strategies - abandoning (thread id: {current_thread.ident})")
-                        # Don't block further - just set to None and continue
-                    else:
-                        self.logger.debug("Connection thread stopped after interrupt strategy")
-                else:
-                    self.logger.debug("Connection thread stopped after socket cleanup")
-            else:
-                self.logger.debug("Connection thread stopped normally")
-        
-        # Final cleanup
+        # Additional cleanup for rapid reconnection scenarios
         with self._lock:
+            # Clear any pending connection state
             self._connection = None
             self._connection_thread = None
-            self._connection_url = None
-            self._metrics.record_disconnection()
+            self._last_error = None
+            self._reconnect_attempts = 0
+            
+            # Reset health check state
+            if hasattr(self, '_last_ping_time'):
+                self._last_ping_time = None
+            if hasattr(self, '_last_pong_time'):
+                self._last_pong_time = None
         
-        self.logger.info("Connection manager disconnected and cleaned up")
+        # Final state verification and metrics
+        with self._lock:
+            if hasattr(self, '_metrics') and self._metrics:
+                self._metrics.record_disconnection()
+        
+        self.logger.debug("Connection manager disconnected and cleaned up")
     
     def is_connected(self) -> bool:
         """

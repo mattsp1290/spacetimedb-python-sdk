@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/websocket_client_integration.py
-# hypothesis_version: 6.135.32
-
-['connect', 'database', 'handle_auth_error', 'host', 'identity', 'logger', 'prepare_auth_headers', 'reconnect', 'spacetimedb_token']

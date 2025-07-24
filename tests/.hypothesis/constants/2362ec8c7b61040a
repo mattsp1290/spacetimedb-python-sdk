@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/retry_policies.py
-# hypothesis_version: 6.135.32
-
-[0.0, 0.1, 0.5, 1.0, 1.5, 2.0, 3.0, 30.0, 60.0, 'BackoffStrategy', 'CircuitBreaker', 'RetryPolicy', 'RetryPolicyPresets', 'RetryableOperation', 'closed', 'constant', 'exponential', 'exponential_jitter', 'failure_count', 'half_open', 'last_failure_time', 'linear', 'open', 'operation', 'state', 'with_retry']

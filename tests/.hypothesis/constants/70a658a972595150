@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_pool.py
-# hypothesis_version: 6.135.32
-
-[0.1, 0.95, 0.99, 5.0, 30.0, 100, 1000, 'ConnectionPool', '_pool_ref', 'active_connections', 'auth_token', 'average_error_rate', 'avg', 'avg_latency_ms', 'avg_ms', 'cache_hits', 'cache_misses', 'circuit_state', 'client', 'connection_details', 'connection_id', 'connection_pool', 'consecutive_failures', 'database_address', 'error_rate', 'error_type', 'failed_operations', 'health', 'health monitor', 'health_check', 'healthy_cache_size', 'healthy_connections', 'host', 'id', 'idle_connections', 'in_healthy_cache', 'latency_metrics', 'least_latency', 'localhost:3000', 'max', 'module_name', 'operation', 'original_error', 'p95', 'p95_ms', 'p99', 'p99_ms', 'pool_id', 'protocol', 'random', 'round_robin', 'samples', 'ssl_enabled', 'state', 'success_rate', 'total_connections', 'total_operations', 'total_retries', 'uri']

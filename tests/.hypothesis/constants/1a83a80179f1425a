@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/validators.py
-# hypothesis_version: 6.135.32
-
-[5.0, 100, 1000, 1024, 2048, 10000, 'ALTER', 'CREATE', 'DELETE', 'DROP', 'GRANT', 'REVOKE', 'TRUNCATE', 'Validator', 'http', 'https', 'validation', 'ws', 'wss']

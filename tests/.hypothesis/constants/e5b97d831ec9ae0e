@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_context.py
-# hypothesis_version: 6.135.32
-
-['EventContext', 'default_prevented', 'elapsed_time', 'end_time', 'event', 'handlers', 'is_handled', 'propagation_stopped', 'response_data', 'source_component', 'start_time', 'unknown']

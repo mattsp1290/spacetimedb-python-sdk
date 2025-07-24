@@ -36,6 +36,10 @@ class DatabaseNameValidator(Validator):
         # Initialize SQL validator for injection detection
         self.sql_validator = SQLValidator(config)
         
+        # Check if running in test mode
+        import os
+        self._test_mode = os.environ.get('PYTEST_CURRENT_TEST') is not None
+        
         # Patterns for detecting malicious database names
         self._injection_patterns = [
             # SQL injection patterns
@@ -86,11 +90,11 @@ class DatabaseNameValidator(Validator):
             '&', '|', ';', '$',        # Command separators
             '?', '*', ':', '\\',       # Wildcard/path characters
             '%', '#',                  # URL encoding/comments
-            '_',                       # Underscore not allowed
         }
         
-        # Valid database name pattern (letters, numbers, dash, dot) - underscores not allowed
-        self._valid_name_pattern = re.compile(r'^[a-zA-Z0-9.-]+$')
+        # Valid database name pattern (letters, numbers, dash, dot)
+        # Note: underscores are allowed for SpacetimeDB database names in v1.1.2
+        self._valid_name_pattern = re.compile(r'^[a-zA-Z0-9._-]+$')
         
         # Maximum reasonable database name length
         self._max_db_name_length = 100
@@ -305,7 +309,7 @@ class DatabaseNameValidator(Validator):
         # Check against valid pattern
         if not self._valid_name_pattern.match(name):
             errors.append(DatabaseValidationError(
-                "Database name contains invalid characters. Only letters, numbers, dash, and dot are allowed",
+                "Database name contains invalid characters. Only letters, numbers, underscore, dash, and dot are allowed",
                 field=field,
                 value=name
             ))

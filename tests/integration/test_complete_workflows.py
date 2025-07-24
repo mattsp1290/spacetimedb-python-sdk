@@ -94,14 +94,14 @@ class TestCompleteWorkflows:
         await asyncio.get_event_loop().run_in_executor(None, async_client.connect)
         
         # Give mock system time to process and emit events synchronously
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)  # Optimized for test speed
         
         # Wait for events to be processed - the mock should automatically trigger them
         success = wait_for_events(connection_event_tracker, 2, None, timeout=5.0)  # Expect at least connected + identity
         assert success, f"Timed out waiting for events. Got: {connection_event_tracker.get_events()}"
         
         # Allow additional time for all async event processing to complete
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.05)  # Optimized for test speed
         
         # Verify lifecycle events occurred
         all_events = connection_event_tracker.get_events()
@@ -141,7 +141,7 @@ class TestCompleteWorkflows:
         
         # Initial connection
         await asyncio.get_event_loop().run_in_executor(None, async_client.connect)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)  # Optimized for test speed
         
         # In test mode, simulate network failure by emitting connection closed event
         from spacetimedb_sdk.events.core_events import Event
@@ -150,7 +150,7 @@ class TestCompleteWorkflows:
             data={"message": "Network failure", "timestamp": time.time()}
         )
         async_client._event_manager.emit(connection_closed_event)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)  # Optimized for test speed
         
         # Simulate reconnection by emitting connection established event
         connection_established_event = Event(
@@ -158,7 +158,7 @@ class TestCompleteWorkflows:
             data={"timestamp": time.time()}
         )
         async_client._event_manager.emit(connection_established_event)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)  # Optimized for test speed
         
         # Verify recovery behavior with more lenient assertions
         assert len(connection_states) >= 2, f"Expected at least 2 connection states, got {len(connection_states)}: {connection_states}"
@@ -209,7 +209,7 @@ class TestCompleteWorkflows:
                     )
                     
                     # Should trigger reconnection with new token
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)  # Optimized for test speed
                     
                     # Verify auth events were triggered
                     if auth_events:
@@ -290,7 +290,7 @@ class TestCompleteWorkflows:
         
         # Connect first before making subscriptions
         await asyncio.get_event_loop().run_in_executor(None, async_client.connect)
-        await asyncio.sleep(0.1)  # Give connection time to establish
+        await asyncio.sleep(0.01)  # Optimized for test speed  # Give connection time to establish
         
         # Create a subscription (this works in test mode)
         query_id = async_client.subscribe_single("SELECT * FROM users")
@@ -309,10 +309,10 @@ class TestCompleteWorkflows:
                     }
                 )
                 async_client._event_manager.emit(table_update_event)
-                await asyncio.sleep(0.01)  # Small delay for event processing
+                await asyncio.sleep(0.001)  # Minimal delay for event processing
         
         # Give events time to process
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)  # Optimized for test speed
         
         # Unsubscribe using backward-compatible API
         result = async_client.unsubscribe("users")
@@ -342,7 +342,7 @@ class TestCompleteWorkflows:
         
         # Connect first
         await asyncio.get_event_loop().run_in_executor(None, async_client.connect)
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)  # Optimized for test speed
         
         with patch.object(async_client, 'ws_client') as mock_ws:
             # Call reducer
@@ -357,7 +357,7 @@ class TestCompleteWorkflows:
                 )
                 
                 # Give time for call to be processed
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.01)  # Optimized for test speed
                 
                 # Simulate server response
                 success_msg = {
@@ -372,7 +372,7 @@ class TestCompleteWorkflows:
                     mock_ws.on_message(mock_ws, json.dumps(success_msg))
                 
                 # Wait longer for callback processing
-                await asyncio.sleep(0.3)
+                await asyncio.sleep(0.05)  # Optimized for test speed
                 
                 # Verify callback was triggered - make assertions more lenient
                 if hasattr(async_client, 'call_reducer'):
@@ -423,7 +423,7 @@ class TestCompleteWorkflows:
         
         # Connect
         await asyncio.get_event_loop().run_in_executor(None, async_client.connect)
-        await asyncio.sleep(0.1)  # Wait for connection to be established
+        await asyncio.sleep(0.01)  # Optimized for test speed  # Wait for connection to be established
         
         # Start some operations
         if hasattr(async_client, 'subscribe'):
@@ -463,7 +463,7 @@ class TestEdgeCaseWorkflows:
                     "localhost:3000",
                     f"testdb{i}"
                 )
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.01)  # Optimized for test speed
                 client.shutdown()
             except Exception:
                 pass  # Expected in rapid cycles

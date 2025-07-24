@@ -1,4 +1,0 @@
-# file: /Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_recovery.py
-# hypothesis_version: 6.135.32
-
-[0.01, 0.75, 1.0, 1.25, 2.0, 10.0, 30.0, 60.0, 'circuit_open', 'connection timed out', 'connection_timeout', 'error_count', 'frame type conflict', 'frame_type_conflict', 'handshake error', 'handshake_error', 'invalid close frame', 'invalid_close_frame', 'last_error', 'message', 'message_format_error', 'protocol mismatch', 'protocol_mismatch', 'recent_errors', 'recovery_count', 'success', 'timestamp', 'type', 'unknown tag', 'unknown_tag', 'uptime_seconds', 'websocket error', 'websocket_error']

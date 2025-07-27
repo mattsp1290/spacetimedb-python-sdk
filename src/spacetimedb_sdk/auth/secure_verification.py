@@ -73,6 +73,19 @@ class SecureVerificationManager:
     determine credential validity.
     """
     
+    # Token validation constants
+    MIN_TOKEN_LENGTH = 10
+    MAX_TOKEN_LENGTH = 10000
+    
+    # Dangerous patterns for token validation
+    DANGEROUS_PATTERNS = [
+        r'<script',  # XSS attempts
+        r'javascript:',  # JavaScript injection
+        r'[\r\n]',  # CRLF injection
+        r'\x00',  # Null bytes
+        r'[;&|`$]',  # Command injection
+    ]
+    
     def __init__(self, rate_limit_window: float = 60.0, max_attempts: int = 5):
         """
         Initialize secure verification manager.
@@ -168,32 +181,6 @@ class SecureVerificationManager:
         
         return result
     
-    def verify_password(
-        self,
-        stored_hash: str,
-        provided_password: str,
-        salt: Optional[str] = None,
-        identifier: Optional[str] = None
-    ) -> VerificationResult:
-        """
-        Secure password verification with timing attack protection.
-        
-        Args:
-            stored_hash: Stored password hash
-            provided_password: Password to verify
-            salt: Optional salt for hashing
-            identifier: Optional identifier for rate limiting
-            
-        Returns:
-            VerificationResult indicating success or failure
-        """
-        if salt:
-            # Hash the provided password with salt
-            provided_hash = self._hash_password(provided_password, salt)
-        else:
-            provided_hash = provided_password
-            
-        return self.verify_credentials(stored_hash, provided_hash, identifier)
     
     def verify_token(
         self,
@@ -218,27 +205,6 @@ class SecureVerificationManager:
         
         return self.verify_credentials(stored_normalized, provided_normalized, identifier)
     
-    def verify_api_key(
-        self,
-        stored_key_hash: str,
-        provided_key: str,
-        identifier: Optional[str] = None
-    ) -> VerificationResult:
-        """
-        Secure API key verification with timing attack protection.
-        
-        Args:
-            stored_key_hash: Stored API key hash
-            provided_key: API key to verify
-            identifier: Optional identifier for rate limiting
-            
-        Returns:
-            VerificationResult indicating success or failure
-        """
-        # Hash the provided key for comparison
-        provided_key_hash = self._hash_api_key(provided_key)
-        
-        return self.verify_credentials(stored_key_hash, provided_key_hash, identifier)
     
     def verify_identity_token(
         self,
@@ -328,17 +294,17 @@ class SecureVerificationManager:
                 )
             
             # Check minimum length (SpacetimeDB tokens are typically JWTs or similar)
-            if len(token) < 10:
+            if len(token) < self.MIN_TOKEN_LENGTH:
                 return TokenFormatResult(
                     is_valid=False,
-                    error="Token too short - minimum 10 characters required"
+                    error=f"Token too short - minimum {self.MIN_TOKEN_LENGTH} characters required"
                 )
             
             # Check maximum reasonable length to prevent DoS
-            if len(token) > 10000:
+            if len(token) > self.MAX_TOKEN_LENGTH:
                 return TokenFormatResult(
                     is_valid=False,
-                    error="Token too long - maximum 10000 characters allowed"
+                    error=f"Token too long - maximum {self.MAX_TOKEN_LENGTH} characters allowed"
                 )
             
             # Check for obviously invalid characters (control characters, etc.)
@@ -350,15 +316,8 @@ class SecureVerificationManager:
             
             # Check for dangerous patterns similar to the client validation
             import re
-            dangerous_patterns = [
-                r'<script',  # XSS attempts
-                r'javascript:',  # JavaScript injection
-                r'[\r\n]',  # CRLF injection
-                r'\x00',  # Null bytes
-                r'[;&|`$]',  # Command injection
-            ]
             
-            for pattern in dangerous_patterns:
+            for pattern in self.DANGEROUS_PATTERNS:
                 if re.search(pattern, token, re.IGNORECASE):
                     return TokenFormatResult(
                         is_valid=False,
@@ -380,13 +339,6 @@ class SecureVerificationManager:
             duration = time.perf_counter() - start_time
             self.logger.debug(f"Token format verification took {duration*1000:.2f}ms")
     
-    def _hash_password(self, password: str, salt: str) -> str:
-        """Hash password with salt using SHA-256."""
-        return hashlib.sha256((password + salt).encode()).hexdigest()
-    
-    def _hash_api_key(self, api_key: str) -> str:
-        """Hash API key using SHA-256."""
-        return hashlib.sha256(api_key.encode()).hexdigest()
     
     def _is_rate_limited(self, identifier: str) -> bool:
         """Check if identifier is rate limited."""

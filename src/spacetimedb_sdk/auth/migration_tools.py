@@ -27,6 +27,10 @@ class AuthenticationMigrator:
     validation and rollback capabilities.
     """
     
+    # Validation constants
+    MIN_IDENTITY_LENGTH = 8
+    MIN_TOKEN_LENGTH = 16
+    
     def __init__(
         self,
         storage_dir: Optional[Path] = None,
@@ -217,10 +221,10 @@ migrator.migrate_all_storage()
                     credentials = AuthCredentials.from_dict(entry_data)
                     
                     # Validate credentials
-                    if not credentials.identity or len(credentials.identity) < 8:
+                    if not self._is_valid_identity(credentials.identity):
                         entry_info['issues'].append('Invalid identity')
                     
-                    if not credentials.token or len(credentials.token) < 16:
+                    if not self._is_valid_token(credentials.token):
                         entry_info['issues'].append('Invalid token')
                     
                     if not credentials.host:
@@ -482,11 +486,19 @@ migrator.migrate_all_storage()
         
         return results
     
+    def _is_valid_identity(self, identity: str) -> bool:
+        """Check if the identity is valid."""
+        return identity and len(identity) >= self.MIN_IDENTITY_LENGTH
+    
+    def _is_valid_token(self, token: str) -> bool:
+        """Check if the token is valid."""
+        return token and len(token) >= self.MIN_TOKEN_LENGTH
+    
     def _validate_credentials(self, credentials: AuthCredentials) -> bool:
         """Validate credentials for migration."""
         return (
-            credentials.identity and len(credentials.identity) >= 8 and
-            credentials.token and len(credentials.token) >= 16 and
+            self._is_valid_identity(credentials.identity) and
+            self._is_valid_token(credentials.token) and
             credentials.host and
             credentials.database
         )

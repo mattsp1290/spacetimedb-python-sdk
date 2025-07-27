@@ -38,6 +38,8 @@ try:
     from ..utils.error_formatting import ErrorFormatter
     from ..monitoring import get_global_monitor, monitor_performance
 except ImportError:
+    import logging
+    logging.warning("Failed to import enhanced_event_system, exceptions, or monitoring modules. Using fallback implementations.")
     
     class EventManager:
         def emit(self, event):
@@ -353,7 +355,7 @@ class AuthenticationManager:
                     credentials.token
                 )
                 
-                if not verification_result.success:
+                if not verification_result:
                     with self._lock:
                         self._auth_state = AuthenticationState.FAILED
                         

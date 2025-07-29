@@ -244,7 +244,7 @@ class TestAuthenticationManager:
         
         # Mock secure verification failure
         with patch('spacetimedb_sdk.auth.authentication_manager.verify_credentials_secure') as mock_verify:
-            mock_verify.return_value = Mock(success=False)
+            mock_verify.return_value = False
             
             result = self.auth_manager.authenticate(credentials)
         

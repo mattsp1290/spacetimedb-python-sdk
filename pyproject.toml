@@ -79,7 +79,8 @@ addopts = [
     # Removed HTML and JSON reports for faster execution - enable only when needed
     # "--html=tests/test-report.html", "--self-contained-html",
     # "--json-report", "--json-report-file=tests/test-report.json",
-    # Removed coverage reports for faster execution - enable only when needed
+    # Coverage reports - uncomment when needed for detailed analysis
+    # "--cov=src/spacetimedb_sdk",
     # "--cov-report=term-missing:skip-covered",
     # "--cov-report=html:htmlcov",
     # "--cov-report=xml:coverage.xml", 

@@ -334,8 +334,23 @@ class BsatnReader:
             # Skip the contained value
             self.skip_value()
         else:
-            self._record_error(BsatnInvalidTagError(f"Unknown tag for skip_value: {tag}"))
-            raise self._error
+            # For unknown tags, try to skip based on common patterns
+            # This supports forward compatibility with future BSATN versions
+            if tag >= 0x20:  # Extended/future tags
+                # Assume length-prefixed format like strings/bytes
+                try:
+                    length = struct.unpack('<I', self._read_bytes(4))[0]
+                    if length <= MAX_PAYLOAD_LEN:
+                        self._read_bytes(length)
+                    else:
+                        self._record_error(BsatnInvalidTagError(f"Unknown tag {tag} with invalid length {length}"))
+                        raise self._error
+                except:
+                    self._record_error(BsatnInvalidTagError(f"Unknown tag for skip_value: {tag}"))
+                    raise self._error
+            else:
+                self._record_error(BsatnInvalidTagError(f"Unknown tag for skip_value: {tag}"))
+                raise self._error
     
     def read_bytes(self) -> bytes:
         """Read a byte array value (tag should have been read already). Alias for read_bytes_raw."""

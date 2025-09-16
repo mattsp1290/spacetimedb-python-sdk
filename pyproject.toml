@@ -29,11 +29,17 @@ repository = "https://github.com/clockworklabs/spacetimedb-python-sdk"
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-xdist>=3.0.0",  # For parallel test execution
+    "pytest-timeout>=2.1.0",  # For test timeout handling
+    "pytest-html>=3.1.0",  # For HTML test reports
+    "pytest-json-report>=1.5.0",  # For JSON test reports
+    "pytest-benchmark>=4.0.0",  # For performance benchmarking
     "black>=23.7.0",
     "isort>=5.12.0",
     "mypy>=1.4.0",
     "flake8>=6.0.0",
     "pytest-cov>=4.1.0",
+    "hypothesis>=6.0.0",  # For property-based testing
 ]
 compression = [
     "brotli>=1.0.9",
@@ -49,47 +55,118 @@ secure-storage = [
 ]
 
 [tool.pytest.ini_options]
-# Test discovery
+# Test discovery - comprehensive patterns for all test types
 testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*", "*Tests"]
+python_functions = ["test_*", "*_test"]
 
-# Output and execution options
+# Output and execution options optimized for performance
 addopts = [
     "-v",
     "--tb=short",
     "--strict-markers",
+    "--strict-config",
     "--color=yes",
     "--disable-warnings",
-    "--maxfail=10",
+    "--maxfail=5",  # Reduced from 10 to fail faster
+    "--durations=10",  # Reduced from 20 for faster output
+    "--timeout=60",  # Reduced from 300s to 60s for faster feedback
+    "--timeout-method=thread",
+    "-x",  # Stop on first failure for faster feedback
+    "--tb=line",  # Shorter traceback for CI
+    "--junit-xml=tests/test-results.xml",
+    # Removed HTML and JSON reports for faster execution - enable only when needed
+    # "--html=tests/test-report.html", "--self-contained-html",
+    # "--json-report", "--json-report-file=tests/test-report.json",
+    # Coverage reports - uncomment when needed for detailed analysis
+    # "--cov=src/spacetimedb_sdk",
+    # "--cov-report=term-missing:skip-covered",
+    # "--cov-report=html:htmlcov",
+    # "--cov-report=xml:coverage.xml", 
+    "--ignore=setup.py",
+    "--ignore=build",
+    "--ignore=dist",
+    "--ignore=.hypothesis",  # Ignore hypothesis cache for faster collection
+    "--ignore=htmlcov",  # Ignore coverage reports
 ]
 
-# Registered markers to avoid warnings
+# Comprehensive markers for all test types - single source of truth
 markers = [
+    # Test execution speed and complexity
+    "unit: Fast unit tests (< 1s)",
+    "slow: Slow running tests (> 5s)",
+    "very_slow: Very slow tests (> 30s)",
+    "timeout_prone: Tests known to potentially timeout",
+    "flaky: Tests that may be unreliable",
+    
+    # Test categories by scope
     "integration: Integration tests requiring external services",
-    "unit: Fast unit tests",
-    "slow: Slow running tests",
-    "security: Security-related tests",
-    "performance: Performance benchmarking tests",
-    "asyncio: Asynchronous tests",
-    "property: Property-based tests",
+    "end_to_end: Complete end-to-end scenario tests",
     "regression: Regression tests for bug fixes",
+    "api_compatibility: API backward compatibility tests",
+    
+    # Technology and component specific
+    "asyncio: Asynchronous tests",
     "wasm: WebAssembly integration tests",
+    "websocket: WebSocket connection tests",
+    "protocol: Protocol-level tests",
+    "client: Client functionality tests",
+    "bsatn: Tests for BSATN encoding/decoding",
+    "v112: Tests specific to v1.1.2 compatibility",
+    
+    # Network and connectivity
+    "network: Tests that require network connectivity",
+    "mock_network: Tests using mocked network connections",
+    "real_connection: Tests requiring real server connections",
+    "offline: Tests that should work offline",
+    "mock_server: Tests using mock server infrastructure",
+    
+    # Security and performance
+    "security: Security-related tests",
+    "auth: Authentication and authorization tests",
+    "performance: Performance benchmarking tests",
+    "memory: Memory usage and leak tests",
+    "concurrent: Concurrency and thread safety tests",
+    
+    # Testing methodology
+    "property: Property-based tests using Hypothesis",
 ]
 
 # Asyncio configuration to fix deprecation warnings
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-# Minimum version and timeouts
+# Optimized timeout configuration for faster feedback
 minversion = "7.0"
-timeout = 120
+timeout = 60  # 1 minute default timeout for faster feedback
 timeout_method = "thread"
 
-# Filtering
+# Optimize test collection - use standard pytest configuration
+norecursedirs = "build dist *.egg-info .git .tox .pytest_cache __pycache__ .hypothesis htmlcov"
+
+# Enhanced filtering to reduce noise while preserving important warnings
 filterwarnings = [
     "ignore::DeprecationWarning",
-    "ignore::RuntimeWarning",
-    "ignore::UserWarning",
+    "ignore::PendingDeprecationWarning",  
+    "ignore::UserWarning:websocket.*",
+    "ignore::ResourceWarning",
+    "ignore::RuntimeWarning:.*unclosed.*",
+    "default::UserWarning:spacetimedb_sdk.*",  # Keep our own warnings
 ]
+
+# Optimized logging for performance (reduced verbosity)
+log_cli = false  # Disabled for performance
+log_cli_level = "WARNING"  # Only show warnings and errors
+log_cli_format = "%(levelname)s: %(message)s"  # Simplified format
+log_cli_date_format = "%H:%M:%S"  # Shorter date format
+
+# Collection optimization
+# Note: collect_ignore is not valid in pyproject.toml, use --ignore in addopts or conftest.py
+# norecursedirs equivalent handled via --ignore in addopts: build dist *.egg-info .git .tox .pytest_cache __pycache__
+cache_dir = ".pytest_cache"
+
+# Parallel execution configuration for pytest-xdist (optimized)
+# Use -n auto for automatic CPU detection or -n logical for all logical cores
+# To enable parallel execution, use: pytest -n auto
+# To disable parallel execution, use: pytest -n 0

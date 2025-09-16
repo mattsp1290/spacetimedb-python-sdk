@@ -18,7 +18,7 @@ from spacetimedb_sdk.exceptions import (
     SpacetimeDBAuthHandshakeError,
     WebSocketHandshakeError
 )
-from spacetimedb_sdk.auth_storage import AuthCredentials, get_credentials, store_credentials
+from spacetimedb_sdk.auth.storage import AuthCredentials, get_credentials, store_credentials
 
 
 class MockAuthenticationHandler:
@@ -79,7 +79,7 @@ class MockAuthenticationHandler:
                     identity=str(self.identity),
                     token=self.auth_token,
                     host="localhost:3000",
-                    database="test_db"
+                    database="test-db"
                 )
                 self.credentials_store[str(self.identity)] = credentials
                 
@@ -507,7 +507,7 @@ class TestAuthenticationHandler:
             identity=identity_str,
             token="test_token",
             host="localhost:3000",
-            database="test_db"
+            database="test-db"
         )
         
         handler.store_credentials(identity_str, credentials)
@@ -518,7 +518,7 @@ class TestAuthenticationHandler:
         assert retrieved.token == "test_token"
         assert retrieved.identity == identity_str
         assert retrieved.host == "localhost:3000"
-        assert retrieved.database == "test_db"
+        assert retrieved.database == "test-db"
         
         # Clear credentials
         success = handler.clear_stored_credentials(identity_str)

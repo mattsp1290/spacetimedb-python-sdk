@@ -73,6 +73,27 @@ from .websocket_client_integration import (
     store_websocket_auth_credentials
 )
 
+from .connection_manager import (
+    # Enums
+    ConnectionState,
+    
+    # Data classes
+    ConnectionConfig,
+    ConnectionMetrics as CoreConnectionMetrics,
+    
+    # Protocols
+    WebSocketFactory,
+    EventManager,
+    ConnectionDiagnostics,
+    
+    # Main class
+    ConnectionManager,
+    
+    # Default implementations
+    DefaultWebSocketFactory,
+    NullEventManager
+)
+
 # from .websocket_integration import (
 #     # Data classes
 #     WebSocketSubscriptionConfig,
@@ -90,6 +111,7 @@ __all__ = [
     'PoolState',
     'HealthStatus',
     'AuthenticationState',
+    'ConnectionState',
     
     # Data classes
     'ConnectionMetrics',
@@ -99,6 +121,13 @@ __all__ = [
     'AuthenticationCredentials',
     'AuthenticationEvent',
     'WebSocketAuthConfig',
+    'ConnectionConfig',
+    'CoreConnectionMetrics',
+    
+    # Protocols
+    'WebSocketFactory',
+    'EventManager',
+    'ConnectionDiagnostics',
     
     # Main classes
     'ConnectionPool',
@@ -106,6 +135,9 @@ __all__ = [
     'AuthenticationHandler',
     'WebSocketAuthIntegration',
     'WebSocketClientAuthMixin',
+    'ConnectionManager',
+    'DefaultWebSocketFactory',
+    'NullEventManager',
     
     # Convenience functions
     'get_connection_manager',

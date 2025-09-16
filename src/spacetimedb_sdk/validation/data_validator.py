@@ -10,6 +10,12 @@ import json
 import sys
 from typing import Any, Optional, List, Dict, Union
 from .validators import Validator, ValidationResult, ValidationError, ValidationConfig
+from .timeout_cache_utils import (
+    with_timeout_and_cache,
+    with_timeout,
+    ValidationTimeoutError,
+    TimeoutValidator
+)
 
 
 class JSONValidationError(ValidationError):
@@ -22,7 +28,7 @@ class DataSizeValidationError(ValidationError):
     pass
 
 
-class JSONValidator(Validator):
+class JSONValidator(Validator, TimeoutValidator):
     """
     Validator for JSON data to prevent memory exhaustion and ensure safety.
     
@@ -35,8 +41,12 @@ class JSONValidator(Validator):
     """
     
     def __init__(self, config: Optional[ValidationConfig] = None):
-        super().__init__(config)
+        timeout_seconds = config.validation_timeout if config else 5.0
+        # Initialize parent classes - Validator first, then TimeoutValidator
+        Validator.__init__(self, config)
+        TimeoutValidator.__init__(self, timeout_seconds)
     
+    @with_timeout_and_cache(timeout_seconds=5.0, cache_ttl_seconds=300.0)
     def validate(self, value: Any, field: Optional[str] = None) -> ValidationResult:
         """
         Validate JSON data for safety and size limits.
@@ -89,9 +99,11 @@ class JSONValidator(Validator):
                 value=json_str
             ))
         
-        # Pre-scan for depth before parsing to prevent memory exhaustion
+        # Pre-scan for depth before parsing to prevent memory exhaustion (with timeout)
         try:
-            pre_scan_depth = self._pre_scan_depth(json_str)
+            pre_scan_depth = self._with_timeout(
+                self._pre_scan_depth_cached, json_str
+            )
             if pre_scan_depth > self.config.max_json_depth:
                 errors.append(JSONValidationError(
                     f"JSON nesting too deep: {pre_scan_depth} > {self.config.max_json_depth}",
@@ -99,6 +111,13 @@ class JSONValidator(Validator):
                     value=json_str
                 ))
                 return ValidationResult(is_valid=False, errors=errors)
+        except ValidationTimeoutError as e:
+            errors.append(JSONValidationError(
+                f"JSON depth pre-scan timed out: {e}",
+                field=field,
+                value=json_str
+            ))
+            return ValidationResult(is_valid=False, errors=errors)
         except Exception as e:
             errors.append(JSONValidationError(
                 f"JSON depth pre-scan failed: {e}",
@@ -267,6 +286,12 @@ class JSONValidator(Validator):
         
         return calculated_max_depth
     
+    @with_timeout_and_cache(timeout_seconds=3.0, cache_ttl_seconds=600.0)
+    def _pre_scan_depth_cached(self, json_str: str) -> int:
+        """
+        Cached version of JSON depth pre-scanning with timeout protection.
+        """
+        return self._pre_scan_depth(json_str)
     
     def _pre_scan_depth(self, json_str: str) -> int:
         """
@@ -306,6 +331,7 @@ class JSONValidator(Validator):
         
         return max_depth
     
+    @with_timeout(timeout_seconds=3.0)
     def _validate_data_structure(self, data: Any, field: Optional[str], depth: int = 0):
         """Recursively validate data structure."""
         # Check depth with safety margins to prevent RecursionError

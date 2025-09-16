@@ -1,0 +1,844 @@
+{
+  "summary": {
+    "total_modules": 134,
+    "total_files": 135,
+    "circular_dependencies_found": 0,
+    "modules_affected": 0
+  },
+  "circular_dependencies": [],
+  "dependency_graph": {
+    "algebraic_type": [],
+    "wasm_integration": [],
+    "protocol_handler": [],
+    "context_pool": [],
+    "memory_management": [],
+    "memory_config": [],
+    "shared_types": [],
+    "secure_storage": [],
+    "query_id": [],
+    "remote_module": [],
+    "connection_id": [],
+    "_version": [],
+    "websocket_client": [],
+    "base_objects": [],
+    "json_api": [],
+    "security_audit": [],
+    "protocol": [],
+    "compression": [],
+    "cross_platform_validation": [],
+    "request_tracker": [],
+    ".": [],
+    "security_manager": [],
+    "time_utils": [],
+    "spacetimedb_client": [],
+    "enhanced_connection_builder": [],
+    "connection_diagnostics": [],
+    "logger": [],
+    "auth_providers": [],
+    "db_context": [],
+    "call_reducer_flags": [],
+    "energy": [],
+    "security_logger": [],
+    "spacetimedb_async_client": [],
+    "large_message_handler": [],
+    "subscription_builder": [],
+    "utils": [],
+    "connection_recovery": [],
+    "bounded_client_cache": [],
+    "data_structures": [],
+    "exceptions": [],
+    "local_config": [],
+    "scheduling": [],
+    "connection_builder": [],
+    "bounded_cache": [],
+    "retry_policies": [],
+    "testing": [],
+    "message_validator": [],
+    "protocol_helpers": [],
+    "table_interface": [],
+    "client_cache": [],
+    "event_manager": [],
+    "serialization": [],
+    "subscription_manager": [],
+    "event_system": [],
+    "algebraic_value": [],
+    "connection_pool": [],
+    "messages.subscribe": [],
+    "messages.server": [],
+    "messages": [],
+    "messages.one_off_query": [],
+    "connection.websocket_integration": [],
+    "connection.enhanced_connection_manager": [],
+    "connection.authentication_handler": [],
+    "connection": [],
+    "connection.websocket_auth_integration": [],
+    "connection.websocket_client_integration": [],
+    "connection.subscription_manager": [],
+    "test_fixtures": [],
+    "test_fixtures.fixtures": [],
+    "security.json_validator": [],
+    "security.input_validation": [],
+    "security": [],
+    "bsatn.constants": [],
+    "bsatn": [],
+    "bsatn.reader": [],
+    "bsatn.utils": [],
+    "bsatn.spacetimedb_types": [],
+    "bsatn.exceptions": [],
+    "bsatn.writer": [],
+    "bsatn.bounded_writer": [],
+    "bsatn.bounded_reader": [],
+    "auth.validators": [],
+    "auth.migration_tools": [],
+    "auth": [],
+    "auth.security_logger": [],
+    "auth.providers": [],
+    "auth.cli": [],
+    "auth.storage": [],
+    "auth.secure_verification": [],
+    "auth.migration": [],
+    "tests.test_bsatn_primitives": [],
+    "tests.test_bsatn_integration": [],
+    "utils.error_formatting": [],
+    "monitoring.alerts": [],
+    "monitoring.metrics": [],
+    "monitoring.config": [],
+    "monitoring.auto_tuner": [],
+    "monitoring.performance_monitor": [],
+    "monitoring": [],
+    "monitoring.dashboard": [],
+    "monitoring.memory_monitor": [],
+    "events.websocket_integration": [],
+    "events.core_events": [],
+    "events.event_handlers": [],
+    "events": [],
+    "events.spacetimedb_events": [],
+    "events.event_context": [],
+    "events.enhanced_event_system": [],
+    "events.event_manager": [],
+    "events.legacy_compat": [],
+    "events.event_types": [],
+    "events.event_system": [],
+    "events.event_filters": [],
+    "factory.rust_factory": [],
+    "factory.registry": [],
+    "factory": [],
+    "factory.python_factory": [],
+    "factory.csharp_factory": [],
+    "factory.base": [],
+    "factory.client_factory": [],
+    "factory.go_factory": [],
+    "validation.data_validator": [],
+    "validation.validators": [],
+    "validation": [],
+    "validation.security_manager": [],
+    "validation.database_validator": [],
+    "validation.url_validator": [],
+    "validation.sql_validator": [],
+    "interfaces.subscription_interface": [],
+    "interfaces.connection_interface": [],
+    "interfaces.reducer_interface": [],
+    "interfaces": [],
+    "interfaces.auth_interface": [],
+    "interfaces.client_interface": []
+  },
+  "module_details": {
+    "algebraic_type": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/algebraic_type.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "wasm_integration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/wasm_integration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "protocol_handler": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/protocol_handler.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "context_pool": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/context_pool.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "memory_management": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/memory_management.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "memory_config": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/memory_config.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "shared_types": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/shared_types.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "secure_storage": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/secure_storage.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "query_id": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/query_id.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "remote_module": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/remote_module.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection_id": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_id.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "_version": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/_version.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "websocket_client": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/websocket_client.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "base_objects": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/base_objects.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "json_api": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/json_api.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "security_audit": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security_audit.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "protocol": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/protocol.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "compression": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/compression.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "cross_platform_validation": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/cross_platform_validation.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "request_tracker": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/request_tracker.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    ".": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/__init__.py",
+      "imports": [
+        "spacetimedb_sdk.events",
+        "spacetimedb_sdk",
+        "spacetimedb_sdk.testing"
+      ],
+      "internal_imports": []
+    },
+    "security_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security_manager.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "time_utils": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/time_utils.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "spacetimedb_client": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/spacetimedb_client.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "enhanced_connection_builder": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/enhanced_connection_builder.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection_diagnostics": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_diagnostics.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "logger": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/logger.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth_providers": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth_providers.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "db_context": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/db_context.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "call_reducer_flags": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/call_reducer_flags.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "energy": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/energy.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "security_logger": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security_logger.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "spacetimedb_async_client": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/spacetimedb_async_client.py",
+      "imports": [
+        "spacetimedb_sdk",
+        "spacetimedb_sdk.SpacetimeDBClient"
+      ],
+      "internal_imports": []
+    },
+    "large_message_handler": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/large_message_handler.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "subscription_builder": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/subscription_builder.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "utils": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/utils/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection_recovery": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_recovery.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bounded_client_cache": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bounded_client_cache.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "data_structures": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/data_structures.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "exceptions": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/exceptions.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "local_config": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/local_config.py",
+      "imports": [
+        "spacetimedb_sdk.local_config"
+      ],
+      "internal_imports": []
+    },
+    "scheduling": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/scheduling.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection_builder": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_builder.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bounded_cache": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bounded_cache.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "retry_policies": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/retry_policies.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "testing": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/testing.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "message_validator": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/message_validator.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "protocol_helpers": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/protocol_helpers.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "table_interface": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/table_interface.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "client_cache": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/client_cache.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "event_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/event_manager.py",
+      "imports": [
+        "spacetimedb_sdk.events"
+      ],
+      "internal_imports": []
+    },
+    "serialization": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/serialization.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "subscription_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/subscription_manager.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "event_system": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/event_system.py",
+      "imports": [
+        "spacetimedb_sdk.events"
+      ],
+      "internal_imports": []
+    },
+    "algebraic_value": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/algebraic_value.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection_pool": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection_pool.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "messages.subscribe": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/messages/subscribe.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "messages.server": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/messages/server.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "messages": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/messages/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "messages.one_off_query": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/messages/one_off_query.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection.websocket_integration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/websocket_integration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection.enhanced_connection_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/enhanced_connection_manager.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection.authentication_handler": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/authentication_handler.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection.websocket_auth_integration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/websocket_auth_integration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection.websocket_client_integration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/websocket_client_integration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "connection.subscription_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/connection/subscription_manager.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "test_fixtures": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/test_fixtures/__init__.py",
+      "imports": [
+        "spacetimedb_sdk.test_fixtures.fixtures",
+        "spacetimedb_sdk.testing",
+        "spacetimedb_sdk.test_fixtures"
+      ],
+      "internal_imports": []
+    },
+    "test_fixtures.fixtures": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/test_fixtures/fixtures.py",
+      "imports": [
+        "spacetimedb_sdk.test_fixtures.fixtures"
+      ],
+      "internal_imports": []
+    },
+    "security.json_validator": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security/json_validator.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "security.input_validation": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security/input_validation.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "security": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/security/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.constants": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/constants.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.reader": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/reader.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.utils": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/utils.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.spacetimedb_types": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/spacetimedb_types.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.exceptions": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/exceptions.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.writer": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/writer.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.bounded_writer": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/bounded_writer.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "bsatn.bounded_reader": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/bsatn/bounded_reader.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.validators": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/validators.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.migration_tools": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/migration_tools.py",
+      "imports": [
+        "spacetimedb_sdk.auth.migration_tools",
+        "spacetimedb_sdk.auth"
+      ],
+      "internal_imports": []
+    },
+    "auth": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.security_logger": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/security_logger.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.providers": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/providers.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.cli": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/cli.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.storage": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/storage.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.secure_verification": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/secure_verification.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "auth.migration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/auth/migration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "tests.test_bsatn_primitives": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/tests/test_bsatn_primitives.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "tests.test_bsatn_integration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/tests/test_bsatn_integration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "utils.error_formatting": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/utils/error_formatting.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.alerts": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/alerts.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.metrics": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/metrics.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.config": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/config.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.auto_tuner": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/auto_tuner.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.performance_monitor": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/performance_monitor.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.dashboard": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/dashboard.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "monitoring.memory_monitor": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/monitoring/memory_monitor.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.websocket_integration": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/websocket_integration.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.core_events": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/core_events.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.event_handlers": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_handlers.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.spacetimedb_events": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/spacetimedb_events.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.event_context": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_context.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.enhanced_event_system": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/enhanced_event_system.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.event_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_manager.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.legacy_compat": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/legacy_compat.py",
+      "imports": [
+        "spacetimedb_sdk.events",
+        "spacetimedb_sdk.event_system",
+        "spacetimedb_sdk.event_manager",
+        "spacetimedb_sdk.events.legacy_compat"
+      ],
+      "internal_imports": []
+    },
+    "events.event_types": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_types.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.event_system": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_system.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "events.event_filters": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/events/event_filters.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.rust_factory": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/rust_factory.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.registry": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/registry.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.python_factory": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/python_factory.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.csharp_factory": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/csharp_factory.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.base": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/base.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.client_factory": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/client_factory.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "factory.go_factory": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/factory/go_factory.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation.data_validator": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/data_validator.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation.validators": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/validators.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation.security_manager": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/security_manager.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation.database_validator": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/database_validator.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation.url_validator": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/url_validator.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "validation.sql_validator": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/validation/sql_validator.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "interfaces.subscription_interface": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/subscription_interface.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "interfaces.connection_interface": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/connection_interface.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "interfaces.reducer_interface": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/reducer_interface.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "interfaces": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/__init__.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "interfaces.auth_interface": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/auth_interface.py",
+      "imports": [],
+      "internal_imports": []
+    },
+    "interfaces.client_interface": {
+      "file": "/Users/punk1290/git/spacetimedb-python-sdk/src/spacetimedb_sdk/interfaces/client_interface.py",
+      "imports": [],
+      "internal_imports": []
+    }
+  }
+}

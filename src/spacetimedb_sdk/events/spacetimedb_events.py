@@ -8,7 +8,7 @@ connection events, table updates, reducer calls, and system events.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union
 
-from .enhanced_event_system import Event, EventType, EventPriority
+from .core_events import Event, EventType, EventPriority
 
 
 @dataclass

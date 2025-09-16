@@ -353,8 +353,8 @@ class OneOffQueryResponseMessage:
                             if rows_tag != TAG_BYTES:
                                 raise ValueError(f"Expected bytes tag for rows, got {rows_tag}")
                             rows_json = reader.read_bytes_raw()
-                            import json
-                            rows = json.loads(rows_json.decode('utf-8'))
+                            from ..security.json_validator import secure_json_loads
+                            rows = secure_json_loads(rows_json.decode('utf-8'), "one_off_query.table_rows")
                     
                     tables.append(OneOffTable(table_name=table_name, rows=rows))
                 fields["tables"] = tables

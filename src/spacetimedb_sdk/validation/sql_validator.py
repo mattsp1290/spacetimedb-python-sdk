@@ -8,6 +8,12 @@ preventing SQL injection attacks and ensuring query safety.
 import re
 from typing import Optional, List, Dict, Any, Tuple
 from .validators import Validator, ValidationResult, ValidationError, ValidationConfig
+from .timeout_cache_utils import (
+    with_timeout_and_cache, 
+    with_timeout, 
+    ValidationTimeoutError,
+    TimeoutValidator
+)
 
 
 class SQLValidationError(ValidationError):
@@ -15,7 +21,7 @@ class SQLValidationError(ValidationError):
     pass
 
 
-class SQLValidator(Validator):
+class SQLValidator(Validator, TimeoutValidator):
     """
     Validator for SQL queries to prevent injection attacks.
     
@@ -29,47 +35,56 @@ class SQLValidator(Validator):
     """
     
     def __init__(self, config: Optional[ValidationConfig] = None):
-        super().__init__(config)
+        timeout_seconds = config.validation_timeout if config else 5.0
+        # Initialize parent classes - Validator first, then TimeoutValidator
+        Validator.__init__(self, config)
+        TimeoutValidator.__init__(self, timeout_seconds)
         
-        # Patterns for detecting SQL injection attempts
-        self._injection_patterns = [
+        # Initialize regex compilation cache
+        self._compiled_patterns = {}
+        
+        # Patterns for detecting SQL injection attempts (compiled with caching)
+        self._injection_pattern_strings = [
             # Comment injection
-            re.compile(r'--', re.IGNORECASE),
-            re.compile(r'/\*.*?\*/', re.IGNORECASE | re.DOTALL),
+            (r'--', re.IGNORECASE, 'comment_dashes'),
+            (r'/\*.*?\*/', re.IGNORECASE | re.DOTALL, 'comment_blocks'),
             
             # String escape attempts
-            re.compile(r"'.*?'.*?'", re.IGNORECASE),
-            re.compile(r'".*?".*?"', re.IGNORECASE),
+            (r"'.*?'.*?'", re.IGNORECASE, 'string_escapes_single'),
+            (r'".*?".*?"', re.IGNORECASE, 'string_escapes_double'),
             
             # Union-based injection
-            re.compile(r'\bunion\b.*?\bselect\b', re.IGNORECASE),
+            (r'\bunion\b.*?\bselect\b', re.IGNORECASE, 'union_select'),
             
             # Boolean-based injection
-            re.compile(r'\bor\b\s+\d+\s*=\s*\d+', re.IGNORECASE),
-            re.compile(r'\band\b\s+\d+\s*=\s*\d+', re.IGNORECASE),
-            re.compile(r'\bor\b\s+\w+\s*=\s*\w+', re.IGNORECASE),
-            re.compile(r'\band\b\s+\w+\s*=\s*\w+', re.IGNORECASE),
+            (r'\bor\b\s+\d+\s*=\s*\d+', re.IGNORECASE, 'boolean_or_numeric'),
+            (r'\band\b\s+\d+\s*=\s*\d+', re.IGNORECASE, 'boolean_and_numeric'),
+            (r'\bor\b\s+\w+\s*=\s*\w+', re.IGNORECASE, 'boolean_or_alpha'),
+            (r'\band\b\s+\w+\s*=\s*\w+', re.IGNORECASE, 'boolean_and_alpha'),
             
             # Time-based injection
-            re.compile(r'\bsleep\s*\(', re.IGNORECASE),
-            re.compile(r'\bwaitfor\b.*?\bdelay\b', re.IGNORECASE),
-            re.compile(r'\bbenchmark\s*\(', re.IGNORECASE),
+            (r'\bsleep\s*\(', re.IGNORECASE, 'time_sleep'),
+            (r'\bwaitfor\b.*?\bdelay\b', re.IGNORECASE, 'time_waitfor'),
+            (r'\bbenchmark\s*\(', re.IGNORECASE, 'time_benchmark'),
             
             # Stacked queries
-            re.compile(r';\s*(?:select|insert|update|delete|drop|create|alter)', re.IGNORECASE),
+            (r';\s*(?:select|insert|update|delete|drop|create|alter)', re.IGNORECASE, 'stacked_queries'),
             
             # System function calls
-            re.compile(r'\bload_file\s*\(', re.IGNORECASE),
-            re.compile(r'\binto\s+outfile\b', re.IGNORECASE),
-            re.compile(r'\bexec\s*\(', re.IGNORECASE),
+            (r'\bload_file\s*\(', re.IGNORECASE, 'system_load_file'),
+            (r'\binto\s+outfile\b', re.IGNORECASE, 'system_outfile'),
+            (r'\bexec\s*\(', re.IGNORECASE, 'system_exec'),
             
             # Hex encoding attempts
-            re.compile(r'0x[0-9a-f]+', re.IGNORECASE),
+            (r'0x[0-9a-f]+', re.IGNORECASE, 'hex_encoding'),
             
             # Char function abuse
-            re.compile(r'\bchar\s*\(', re.IGNORECASE),
-            re.compile(r'\bascii\s*\(', re.IGNORECASE),
+            (r'\bchar\s*\(', re.IGNORECASE, 'char_function'),
+            (r'\bascii\s*\(', re.IGNORECASE, 'ascii_function'),
         ]
+        
+        # Compile patterns with caching
+        self._injection_patterns = self._get_compiled_patterns()
         
         # Dangerous SQL keywords that should be blocked
         self._dangerous_keywords = {
@@ -82,9 +97,32 @@ class SQLValidator(Validator):
         if self.config.blocked_sql_keywords:
             self._dangerous_keywords.update(kw.upper() for kw in self.config.blocked_sql_keywords)
         
-        # Pattern for detecting parameterized queries
-        self._parameter_pattern = re.compile(r'(?:\?|\$\d+|:\w+)', re.IGNORECASE)
+        # Pattern for detecting parameterized queries (compiled with caching)
+        self._parameter_pattern = self._get_compiled_pattern(
+            r'(?:\?|\$\d+|:\w+)', re.IGNORECASE, 'parameter_pattern'
+        )
     
+    def _get_compiled_pattern(self, pattern: str, flags: int, pattern_id: str):
+        """Get a compiled regex pattern with caching."""
+        cache_key = f"{pattern_id}_{hash(pattern)}_{flags}"
+        
+        if cache_key not in self._compiled_patterns:
+            try:
+                self._compiled_patterns[cache_key] = re.compile(pattern, flags)
+            except re.error as e:
+                raise SQLValidationError(f"Invalid regex pattern {pattern_id}: {e}")
+        
+        return self._compiled_patterns[cache_key]
+    
+    def _get_compiled_patterns(self):
+        """Get all compiled injection patterns with caching."""
+        patterns = []
+        for pattern_str, flags, pattern_id in self._injection_pattern_strings:
+            compiled_pattern = self._get_compiled_pattern(pattern_str, flags, pattern_id)
+            patterns.append(compiled_pattern)
+        return patterns
+    
+    @with_timeout_and_cache(timeout_seconds=5.0, cache_ttl_seconds=300.0)
     def validate(self, value: Any, field: Optional[str] = None) -> ValidationResult:
         """
         Validate SQL query for injection attempts.
@@ -125,9 +163,18 @@ class SQLValidator(Validator):
             ))
             return ValidationResult(is_valid=False, errors=errors)
         
-        # Check for injection patterns
-        injection_errors = self._check_injection_patterns(value, field)
-        errors.extend(injection_errors)
+        # Check for injection patterns with timeout protection
+        try:
+            injection_errors = self._with_timeout(
+                self._check_injection_patterns, value, field
+            )
+            errors.extend(injection_errors)
+        except ValidationTimeoutError as e:
+            errors.append(SQLValidationError(
+                f"SQL injection pattern check timed out: {e}",
+                field=field,
+                value=value
+            ))
         
         # Check for dangerous keywords
         keyword_errors = self._check_dangerous_keywords(value, field)
@@ -152,34 +199,63 @@ class SQLValidator(Validator):
             warnings=warnings
         )
     
+    @with_timeout_and_cache(timeout_seconds=3.0, cache_ttl_seconds=600.0)
     def _check_injection_patterns(self, query: str, field: Optional[str]) -> List[SQLValidationError]:
-        """Check for SQL injection patterns."""
+        """Check for SQL injection patterns with caching and timeout protection."""
         errors = []
         
-        for pattern in self._injection_patterns:
-            if pattern.search(query):
-                errors.append(SQLValidationError(
-                    f"SQL injection pattern detected: {pattern.pattern}",
-                    field=field,
-                    value=query
-                ))
+        # Process patterns in batches to allow timeout interruption
+        batch_size = 5
+        for i in range(0, len(self._injection_patterns), batch_size):
+            batch = self._injection_patterns[i:i + batch_size]
+            
+            for pattern in batch:
+                try:
+                    if pattern.search(query):
+                        errors.append(SQLValidationError(
+                            f"SQL injection pattern detected: {pattern.pattern}",
+                            field=field,
+                            value=query
+                        ))
+                except re.error as e:
+                    # Log regex execution error but continue with other patterns
+                    self.logger.warning(f"Regex pattern failed: {pattern.pattern}, error: {e}")
+                    continue
         
         return errors
     
+    @with_timeout_and_cache(timeout_seconds=2.0, cache_ttl_seconds=600.0)
     def _check_dangerous_keywords(self, query: str, field: Optional[str]) -> List[SQLValidationError]:
-        """Check for dangerous SQL keywords."""
+        """Check for dangerous SQL keywords with caching."""
         errors = []
         
-        # Split query into tokens
-        tokens = re.findall(r'\b\w+\b', query.upper())
-        
-        for token in tokens:
-            if token in self._dangerous_keywords:
+        # Split query into tokens (with timeout protection for large queries)
+        try:
+            tokens = re.findall(r'\b\w+\b', query.upper())
+            
+            # Limit token processing to prevent DoS
+            if len(tokens) > 1000:
                 errors.append(SQLValidationError(
-                    f"Dangerous SQL keyword detected: {token}",
+                    f"Query has too many tokens: {len(tokens)} > 1000",
                     field=field,
                     value=query
                 ))
+                return errors
+            
+            for token in tokens:
+                if token in self._dangerous_keywords:
+                    errors.append(SQLValidationError(
+                        f"Dangerous SQL keyword detected: {token}",
+                        field=field,
+                        value=query
+                    ))
+                    
+        except re.error as e:
+            errors.append(SQLValidationError(
+                f"Failed to tokenize query: {e}",
+                field=field,
+                value=query
+            ))
         
         return errors
     

@@ -7,6 +7,13 @@ compatible with client code that expects dictionary-like access patterns.
 
 from typing import Any, Dict, List, Union, Iterator, Tuple
 import logging
+from .exceptions import (
+    ValidationSecurityError, 
+    AuthenticationSecurityError,
+    OperationalError,
+    ConfigurationOperationalError
+)
+from .security_logger import log_security_exception
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +216,7 @@ class SpacetimeDBObject(DictLikeMixin, SerializableMixin):
     
     def __eq__(self, other) -> bool:
         """
-        Equality comparison.
+        Equality comparison with secure exception handling.
         
         Args:
             other: Object to compare with
@@ -225,5 +232,24 @@ class SpacetimeDBObject(DictLikeMixin, SerializableMixin):
                 if getattr(self, key) != getattr(other, key, None):
                     return False
             return True
-        except Exception:
+        except (ValidationSecurityError, AuthenticationSecurityError) as e:
+            # Security exceptions must never be silently caught - they indicate potential attacks
+            event_id = log_security_exception(e, operation="object_equality_comparison")
+            logger.error(f"Security violation during object comparison [Event: {event_id}]: {e}")
+            raise  # Always re-raise security exceptions
+        except (AttributeError, TypeError) as e:
+            # Expected operational errors - safe to handle
+            logger.debug(f"Expected error during object comparison for {type(self).__name__}: {e}")
             return False
+        except Exception as e:
+            # Unexpected errors should be logged and converted to operational error
+            logger.critical(f"Unexpected error during object comparison: {type(e).__name__}: {e}")
+            raise OperationalError(
+                f"Internal error during object comparison: {type(e).__name__}",
+                diagnostic_info={
+                    "original_error": str(e),
+                    "error_type": type(e).__name__,
+                    "object_type": type(self).__name__,
+                    "operation": "equality_comparison"
+                }
+            )

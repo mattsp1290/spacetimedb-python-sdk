@@ -7,7 +7,7 @@ selection based on server language, and provides convenient functions
 for client creation.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, TYPE_CHECKING
 import logging
 from ..utils.error_formatting import ErrorFormatter
 
@@ -17,11 +17,13 @@ from .rust_factory import RustOptimizedFactory
 from .python_factory import PythonOptimizedFactory
 from .csharp_factory import CSharpOptimizedFactory
 from .go_factory import GoOptimizedFactory
-from ..spacetimedb_client import SpacetimeDBClient
 from ..exceptions import (
     SpacetimeDBConnectionError,
     SpacetimeDBError,
 )
+
+if TYPE_CHECKING:
+    from ..spacetimedb_client import SpacetimeDBClient
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +107,7 @@ def create_spacetimedb_client(
     optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
     factory: Optional[SpacetimeDBClientFactory] = None,
     **kwargs: Any
-) -> SpacetimeDBClient:
+) -> 'SpacetimeDBClient':
     """
     Create a SpacetimeDB client optimized for the specified server language.
     
@@ -185,7 +187,7 @@ def create_optimized_client(
     optimization_profile: OptimizationProfile,
     auth_token: Optional[str] = None,
     **kwargs: Any
-) -> SpacetimeDBClient:
+) -> 'SpacetimeDBClient':
     """
     Create a client with specific optimization profile.
     
@@ -321,7 +323,7 @@ def create_rust_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.PERFORMANCE,
     **kwargs: Any
-) -> SpacetimeDBClient:
+) -> 'SpacetimeDBClient':
     """Create a client optimized for Rust servers."""
     return create_spacetimedb_client(
         host=host,
@@ -339,7 +341,7 @@ def create_python_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
     **kwargs: Any
-) -> SpacetimeDBClient:
+) -> 'SpacetimeDBClient':
     """Create a client optimized for Python servers."""
     return create_spacetimedb_client(
         host=host,
@@ -357,7 +359,7 @@ def create_csharp_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.BALANCED,
     **kwargs: Any
-) -> SpacetimeDBClient:
+) -> 'SpacetimeDBClient':
     """Create a client optimized for C# servers."""
     return create_spacetimedb_client(
         host=host,
@@ -375,7 +377,7 @@ def create_go_client(
     auth_token: Optional[str] = None,
     optimization_profile: OptimizationProfile = OptimizationProfile.PERFORMANCE,
     **kwargs: Any
-) -> SpacetimeDBClient:
+) -> 'SpacetimeDBClient':
     """Create a client optimized for Go servers."""
     return create_spacetimedb_client(
         host=host,

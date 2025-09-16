@@ -189,7 +189,8 @@ class LargeMessageHandler:
             else:
                 message_str = message_data
             
-            message = json.loads(message_str)
+            from .security.json_validator import secure_json_loads
+            message = secure_json_loads(message_str, "large_message_handler")
         except (json.JSONDecodeError, UnicodeDecodeError):
             # Not a JSON message, return as-is
             if isinstance(message_data, str):
@@ -497,7 +498,8 @@ class AsyncLargeMessageHandler:
             else:
                 message_str = message_data
             
-            message = json.loads(message_str)
+            from .security.json_validator import secure_json_loads
+            message = secure_json_loads(message_str, "large_message_handler")
         except (json.JSONDecodeError, UnicodeDecodeError):
             # Not a JSON message, return as-is
             if isinstance(message_data, str):

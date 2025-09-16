@@ -81,7 +81,7 @@ class CallbackManager:
                 return True
             return False
             
-    def invoke_callbacks(self, event_type: str, *args, **kwargs):
+    def invoke_callbacks(self, event_type: str, *args: Any, **kwargs: Any) -> None:
         """Invoke all callbacks for an event type."""
         with self._lock:
             callbacks = list(self._callbacks[event_type].values())
@@ -200,11 +200,11 @@ class TableHandle(Generic[T]):
         return self._callback_manager.remove_callback('update', callback_id)
         
     # Unique column support
-    def add_unique_column(self, column_name: str, getter: Callable[[T], Any]):
+    def add_unique_column(self, column_name: str, getter: Callable[[T], Any]) -> None:
         """Register a unique column for find_by operations."""
         self._unique_columns[column_name] = getter
         
-    def set_primary_key(self, column_name: str, getter: Callable[[T], Any]):
+    def set_primary_key(self, column_name: str, getter: Callable[[T], Any]) -> None:
         """Set the primary key column for update detection."""
         self._primary_key_column = column_name
         self._primary_key_getter = getter
@@ -317,7 +317,7 @@ class TableEventProcessor:
         self.db_interface = db_interface
         self.logger = logging.getLogger(f"{__name__}.TableEventProcessor")
         
-    def process_table_update(self, table_update: 'TableUpdate', event_context: Any = None):
+    def process_table_update(self, table_update: 'TableUpdate', event_context: Any = None) -> None:
         """Process a table update from the protocol."""
         table_name = table_update.table_name
         table_handle = self.db_interface.get_table(table_name)

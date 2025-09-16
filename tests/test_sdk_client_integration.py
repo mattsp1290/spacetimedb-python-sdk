@@ -19,6 +19,7 @@ from spacetimedb_sdk.websocket_client import WebSocketClient, SubscriptionMetric
 from spacetimedb_sdk.message_validator import SpacetimeDBMessageValidator, MessageValidationError
 from spacetimedb_sdk.large_message_handler import LargeMessageHandler
 from spacetimedb_sdk.connection_recovery import RobustConnectionManager
+from spacetimedb_sdk.connection.connection_manager import ConnectionState
 from spacetimedb_sdk.protocol import (
     InitialSubscription, TransactionUpdate, TransactionUpdateLight,
     SubscribeApplied, SubscribeMultiApplied, SubscriptionError,
@@ -201,8 +202,10 @@ class TestProtocolHelperIntegration:
         
         sdk_client = WebSocketClient(protocol=TEXT_PROTOCOL)
         mock_ws = MockWebSocket()
-        sdk_client.ws = mock_ws
-        sdk_client.state = sdk_client.state.CONNECTED
+        # Use ws_app property to sync with connection manager
+        sdk_client.ws_app = mock_ws
+        # Properly set connection state for testing
+        sdk_client.connection_state = ConnectionState.CONNECTED
         
         # Create pre-encoded message (as client would send)
         pre_encoded_message = json.dumps({

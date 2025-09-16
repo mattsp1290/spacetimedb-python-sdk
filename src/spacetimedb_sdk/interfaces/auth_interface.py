@@ -10,8 +10,11 @@ from enum import Enum
 from typing import Optional, Dict, Any, Callable, List
 from datetime import datetime, timedelta
 
+# Import our serializable enum base class
+from ..base_enum import SerializableEnum
 
-class AuthenticationState(Enum):
+
+class AuthenticationState(SerializableEnum):
     """Authentication state enumeration."""
     UNAUTHENTICATED = "unauthenticated"
     AUTHENTICATING = "authenticating"
@@ -21,7 +24,7 @@ class AuthenticationState(Enum):
     FAILED = "failed"
 
 
-class TokenType(Enum):
+class TokenType(SerializableEnum):
     """Token type enumeration."""
     BEARER = "bearer"
     IDENTITY = "identity"

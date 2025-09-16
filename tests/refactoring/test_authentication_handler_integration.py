@@ -67,7 +67,7 @@ class TestAuthenticationHandlerIntegration:
             def __init__(self):
                 self.logger = Mock()
                 self.host = "localhost"
-                self.database = "test_db"
+                self.database = "test-db"
             
             def reconnect(self):
                 pass
@@ -95,11 +95,11 @@ class TestAuthenticationHandlerIntegration:
             identity="test_identity_12345678",
             token="test_jwt_token",
             host="localhost",
-            database="test_db"
+            database="test-db"
         )
         
         # Get headers
-        headers = integration.prepare_connection_headers("localhost", "test_db")
+        headers = integration.prepare_connection_headers("localhost", "test-db")
         
         assert "Authorization" in headers
         assert headers["Authorization"] == "Bearer test_jwt_token"
@@ -111,7 +111,7 @@ class TestAuthenticationHandlerIntegration:
         
         # Get headers with legacy token (use different database to avoid stored credentials)
         headers = integration.prepare_connection_headers(
-            "localhost", "legacy_test_db", legacy_token="legacy_token"
+            "localhost", "legacy_test-db", legacy_token="legacy_token"
         )
         
         assert "Authorization" in headers
@@ -136,13 +136,13 @@ class TestAuthenticationHandlerIntegration:
         
         # Handle the error
         should_retry = integration.handle_authentication_error(
-            handshake_error, "localhost", "test_db", error_message
+            handshake_error, "localhost", "test-db", error_message
         )
         
         assert should_retry is True
         
         # Verify credentials were stored
-        credentials = handler.get_stored_credentials("localhost", "test_db")
+        credentials = handler.get_stored_credentials("localhost", "test-db")
         assert credentials is not None
         assert credentials.identity == "abcdef123456789"
         assert credentials.token == "jwt.token.here"
@@ -160,14 +160,14 @@ class TestAuthenticationHandlerIntegration:
             identity="test_identity",
             token="test_token",
             host="localhost",
-            database="test_db"
+            database="test-db"
         )
         
         # Should be authenticated now
         assert handler.get_authentication_state() == AuthenticationState.AUTHENTICATED
         
         # Clear credentials
-        handler.clear_credentials("localhost", "test_db")
+        handler.clear_credentials("localhost", "test-db")
         
         # Should be unauthenticated again
         assert handler.get_authentication_state() == AuthenticationState.UNAUTHENTICATED
@@ -190,7 +190,7 @@ class TestAuthenticationHandlerIntegration:
             identity="test_identity",
             token="test_token",
             host="localhost",
-            database="test_db",
+            database="test-db",
             timestamp=time.time(),
             expires_at=time.time() + 1  # Expires in 1 second
         )
@@ -208,7 +208,7 @@ class TestAuthenticationHandlerIntegration:
             def __init__(self):
                 self.logger = Mock()
                 self.host = "localhost"
-                self.database = "test_db"
+                self.database = "test-db"
             
             def reconnect(self):
                 pass
@@ -228,7 +228,7 @@ class TestAuthenticationHandlerIntegration:
         """Test convenience functions for authentication."""
         
         # Test getting auth headers
-        headers = get_auth_headers_for_connection("localhost", "test_db")
+        headers = get_auth_headers_for_connection("localhost", "test-db")
         assert isinstance(headers, dict)
         
         # Test storing credentials
@@ -236,11 +236,11 @@ class TestAuthenticationHandlerIntegration:
             identity="test_identity",
             token="test_token",
             host="localhost",
-            database="test_db"
+            database="test-db"
         )
         
         # Test getting headers again (should have credentials now)
-        headers = get_auth_headers_for_connection("localhost", "test_db")
+        headers = get_auth_headers_for_connection("localhost", "test-db")
         assert "Authorization" in headers
     
     def test_error_handling(self):
@@ -251,7 +251,7 @@ class TestAuthenticationHandlerIntegration:
         # Test handling authentication error
         auth_error = AuthenticationError("Invalid credentials", status_code=401)
         should_retry = integration.handle_authentication_error(
-            auth_error, "localhost", "test_db"
+            auth_error, "localhost", "test-db"
         )
         
         # Should indicate retry is possible
@@ -274,7 +274,7 @@ class TestAuthenticationHandlerIntegration:
             identity="test_identity",
             token="test_token",
             host="localhost",
-            database="test_db"
+            database="test-db"
         )
         
         status = integration.get_authentication_status()
@@ -295,7 +295,7 @@ class TestAuthenticationHandlerIntegration:
                     identity=f"test_identity_{worker_id}",
                     token=f"test_token_{worker_id}",
                     host="localhost",
-                    database=f"test_db_{worker_id}"
+                    database=f"test-db_{worker_id}"
                 )
             except Exception as e:
                 errors.append(e)
@@ -324,7 +324,7 @@ class TestAuthenticationHandlerIntegration:
             identity="test_identity",
             token="test_token",
             host="localhost",
-            database="test_db"
+            database="test-db"
         )
         
         # Test integration shutdown
@@ -345,7 +345,7 @@ class TestAuthenticationHandlerIntegration:
                 self.identity = "legacy_identity"
                 self.spacetimedb_token = "legacy_token"
                 self.host = "localhost"
-                self.database = "test_db"
+                self.database = "test-db"
             
             def prepare_auth_headers(self, host, database):
                 return {"Authorization": "Bearer legacy_token"}

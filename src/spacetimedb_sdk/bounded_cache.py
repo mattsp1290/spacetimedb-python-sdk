@@ -2,8 +2,7 @@
 Bounded Cache Module for SpacetimeDB SDK
 
 Provides core caching functionality with bounded storage and memory management.
-This module extracts the caching logic from bounded_client_cache.py for better
-separation of concerns.
+This module provides both simple LRU cache and advanced caching with memory management.
 """
 
 import importlib
@@ -12,15 +11,96 @@ import logging
 from .utils.error_formatting import ErrorFormatter
 import threading
 import time
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any, Callable, OrderedDict
 from dataclasses import dataclass
+from collections import OrderedDict
 
-from .memory_management import (
-    BoundedDict, MemoryAccountant, get_global_memory_accountant,
-    DEFAULT_MAX_CACHE_SIZE
-)
+try:
+    from .memory_management import (
+        BoundedDict, MemoryAccountant, get_global_memory_accountant,
+        DEFAULT_MAX_CACHE_SIZE
+    )
+    HAS_MEMORY_MANAGEMENT = True
+except ImportError:
+    # Fallback for tests that don't have memory management
+    HAS_MEMORY_MANAGEMENT = False
+    DEFAULT_MAX_CACHE_SIZE = 1000
 
 logger = logging.getLogger(__name__)
+
+
+class BoundedCache:
+    """
+    Simple LRU cache with bounded storage.
+    
+    This is the primary cache class expected by property-based tests.
+    Features:
+    - LRU (Least Recently Used) eviction policy
+    - Maximum size limit
+    - O(1) operations for get, put, contains
+    """
+    
+    def __init__(self, max_size: int):
+        if max_size <= 0:
+            raise ValueError("max_size must be positive")
+        
+        self.max_size = max_size
+        self._cache: OrderedDict[Any, Any] = OrderedDict()
+    
+    def put(self, key: Any, value: Any) -> None:
+        """Put a key-value pair into the cache."""
+        if key in self._cache:
+            # Update existing key - move to end (most recent)
+            del self._cache[key]
+        elif len(self._cache) >= self.max_size:
+            # Evict least recently used (first item)
+            self._cache.popitem(last=False)
+        
+        # Add/update the key-value pair at the end (most recent)
+        self._cache[key] = value
+    
+    def get(self, key: Any) -> Optional[Any]:
+        """Get a value by key. Returns None if not found."""
+        if key not in self._cache:
+            return None
+        
+        # Move to end to mark as recently accessed
+        value = self._cache[key]
+        del self._cache[key]
+        self._cache[key] = value
+        return value
+    
+    def contains(self, key: Any) -> bool:
+        """Check if cache contains the key."""
+        return key in self._cache
+    
+    def __contains__(self, key: Any) -> bool:
+        """Check if cache contains the key (Python magic method)."""
+        return self.contains(key)
+    
+    def size(self) -> int:
+        """Get the current size of the cache."""
+        return len(self._cache)
+    
+    def __len__(self) -> int:
+        """Get the current size of the cache (Python magic method)."""
+        return len(self._cache)
+    
+    def clear(self) -> None:
+        """Clear all entries from the cache."""
+        self._cache.clear()
+    
+    def keys(self):
+        """Get all keys in cache (in LRU order, oldest first)."""
+        return self._cache.keys()
+    
+    def values(self):
+        """Get all values in cache (in LRU order, oldest first)."""
+        return self._cache.values()
+    
+    def items(self):
+        """Get all key-value pairs in cache (in LRU order, oldest first)."""
+        return self._cache.items()
 
 
 def snake_to_camel(snake_case_string: str) -> str:

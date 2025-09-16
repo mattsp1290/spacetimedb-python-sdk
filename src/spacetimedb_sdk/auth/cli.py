@@ -14,6 +14,7 @@ from typing import Dict, Any
 
 from .storage import SecureAuthStorage
 from .migration import migrate_auth_storage, AuthStorageMigrator
+from .migration_tools import AuthenticationMigrator
 from .validators import TokenValidator, CredentialsValidator
 
 

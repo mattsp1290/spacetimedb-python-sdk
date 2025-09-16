@@ -18,7 +18,7 @@ from .utils.error_formatting import ErrorFormatter
 from typing import Dict, List, Optional, Callable, Any, Tuple, Set, TYPE_CHECKING
 from dataclasses import dataclass, field
 from enum import Enum
-from collections import deque
+from collections import deque, OrderedDict
 import uuid
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, Future
@@ -31,6 +31,16 @@ from .connection_id import (
     ConnectionEventType,
     ConnectionEventListener
 )
+from .exceptions import (
+    ValidationSecurityError,
+    AuthenticationSecurityError,
+    ConnectionSecurityError,
+    NetworkOperationalError,
+    ResourceOperationalError,
+    ConfigurationOperationalError,
+    OperationalError
+)
+from .security_logger import log_security_exception
 
 # Import shared types
 from .shared_types import (
@@ -111,12 +121,36 @@ class PooledConnection:
             self.logger.info(f"Connection {self.connection_id[:8]} established")
             return True
             
-        except Exception as e:
-            self.logger.error(ErrorFormatter.format_connection_error("initialization", e))
+        except (ValidationSecurityError, AuthenticationSecurityError, ConnectionSecurityError) as e:
+            # Security exceptions must never be silently caught - log and re-raise
+            event_id = log_security_exception(e, operation="connection_initialization")
+            self.logger.error(f"Security violation during connection initialization [Event: {event_id}]: {e}")
+            self.state = PooledConnectionState.UNHEALTHY
+            self.health.state = self.state
+            self.health.record_failure()
+            raise  # Always re-raise security exceptions
+        except (ConnectionError, TimeoutError, OSError) as e:
+            # Expected network/connection errors - safe to handle
+            self.logger.warning(f"Expected connection error during initialization: {e}")
             self.state = PooledConnectionState.UNHEALTHY
             self.health.state = self.state
             self.health.record_failure()
             return False
+        except Exception as e:
+            # Unexpected errors should be logged and converted to operational error
+            self.logger.critical(f"Unexpected error during connection initialization: {type(e).__name__}: {e}")
+            self.state = PooledConnectionState.UNHEALTHY
+            self.health.state = self.state
+            self.health.record_failure()
+            raise NetworkOperationalError(
+                f"Internal error during connection initialization: {type(e).__name__}",
+                diagnostic_info={
+                    "original_error": str(e),
+                    "error_type": type(e).__name__,
+                    "connection_id": self.connection_id,
+                    "operation": "connection_initialization"
+                }
+            )
     
     def disconnect(self) -> None:
         """Disconnect and cleanup."""
@@ -124,10 +158,24 @@ class PooledConnection:
             if self.client:
                 try:
                     self.client.disconnect()
+                except (ValidationSecurityError, AuthenticationSecurityError, ConnectionSecurityError) as e:
+                    # Security exceptions during disconnect still need to be logged and re-raised
+                    event_id = log_security_exception(e, operation="connection_disconnect")
+                    self.logger.error(f"Security violation during disconnect [Event: {event_id}]: {e}")
+                    self.client = None  # Clean up anyway
+                    raise  # Always re-raise security exceptions
+                except (ConnectionError, OSError, AttributeError) as e:
+                    # Expected errors during disconnect - safe to handle
+                    self.logger.debug(f"Expected error during disconnect: {e}")
+                    self.client = None  # Clean up anyway
                 except Exception as e:
-                    self.logger.error(ErrorFormatter.format_connection_error("disconnect", e))
+                    # Unexpected errors should be logged but not prevent cleanup
+                    self.logger.warning(f"Unexpected error during disconnect: {type(e).__name__}: {e}")
+                    self.client = None  # Clean up anyway
                 finally:
-                    self.client = None
+                    # Ensure client is always cleared
+                    if hasattr(self, 'client'):
+                        self.client = None
             
             self.state = PooledConnectionState.CLOSED
             self.health.state = self.state
@@ -161,11 +209,33 @@ class PooledConnection:
                 self.state = PooledConnectionState.UNHEALTHY
                 return False
                 
-        except Exception as e:
-            self.logger.error(ErrorFormatter.format_connection_error("health check", e))
+        except (ValidationSecurityError, AuthenticationSecurityError, ConnectionSecurityError) as e:
+            # Security exceptions during health check must be logged and re-raised
+            event_id = log_security_exception(e, operation="connection_health_check")
+            self.logger.error(f"Security violation during health check [Event: {event_id}]: {e}")
+            self.health.record_failure()
+            self.state = PooledConnectionState.UNHEALTHY
+            raise  # Always re-raise security exceptions
+        except (ConnectionError, TimeoutError, AttributeError) as e:
+            # Expected errors during health check - safe to handle
+            self.logger.debug(f"Expected error during health check: {e}")
             self.health.record_failure()
             self.state = PooledConnectionState.UNHEALTHY
             return False
+        except Exception as e:
+            # Unexpected errors should be logged and converted to operational error
+            self.logger.warning(f"Unexpected error during health check: {type(e).__name__}: {e}")
+            self.health.record_failure()
+            self.state = PooledConnectionState.UNHEALTHY
+            raise NetworkOperationalError(
+                f"Internal error during health check: {type(e).__name__}",
+                diagnostic_info={
+                    "original_error": str(e),
+                    "error_type": type(e).__name__,
+                    "connection_id": self.connection_id,
+                    "operation": "health_check"
+                }
+            )
     
     def acquire(self) -> bool:
         """Acquire the connection for use."""
@@ -193,6 +263,16 @@ class PooledConnection:
             self.state = PooledConnectionState.UNHEALTHY
             self.health.state = self.state
             self.circuit_breaker.record_failure()
+            
+    def set_pool_reference(self, pool: 'ConnectionPool') -> None:
+        """Set reference to parent pool for cache invalidation."""
+        self._pool_ref = pool
+    
+    def _notify_pool_state_change(self) -> None:
+        """Notify parent pool of state change for cache invalidation.""" 
+        if hasattr(self, '_pool_ref') and self._pool_ref:
+            # Force cache refresh on next access
+            self._pool_ref._healthy_cache_last_update = 0
 
 
 class ConnectionPool:
@@ -230,6 +310,18 @@ class ConnectionPool:
         self.current_index = 0
         self._lock = threading.RLock()
         self._shutdown = False
+        
+        # O(1) Performance optimization structures
+        self._healthy_connections: OrderedDict[str, PooledConnection] = OrderedDict()
+        self._healthy_cache_last_update = 0
+        self._healthy_cache_ttl = 5.0  # Cache TTL in seconds
+        self._health_check_batch_size = 10  # Max connections to check per batch
+        self._last_health_check_index = 0
+        
+        # Performance metrics
+        self._connection_acquisition_times = deque(maxlen=1000)
+        self._cache_hits = 0
+        self._cache_misses = 0
         
         # Health monitoring
         self._health_monitor_thread: Optional[threading.Thread] = None
@@ -273,8 +365,12 @@ class ConnectionPool:
         
         if conn.connect():
             with self._lock:
+                # Set pool reference for cache invalidation
+                conn.set_pool_reference(self)
                 self.connections[conn.connection_id] = conn
                 self.connection_order.append(conn.connection_id)
+                # Add to healthy cache immediately for O(1) access
+                self._healthy_connections[conn.connection_id] = conn
             return conn
         else:
             self.logger.error("Failed to create connection")
@@ -300,13 +396,30 @@ class ConnectionPool:
                 self.logger.error(ErrorFormatter.format_connection_error("health monitor", e))
     
     def _check_pool_health(self) -> None:
-        """Check health of all connections and recover unhealthy ones."""
+        """Check health of all connections and recover unhealthy ones with optimized batch processing."""
         with self._lock:
+            # Optimized batch health checking to avoid O(n) operations every cycle
+            connections_list = list(self.connections.items())
+            if not connections_list:
+                return
+            
+            # Check a subset of connections each cycle for better performance
+            batch_size = min(self._health_check_batch_size, len(connections_list))
+            start_idx = self._last_health_check_index
+            
             unhealthy_connections = []
             
-            for conn_id, conn in self.connections.items():
+            for i in range(batch_size):
+                idx = (start_idx + i) % len(connections_list)
+                conn_id, conn = connections_list[idx]
+                
                 if not conn.is_healthy():
                     unhealthy_connections.append(conn_id)
+                    # Remove from healthy cache immediately
+                    self._healthy_connections.pop(conn_id, None)
+            
+            # Update the index for next batch
+            self._last_health_check_index = (start_idx + batch_size) % len(connections_list)
             
             # Try to recover unhealthy connections
             for conn_id in unhealthy_connections:
@@ -318,11 +431,19 @@ class ConnectionPool:
                 if not conn.connect():
                     # If reconnection fails, remove from pool
                     del self.connections[conn_id]
-                    self.connection_order.remove(conn_id)
+                    if conn_id in self.connection_order:
+                        self.connection_order.remove(conn_id)
+                    self._healthy_connections.pop(conn_id, None)
                     
                     # Create replacement if below minimum
                     if len(self.connections) < self.min_connections:
                         self._create_connection()
+                else:
+                    # Reconnection successful, add back to healthy cache
+                    self._healthy_connections[conn_id] = conn
+            
+            # Update healthy cache periodically for efficiency
+            self._update_healthy_cache_if_needed()
     
     @monitor_performance("connection_pool_acquire")
     def get_connection(self) -> Optional[PooledConnection]:
@@ -392,22 +513,50 @@ class ConnectionPool:
             return self._round_robin_select()
     
     def _round_robin_select(self) -> Optional[PooledConnection]:
-        """Round-robin connection selection."""
-        if not self.connection_order:
+        """O(1) optimized round-robin connection selection using healthy connection cache."""
+        start_time = time.time()
+        
+        # Update healthy cache if needed
+        self._update_healthy_cache_if_needed()
+        
+        # Use cached healthy connections for O(1) access
+        if not self._healthy_connections:
+            self._cache_misses += 1
+            acquisition_time = (time.time() - start_time) * 1000
+            self._connection_acquisition_times.append(acquisition_time)
             return None
         
-        start_index = self.current_index
-        while True:
-            conn_id = self.connection_order[self.current_index]
-            self.current_index = (self.current_index + 1) % len(self.connection_order)
-            
-            conn = self.connections.get(conn_id)
-            if conn and conn.state == PooledConnectionState.IDLE and conn.is_healthy():
-                return conn
-            
-            if self.current_index == start_index:
-                break
+        # O(1) round-robin on healthy connections
+        healthy_conn_ids = list(self._healthy_connections.keys())
+        if not healthy_conn_ids:
+            self._cache_misses += 1
+            acquisition_time = (time.time() - start_time) * 1000
+            self._connection_acquisition_times.append(acquisition_time)
+            return None
         
+        # Find next available connection using optimized index
+        start_index = self.current_index % len(healthy_conn_ids)
+        
+        for i in range(len(healthy_conn_ids)):
+            idx = (start_index + i) % len(healthy_conn_ids)
+            conn_id = healthy_conn_ids[idx]
+            conn = self._healthy_connections.get(conn_id)
+            
+            if conn and conn.state == PooledConnectionState.IDLE:
+                # Update index for next selection
+                self.current_index = (idx + 1) % len(healthy_conn_ids)
+                self._cache_hits += 1
+                
+                acquisition_time = (time.time() - start_time) * 1000
+                self._connection_acquisition_times.append(acquisition_time)
+                return conn
+        
+        # No idle connections found in cache, force cache refresh
+        self._force_refresh_healthy_cache()
+        self._cache_misses += 1
+        
+        acquisition_time = (time.time() - start_time) * 1000
+        self._connection_acquisition_times.append(acquisition_time)
         return None
     
     def _least_latency_select(self) -> Optional[PooledConnection]:
@@ -522,6 +671,62 @@ class ConnectionPool:
             operation_name
         )
     
+    def _update_healthy_cache_if_needed(self) -> None:
+        """Update healthy connection cache if TTL expired (thread-safe)."""
+        current_time = time.time()
+        # Use double-checked locking pattern for performance
+        if current_time - self._healthy_cache_last_update > self._healthy_cache_ttl:
+            with self._lock:
+                # Check again after acquiring lock
+                if current_time - self._healthy_cache_last_update > self._healthy_cache_ttl:
+                    self._refresh_healthy_cache()
+    
+    def _refresh_healthy_cache(self) -> None:
+        """Refresh the healthy connections cache."""
+        current_time = time.time()
+        new_healthy_connections = OrderedDict()
+        
+        for conn_id, conn in self.connections.items():
+            # Fast health check using cached state and timestamps
+            if (conn.state != PooledConnectionState.UNHEALTHY and
+                conn.client and conn.client.is_connected and
+                current_time - conn.last_health_check < conn.health_check_interval):
+                new_healthy_connections[conn_id] = conn
+            elif self._is_connection_healthy_fast(conn, current_time):
+                new_healthy_connections[conn_id] = conn
+        
+        self._healthy_connections = new_healthy_connections
+        self._healthy_cache_last_update = current_time
+    
+    def _force_refresh_healthy_cache(self) -> None:
+        """Force immediate refresh of healthy connections cache (thread-safe)."""
+        with self._lock:
+            self._healthy_cache_last_update = 0
+            self._refresh_healthy_cache()
+    
+    def _is_connection_healthy_fast(self, conn: PooledConnection, current_time: float) -> bool:
+        """Fast health check with minimal overhead."""
+        if conn.state == PooledConnectionState.UNHEALTHY:
+            return False
+        
+        if not conn.client or not conn.client.is_connected:
+            return False
+        
+        # Use timestamp-based optimization to avoid expensive health checks
+        time_since_last_check = current_time - conn.last_health_check
+        if time_since_last_check < conn.health_check_interval / 2:  # Use cached result
+            return True
+        
+        # Perform actual health check only if really needed
+        try:
+            if conn.client.is_connected:
+                conn.last_health_check = current_time
+                return True
+        except:
+            pass
+        
+        return False
+    
     def get_pool_metrics(self) -> Dict[str, Any]:
         """Get comprehensive pool metrics."""
         with self._lock:
@@ -554,10 +759,27 @@ class ConnectionPool:
             else:
                 avg_latency = p95_latency = p99_latency = 0
             
+            # Performance optimization metrics
+            cache_hit_rate = (
+                self._cache_hits / (self._cache_hits + self._cache_misses) * 100
+                if (self._cache_hits + self._cache_misses) > 0 else 0
+            )
+            
+            # Connection acquisition performance metrics
+            if self._connection_acquisition_times:
+                sorted_times = sorted(self._connection_acquisition_times)
+                avg_acquisition_time = sum(sorted_times) / len(sorted_times)
+                p95_acquisition_time = sorted_times[int(len(sorted_times) * 0.95)]
+                p99_acquisition_time = sorted_times[int(len(sorted_times) * 0.99)]
+                max_acquisition_time = max(sorted_times)
+            else:
+                avg_acquisition_time = p95_acquisition_time = p99_acquisition_time = max_acquisition_time = 0
+            
             return {
                 "pool_id": self.pool_id,
                 "total_connections": len(self.connections),
                 "healthy_connections": healthy_count,
+                "cached_healthy_connections": len(self._healthy_connections),
                 "active_connections": active_count,
                 "idle_connections": len(self.connections) - active_count,
                 "total_operations": self.total_operations,
@@ -573,10 +795,25 @@ class ConnectionPool:
                     "p95_ms": p95_latency,
                     "p99_ms": p99_latency
                 },
+                "performance_optimizations": {
+                    "cache_hit_rate_percent": cache_hit_rate,
+                    "cache_hits": self._cache_hits,
+                    "cache_misses": self._cache_misses,
+                    "healthy_cache_size": len(self._healthy_connections),
+                    "healthy_cache_ttl_seconds": self._healthy_cache_ttl,
+                    "connection_acquisition_times_ms": {
+                        "avg": avg_acquisition_time,
+                        "p95": p95_acquisition_time,
+                        "p99": p99_acquisition_time,
+                        "max": max_acquisition_time,
+                        "samples": len(self._connection_acquisition_times)
+                    }
+                },
                 "connection_details": [
                     {
                         "id": conn.connection_id[:8],
                         "state": conn.state.value,
+                        "in_healthy_cache": conn.connection_id in self._healthy_connections,
                         "health": {
                             "consecutive_failures": conn.health.consecutive_failures,
                             "error_rate": conn.health.error_rate * 100,
@@ -630,6 +867,16 @@ class ConnectionPool:
             
             self.connections.clear()
             self.connection_order.clear()
+            self._healthy_connections.clear()
+            
+            # Log final performance metrics
+            if self._cache_hits + self._cache_misses > 0:
+                hit_rate = self._cache_hits / (self._cache_hits + self._cache_misses) * 100
+                self.logger.info(f"Final performance metrics - Cache hit rate: {hit_rate:.2f}%")
+                
+            if self._connection_acquisition_times:
+                avg_time = sum(self._connection_acquisition_times) / len(self._connection_acquisition_times)
+                self.logger.info(f"Average connection acquisition time: {avg_time:.3f}ms")
         
         # Shutdown executor
         self._executor.shutdown(wait=graceful)

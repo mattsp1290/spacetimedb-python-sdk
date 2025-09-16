@@ -14,6 +14,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from cryptography.fernet import Fernet
 
+# Set pytest environment marker
+os.environ['PYTEST_RUNNING'] = '1'
+
 # Add SDK to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
 
@@ -40,14 +43,23 @@ class TestCredentialSecurity:
     def auth_handler(self, isolated_storage):
         """Provide configured authentication handler."""
         try:
+            # Create isolated storage that prefers file storage over keyring for testing
+            from spacetimedb_sdk.auth.storage import SecureAuthStorage
+            storage = SecureAuthStorage(
+                storage_dir=isolated_storage,
+                prefer_keyring=False,  # Force file storage for testing
+                master_password="test_password_for_testing"  # Avoid password prompt
+            )
             return AuthenticationHandler(
-                storage_path=isolated_storage,
+                storage=storage,
                 auto_refresh_tokens=False
             )
-        except Exception:
-            # Fallback for different constructor signatures
-            handler = AuthenticationHandler()
-            handler.storage_path = isolated_storage
+        except Exception as e:
+            # Fallback for different constructor signatures or import errors
+            handler = AuthenticationHandler(auto_refresh_tokens=False)
+            # Try to set storage path if possible
+            if hasattr(handler, 'storage') and hasattr(handler.storage, 'storage_dir'):
+                handler.storage.storage_dir = isolated_storage
             return handler
 
     def test_credentials_encrypted_at_rest(self, auth_handler, isolated_storage):
@@ -86,7 +98,7 @@ class TestCredentialSecurity:
         with caplog.at_level("DEBUG"):
             try:
                 auth_handler.store_credentials(test_identity, test_token, "host", "db")
-                auth_handler.get_credentials("host", "db")
+                auth_handler.get_stored_credentials("host", "db")
             except AttributeError:
                 # Handle different method signatures
                 pass
@@ -119,7 +131,7 @@ class TestCredentialSecurity:
             # Valid authentication timing
             start = time.perf_counter()
             try:
-                auth_handler.get_credentials(host, db)
+                auth_handler.get_stored_credentials(host, db)
             except Exception:
                 pass
             valid_times.append(time.perf_counter() - start)
@@ -127,7 +139,7 @@ class TestCredentialSecurity:
             # Invalid authentication timing
             start = time.perf_counter()
             try:
-                auth_handler.get_credentials("invalid_host", "invalid_db")
+                auth_handler.get_stored_credentials("invalid_host", "invalid_db")
             except Exception:
                 pass
             invalid_times.append(time.perf_counter() - start)
@@ -167,8 +179,9 @@ class TestCredentialSecurity:
                     expires_at=case["expires_at"]
                 )
                 
-                # Check if token is considered valid
-                is_valid = auth_handler.is_token_valid(host, db)
+                # Check if token is considered valid by getting credentials and checking expiry
+                stored_creds = auth_handler.get_stored_credentials(host, db, allow_expired=True)
+                is_valid = stored_creds is not None and not stored_creds.is_expired
                 
                 assert is_valid == case["should_be_valid"], \
                     f"Token expiry edge case failed for case {i}: expected {case['should_be_valid']}, got {is_valid}"
@@ -196,7 +209,7 @@ class TestCredentialSecurity:
         def worker_read():
             """Worker function for reading credentials."""
             try:
-                creds = auth_handler.get_credentials(host, db)
+                creds = auth_handler.get_stored_credentials(host, db)
                 results.append(creds)
             except Exception as e:
                 errors.append(e)
@@ -246,8 +259,8 @@ class TestCredentialSecurity:
             auth_handler.store_credentials(identity2, token2, host, db2)
             
             # Retrieve credentials for each database
-            creds1 = auth_handler.get_credentials(host, db1)
-            creds2 = auth_handler.get_credentials(host, db2)
+            creds1 = auth_handler.get_stored_credentials(host, db1)
+            creds2 = auth_handler.get_stored_credentials(host, db2)
             
             # Verify isolation - each database should get its own credentials
             if creds1 and creds2:
@@ -255,7 +268,7 @@ class TestCredentialSecurity:
                 assert creds1 != creds2, "Credentials not properly isolated between databases"
                 
                 # Try to get credentials for non-existent database
-                creds_none = auth_handler.get_credentials(host, "non_existent_db")
+                creds_none = auth_handler.get_stored_credentials(host, "non_existent_db")
                 assert creds_none is None, "Should return None for non-existent database"
                 
         except AttributeError:
@@ -280,7 +293,7 @@ class TestCredentialSecurity:
             auth_handler.clear_credentials(host, db)
             
             # Verify credentials are gone
-            creds = auth_handler.get_credentials(host, db)
+            creds = auth_handler.get_stored_credentials(host, db)
             assert creds is None, "Credentials not properly cleared"
             
             # Check that sensitive data is not left in storage files
@@ -293,6 +306,79 @@ class TestCredentialSecurity:
                     
         except AttributeError:
             pytest.skip("Credential cleanup functionality not available")
+    
+    def test_keyring_fallback_behavior(self, isolated_storage):
+        """Test that keyring failures gracefully fall back to file storage."""
+        try:
+            from spacetimedb_sdk.auth.storage import SecureAuthStorage
+            from unittest.mock import patch
+            
+            # Create storage that prefers keyring
+            storage = SecureAuthStorage(
+                storage_dir=isolated_storage,
+                prefer_keyring=True,
+                master_password="test_password_for_testing"
+            )
+            
+            test_identity = "test_identity_fallback"
+            test_token = "test_token_fallback"
+            test_host = "localhost:3000"
+            test_db = "test_database"
+            
+            # Mock keyring to fail (simulating permission errors)
+            with patch('keyring.set_password', side_effect=Exception("Keyring access denied")):
+                # Store credentials - should fall back to file storage
+                storage.store_credentials(test_identity, test_token, test_host, test_db)
+                
+                # Verify files were created (fallback worked)
+                storage_files = list(isolated_storage.glob("*"))
+                assert len(storage_files) > 0, "Fallback file storage should create files when keyring fails"
+                
+                # Verify credentials can be retrieved
+                retrieved = storage.get_credentials(test_host, test_db)
+                assert retrieved is not None, "Should be able to retrieve credentials from fallback storage"
+                assert retrieved.identity == test_identity
+                assert retrieved.token == test_token
+                
+        except ImportError:
+            pytest.skip("Required storage modules not available")
+
+    def test_keyring_permission_error_handling(self, isolated_storage):
+        """Test handling of specific keyring permission errors like macOS (-25299)."""
+        try:
+            from spacetimedb_sdk.auth.storage import SecureAuthStorage
+            from unittest.mock import patch
+            import keyring.errors
+            
+            # Create storage that prefers keyring
+            storage = SecureAuthStorage(
+                storage_dir=isolated_storage,
+                prefer_keyring=True,
+                master_password="test_password_for_testing"
+            )
+            
+            test_identity = "test_identity_permission"
+            test_token = "test_token_permission"
+            test_host = "localhost:3000"
+            test_db = "test_database"
+            
+            # Mock keyring to fail with specific permission error
+            permission_error = keyring.errors.PasswordSetError("Can't store password on keychain: (-25299, 'Unknown Error')")
+            
+            with patch('keyring.set_password', side_effect=permission_error):
+                # Store credentials - should fall back to file storage
+                storage.store_credentials(test_identity, test_token, test_host, test_db)
+                
+                # Verify files were created (fallback worked)
+                storage_files = list(isolated_storage.glob("*"))
+                assert len(storage_files) > 0, "Fallback file storage should create files when keyring has permission errors"
+                
+                # Verify credentials can be retrieved
+                retrieved = storage.get_credentials(test_host, test_db)
+                assert retrieved is not None, "Should be able to retrieve credentials from fallback storage"
+                
+        except (ImportError, AttributeError):
+            pytest.skip("Required keyring modules not available")
 
 
 @pytest.mark.security

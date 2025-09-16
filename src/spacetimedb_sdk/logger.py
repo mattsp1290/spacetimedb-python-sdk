@@ -352,7 +352,7 @@ class SpacetimeDBLogger:
         return merged
     
     @contextmanager
-    def context(self, **kwargs):
+    def context(self, **kwargs: Any) -> Any:
         """Context manager for adding context to logs."""
         ctx = LogContext(**kwargs)
         
@@ -512,7 +512,7 @@ class SpacetimeDBLogger:
         self.debug(f"Table {event}: {table_name}", **ctx)
     
     @contextmanager
-    def performance(self, operation: str, **context):
+    def performance(self, operation: str, **context: Any) -> Any:
         """Context manager for performance logging."""
         start_time = time.perf_counter()
         
@@ -570,7 +570,7 @@ class SpacetimeDBLogger:
 logger = SpacetimeDBLogger()
 
 # Configure default handlers based on environment
-def configure_default_logging(debug: bool = False, log_file: Optional[str] = None):
+def configure_default_logging(debug: bool = False, log_file: Optional[str] = None) -> None:
     """Configure default logging setup."""
     global logger
     

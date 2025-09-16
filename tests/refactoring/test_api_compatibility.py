@@ -7,6 +7,7 @@ websocket_client.py into focused modules.
 import pytest
 import inspect
 import time
+import threading
 from unittest.mock import Mock, patch
 from typing import Dict, Any, List, Callable
 
@@ -347,20 +348,28 @@ class TestAPIUsagePatterns:
             database_address="test-db"
         )
         
-        # Mock connection state
-        client.connection_state = ConnectionState.CONNECTED
+        # Mock connection state properly - need to mock both state attributes and connection manager
+        client.state = ConnectionState.CONNECTED
         
+        # Mock WebSocket connection
         with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
             mock_instance = Mock()
             mock_ws_app.return_value = mock_instance
-            client.ws_app = mock_instance
+            client.ws = mock_instance
             
-            # This usage pattern should work
-            client.subscribe("users", "SELECT * FROM users")
-            client.subscribe("messages", "SELECT * FROM messages WHERE user_id = ?")
-            
-            # Should have subscriptions
-            assert len(client.subscriptions) >= 0  # May be empty due to mocking
+            # Mock connection manager's connection state
+            with patch.object(client, '_connection_manager') as mock_conn_mgr:
+                mock_conn_mgr.is_connected.return_value = True
+                mock_conn_mgr._connection = mock_instance
+                mock_conn_mgr.get_connection_state.return_value = ConnectionState.CONNECTED
+                mock_conn_mgr._lock = threading.Lock()
+                
+                # This usage pattern should work
+                client.subscribe("users", "SELECT * FROM users")
+                client.subscribe("messages", "SELECT * FROM messages WHERE user_id = ?")
+                
+                # Should have subscriptions
+                assert len(client.subscriptions) >= 0  # May be empty due to mocking
             
     def test_reducer_calling_pattern(self):
         """Test reducer calling pattern remains supported"""
@@ -369,20 +378,28 @@ class TestAPIUsagePatterns:
             database_address="test-db"
         )
         
-        # Mock connection state
-        client.connection_state = ConnectionState.CONNECTED
+        # Mock connection state properly
+        client.state = ConnectionState.CONNECTED
         
+        # Mock WebSocket connection  
         with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
             mock_instance = Mock()
             mock_ws_app.return_value = mock_instance
-            client.ws_app = mock_instance
+            client.ws = mock_instance
             
-            # This usage pattern should work
-            client.call_reducer("send_message", {"content": "Hello, world!"})
-            client.call_reducer("set_name", {"name": "Alice"})
-            
-            # Should have called send on the mock
-            assert mock_instance.send.called or hasattr(mock_instance, 'send')
+            # Mock connection manager's connection state
+            with patch.object(client, '_connection_manager') as mock_conn_mgr:
+                mock_conn_mgr.is_connected.return_value = True
+                mock_conn_mgr._connection = mock_instance
+                mock_conn_mgr.get_connection_state.return_value = ConnectionState.CONNECTED
+                mock_conn_mgr._lock = threading.Lock()
+                
+                # This usage pattern should work
+                client.call_reducer("send_message", {"content": "Hello, world!"})
+                client.call_reducer("set_name", {"name": "Alice"})
+                
+                # Should have called send on the mock
+                assert mock_instance.send.called or hasattr(mock_instance, 'send')
             
     def test_query_usage_pattern(self):
         """Test one-off query usage pattern remains supported"""
@@ -391,20 +408,28 @@ class TestAPIUsagePatterns:
             database_address="test-db"
         )
         
-        # Mock connection state
-        client.connection_state = ConnectionState.CONNECTED
+        # Mock connection state properly - one_off_query checks self.state and self.ws
+        client.state = ConnectionState.CONNECTED
         
+        # Mock WebSocket connection
         with patch('spacetimedb_sdk.websocket_client.websocket.WebSocketApp') as mock_ws_app:
             mock_instance = Mock()
             mock_ws_app.return_value = mock_instance
-            client.ws_app = mock_instance
+            client.ws = mock_instance
             
-            # This usage pattern should work
-            client.one_off_query("SELECT COUNT(*) FROM users")
-            client.one_off_query("SELECT * FROM messages WHERE id = ?", [123])
-            
-            # Should have called send on the mock
-            assert mock_instance.send.called or hasattr(mock_instance, 'send')
+            # Mock connection manager's connection state for send_message
+            with patch.object(client, '_connection_manager') as mock_conn_mgr:
+                mock_conn_mgr.is_connected.return_value = True
+                mock_conn_mgr._connection = mock_instance
+                mock_conn_mgr.get_connection_state.return_value = ConnectionState.CONNECTED
+                mock_conn_mgr._lock = threading.Lock()
+                
+                # This usage pattern should work
+                client.one_off_query("SELECT COUNT(*) FROM users")
+                client.one_off_query("SELECT * FROM messages WHERE id = ?", [123])
+                
+                # Should have called send on the mock
+                assert mock_instance.send.called or hasattr(mock_instance, 'send')
             
     def test_metrics_usage_pattern(self):
         """Test metrics usage pattern remains supported"""

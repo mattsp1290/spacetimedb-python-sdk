@@ -115,6 +115,7 @@ from .legacy_compat import (
     create_migration_guide,
     get_legacy_sdk_event_manager,
     get_legacy_event_emitter,
+    create_event,
 )
 
 # EventSystem compatibility layer

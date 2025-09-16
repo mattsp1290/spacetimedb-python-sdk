@@ -365,3 +365,42 @@ class URLValidator(Validator):
             result = result._replace(warnings=result.warnings + [warning])
         
         return result
+
+
+# Global instance for convenience functions
+_url_validator = URLValidator()
+
+
+def validate_websocket_url(url: str, field: Optional[str] = None) -> ValidationResult:
+    """
+    Convenience function to validate WebSocket URLs.
+    
+    Args:
+        url: WebSocket URL to validate
+        field: Optional field name for error reporting
+        
+    Returns:
+        ValidationResult with validation results
+    """
+    return _url_validator.validate_websocket_url(url, field)
+
+
+def validate_spacetimedb_url(url: str, field: Optional[str] = None) -> ValidationResult:
+    """
+    Convenience function to validate SpacetimeDB URLs.
+    
+    Args:
+        url: SpacetimeDB URL to validate
+        field: Optional field name for error reporting
+        
+    Returns:
+        ValidationResult with validation results
+    """
+    return _url_validator.validate_spacetimedb_url(url, field)
+
+
+__all__ = [
+    'URLValidator',
+    'validate_websocket_url',
+    'validate_spacetimedb_url'
+]

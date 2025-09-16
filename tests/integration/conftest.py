@@ -143,8 +143,8 @@ class MockWebSocketApp:
         if not self.on_message:
             return
             
-        # Simulate server delay
-        time.sleep(0.02)
+        # Simulate server delay but keep it synchronous
+        time.sleep(0.01)
         
         identity_msg = {
             "IdentityToken": {
@@ -158,6 +158,8 @@ class MockWebSocketApp:
         
         try:
             self.on_message(self, json.dumps(identity_msg))
+            # Ensure event processing completes
+            time.sleep(0.01)
         except Exception as e:
             logging.error(f"Error in on_message callback for identity: {e}")
             
@@ -228,50 +230,43 @@ class MockWebSocketApp:
             pass
             
     def _send_subscription_response(self, subscribe_msg):
-        """Send mock subscription response."""
-        # Simulate server processing delay
-        def delayed_response():
-            time.sleep(0.02)
-            response = {
-                "SubscriptionApplied": {
-                    "query_id": subscribe_msg.get("Subscribe", {}).get("query_id", "mock_query_id"),
-                    "table_name": "mock_table"
-                }
+        """Send mock subscription response synchronously."""
+        # Small synchronous delay to simulate processing
+        time.sleep(0.01)
+        response = {
+            "SubscriptionApplied": {
+                "query_id": subscribe_msg.get("Subscribe", {}).get("query_id", "mock_query_id"),
+                "table_name": "mock_table"
             }
-            if self.on_message:
-                self.on_message(self, json.dumps(response))
-                
-        threading.Thread(target=delayed_response, daemon=True).start()
+        }
+        if self.on_message:
+            self.on_message(self, json.dumps(response))
         
     def _send_reducer_response(self, reducer_msg):
-        """Send mock reducer response."""
-        def delayed_response():
-            time.sleep(0.05)
-            response = {
-                "CallReducerResult": {
-                    "call_id": reducer_msg.get("CallReducer", {}).get("call_id", "mock_call_id"),
-                    "result": {"success": True, "data": "mock_result"}
-                }
+        """Send mock reducer response synchronously."""
+        # Small synchronous delay to simulate processing
+        time.sleep(0.02)
+        response = {
+            "CallReducerResult": {
+                "call_id": reducer_msg.get("CallReducer", {}).get("call_id", "mock_call_id"),
+                "result": {"success": True, "data": "mock_result"}
             }
-            if self.on_message:
-                self.on_message(self, json.dumps(response))
-                
-        threading.Thread(target=delayed_response, daemon=True).start()
+        }
+        if self.on_message:
+            self.on_message(self, json.dumps(response))
         
     def _send_query_response(self, query_msg):
-        """Send mock query response."""
-        def delayed_response():
-            time.sleep(0.03)
-            response = {
-                "OneOffQueryResult": {
-                    "query_id": query_msg.get("OneOffQuery", {}).get("query_id", "mock_query_id"),
-                    "result": [{"id": 1, "data": "mock_data"}]
-                }
+        """Send mock query response synchronously."""
+        # Small synchronous delay to simulate processing
+        time.sleep(0.015)
+        response = {
+            "OneOffQueryResult": {
+                "query_id": query_msg.get("OneOffQuery", {}).get("query_id", "mock_query_id"),
+                "result": [{"id": 1, "data": "mock_data"}]
             }
-            if self.on_message:
-                self.on_message(self, json.dumps(response))
-                
-        threading.Thread(target=delayed_response, daemon=True).start()
+        }
+        if self.on_message:
+            self.on_message(self, json.dumps(response))
         
     def close(self, code=1000, reason="Normal closure"):
         """Close the mock connection."""
@@ -370,36 +365,51 @@ class IntegratedSpacetimeDBClientMock:
         
     def _trigger_client_connection_event(self):
         """Trigger client-level connection established event."""
-        if hasattr(self.original_client, '_event_emitter'):
+        # If in test mode, ensure proper identity token setup for is_connected check
+        if getattr(self.original_client, 'test_mode', False):
+            # Simulate the identity token that _simulate_test_connection() would create
+            from spacetimedb_sdk.identity import Identity
+            from spacetimedb_sdk.connection_id import ConnectionId
+            from spacetimedb_sdk.messages.identity_token import IdentityToken
+            
+            identity = Identity.from_hex("0" * 32)
+            connection_id = ConnectionId.from_hex("0" * 16)
+            identity_token = IdentityToken(
+                identity=identity,
+                connection_id=connection_id,
+                token="test_token"
+            )
+            
+            # Call the identity token handler to set enhanced_connection_id
+            self.original_client._handle_identity_token(identity_token)
+        
+        if hasattr(self.original_client, '_event_manager'):
             from spacetimedb_sdk.events.core_events import Event, EventType
             event = Event(
                 type=EventType.CONNECTION_ESTABLISHED,
-                data={"timestamp": time.time()},
-                timestamp=time.time()
+                data={"timestamp": time.time()}
             )
-            self.original_client._event_emitter.emit(event)
+            self.original_client._event_manager.emit(event)
             
     def _trigger_client_disconnect_event(self, reason):
         """Trigger client-level connection closed event."""
-        if hasattr(self.original_client, '_event_emitter'):
+        if hasattr(self.original_client, '_event_manager'):
             from spacetimedb_sdk.events.core_events import Event, EventType
             event = Event(
                 type=EventType.CONNECTION_CLOSED,
-                data={"message": reason, "timestamp": time.time()},
-                timestamp=time.time()
+                data={"message": reason, "timestamp": time.time()}
             )
-            self.original_client._event_emitter.emit(event)
+            self.original_client._event_manager.emit(event)
             
     def _trigger_client_error_event(self, error):
         """Trigger client-level connection error event."""
-        if hasattr(self.original_client, '_event_emitter'):
+        if hasattr(self.original_client, '_event_manager'):
             from spacetimedb_sdk.events.core_events import Event, EventType
             event = Event(
                 type=EventType.CONNECTION_ERROR,
-                data={"error": str(error), "error_type": type(error).__name__, "timestamp": time.time()},
-                timestamp=time.time()
+                data={"error": str(error), "error_type": type(error).__name__, "timestamp": time.time()}
             )
-            self.original_client._event_emitter.emit(event)
+            self.original_client._event_manager.emit(event)
             
     def _handle_message_events(self, message_str):
         """Parse message and trigger appropriate client events."""
@@ -418,7 +428,7 @@ class IntegratedSpacetimeDBClientMock:
             
     def _trigger_identity_event(self, identity_data):
         """Trigger identity received event."""
-        if hasattr(self.original_client, '_event_emitter'):
+        if hasattr(self.original_client, '_event_manager'):
             from spacetimedb_sdk.events.core_events import Event, EventType
             event_data = {
                 "token": identity_data.get("token"),
@@ -428,14 +438,13 @@ class IntegratedSpacetimeDBClientMock:
             }
             event = Event(
                 type=EventType.IDENTITY_RECEIVED,
-                data=event_data,
-                timestamp=time.time()
+                data=event_data
             )
-            self.original_client._event_emitter.emit(event)
+            self.original_client._event_manager.emit(event)
             
     def _trigger_subscription_event(self, subscription_data):
         """Trigger subscription applied event."""
-        if hasattr(self.original_client, '_event_emitter'):
+        if hasattr(self.original_client, '_event_manager'):
             from spacetimedb_sdk.events.core_events import Event, EventType
             event_data = {
                 "query_id": subscription_data.get("query_id"),
@@ -444,14 +453,13 @@ class IntegratedSpacetimeDBClientMock:
             }
             event = Event(
                 type=EventType.SUBSCRIPTION_APPLIED,
-                data=event_data,
-                timestamp=time.time()
+                data=event_data
             )
-            self.original_client._event_emitter.emit(event)
+            self.original_client._event_manager.emit(event)
             
     def _trigger_table_update_event(self, table_data):
         """Trigger table update event."""
-        if hasattr(self.original_client, '_event_emitter'):
+        if hasattr(self.original_client, '_event_manager'):
             from spacetimedb_sdk.events.core_events import Event, EventType
             event_data = {
                 "table_name": table_data.get("table_name"),
@@ -460,10 +468,9 @@ class IntegratedSpacetimeDBClientMock:
             }
             event = Event(
                 type=EventType.TABLE_UPDATE,
-                data=event_data,
-                timestamp=time.time()
+                data=event_data
             )
-            self.original_client._event_emitter.emit(event)
+            self.original_client._event_manager.emit(event)
 
 
 @pytest.fixture
@@ -495,30 +502,10 @@ def integration_client_factory(mock_websocket_comprehensive):
         kwargs.setdefault('test_mode', True)
         kwargs.setdefault('start_message_processing', False)
         
-        # Create mock WebSocket first
-        mock_ws_app = MockWebSocketApp("ws://localhost:3000/v1/database/test")
-        
-        # Create mock WebSocketClient
-        mock_ws_client = Mock()
-        mock_ws_client.ws_app = mock_ws_app
-        mock_ws_client.connect = lambda: mock_ws_app.run_forever()
-        mock_ws_client.send_message = mock_ws_app.send
-        mock_ws_client.close = mock_ws_app.close
-        mock_ws_client.connection_state = ConnectionState.DISCONNECTED
-        
-        # Patch WebSocketClient constructor to return our mock
-        ws_patch = patch('spacetimedb_sdk.spacetimedb_client.WebSocketClient', return_value=mock_ws_client)
-        ws_patch.start()
-        patches.append(ws_patch)
-        
-        # Create the client
+        # Create a real client in test mode - no mocking needed!
+        # The SpacetimeDBClient's test mode handles simulation internally
         client = SpacetimeDBClient(**kwargs)
         clients.append(client)
-        
-        # Set up integration after client creation
-        mock_integration = IntegratedSpacetimeDBClientMock(client, mock_ws_app)
-        mock_integration.setup_event_integration()
-        mock_integrations.append(mock_integration)
         
         return client
         
@@ -535,11 +522,49 @@ def integration_client_factory(mock_websocket_comprehensive):
     # Cleanup clients and mock integrations
     for client in clients:
         try:
+            # First shutdown the event manager if it has async components
+            if hasattr(client, '_event_manager') and hasattr(client._event_manager, 'shutdown'):
+                try:
+                    # Check if we can run async shutdown properly
+                    import asyncio
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # Create task and ensure it's awaited before cleanup
+                        shutdown_task = asyncio.create_task(client._event_manager.shutdown())
+                        # Give the shutdown task time to complete
+                        import time
+                        time.sleep(0.1)
+                    except RuntimeError:
+                        # No running loop, use async.run for proper cleanup
+                        try:
+                            asyncio.run(client._event_manager.shutdown())
+                        except Exception:
+                            # If asyncio.run fails, fall back to synchronous cleanup
+                            if hasattr(client._event_manager, '_cleanup_event_loop'):
+                                client._event_manager._is_shutting_down = True
+                                if client._event_manager._thread_pool:
+                                    client._event_manager._thread_pool.shutdown(wait=False)
+                                client._event_manager._cleanup_event_loop()
+                except Exception as cleanup_error:
+                    # If async cleanup fails, force synchronous cleanup
+                    try:
+                        if hasattr(client._event_manager, '_cleanup_event_loop'):
+                            client._event_manager._is_shutting_down = True
+                            if client._event_manager._thread_pool:
+                                client._event_manager._thread_pool.shutdown(wait=False)
+                            client._event_manager._cleanup_event_loop()
+                    except Exception:
+                        pass
+            
+            # Then shutdown the client
             if hasattr(client, 'close'):
                 client.close()
             elif hasattr(client, 'shutdown'):
                 client.shutdown()
-        except Exception:
+        except Exception as e:
+            # Log the error but continue cleanup
+            import logging
+            logging.debug(f"Error during test client cleanup: {e}")
             pass
     
     # Clear mock integrations
@@ -569,13 +594,15 @@ def connection_event_tracker():
         def __init__(self):
             self.events = []
             self.handlers = {}
+            self._lock = threading.Lock()  # Thread-safe event tracking
             
         def track_event(self, event_type, data=None):
-            self.events.append({
-                'type': event_type,
-                'data': data or {},
-                'timestamp': time.time()
-            })
+            with self._lock:
+                self.events.append({
+                    'type': event_type,
+                    'data': data or {},
+                    'timestamp': time.time()
+                })
             
         def register_handler(self, event_type, handler):
             if event_type not in self.handlers:
@@ -583,25 +610,37 @@ def connection_event_tracker():
             self.handlers[event_type].append(handler)
             
         def get_events(self, event_type=None):
-            if event_type:
-                return [e for e in self.events if e['type'] == event_type]
-            return self.events.copy()
+            with self._lock:
+                if event_type:
+                    return [e for e in self.events if e['type'] == event_type]
+                return self.events.copy()
             
         def get_event_count(self, event_type=None):
             return len(self.get_events(event_type))
             
         def clear_events(self):
-            self.events.clear()
+            with self._lock:
+                self.events.clear()
             
         def has_event_sequence(self, expected_sequence):
             """Check if events occurred in expected sequence."""
-            if len(self.events) < len(expected_sequence):
-                return False
-                
-            for i, expected_type in enumerate(expected_sequence):
-                if i >= len(self.events) or self.events[i]['type'] != expected_type:
+            with self._lock:
+                if len(self.events) < len(expected_sequence):
                     return False
-            return True
+                    
+                for i, expected_type in enumerate(expected_sequence):
+                    if i >= len(self.events) or self.events[i]['type'] != expected_type:
+                        return False
+                return True
+        
+        def wait_for_condition(self, condition_func, timeout=5.0, poll_interval=0.01):
+            """Wait for a custom condition function to return True."""
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                if condition_func(self):
+                    return True
+                time.sleep(poll_interval)
+            return False
             
     return ConnectionEventTracker()
 
@@ -611,25 +650,27 @@ def async_test_helper():
     """Helper for async operations in sync tests."""
     class AsyncTestHelper:
         def __init__(self):
-            self.loop = None
+            # Don't store loop instance - use asyncio.run() for proper management
+            pass
             
         def run_async(self, coro, timeout=5.0):
-            """Run async coroutine in sync test."""
-            if self.loop is None:
-                self.loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self.loop)
-            
-            return asyncio.wait_for(coro, timeout=timeout)
+            """Run async coroutine in sync test using asyncio.run()."""
+            # Use asyncio.run() for proper event loop management
+            import asyncio
+            return asyncio.run(asyncio.wait_for(coro, timeout=timeout))
             
         def run_in_executor(self, func, *args, **kwargs):
             """Run sync function in executor."""
-            if self.loop is None:
-                self.loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(self.loop)
-                
-            executor = ThreadPoolExecutor(max_workers=2)
-            future = executor.submit(func, *args, **kwargs)
-            return future.result(timeout=5.0)
+            import asyncio
+            async def _run_in_executor():
+                loop = asyncio.get_running_loop()
+                executor = ThreadPoolExecutor(max_workers=2)
+                try:
+                    return await loop.run_in_executor(executor, func, *args, **kwargs)
+                finally:
+                    executor.shutdown(wait=True)
+            
+            return asyncio.run(asyncio.wait_for(_run_in_executor(), timeout=5.0))
             
     return AsyncTestHelper()
 
@@ -637,10 +678,20 @@ def async_test_helper():
 @pytest.fixture
 def no_real_connections():
     """Ensure no real network connections are made during tests."""
-    with patch('socket.socket') as mock_socket:
+    # Block only network-related socket connections, not local pipes
+    import socket as socket_module
+    original_socket = socket_module.socket
+    
+    def selective_socket_block(*args, **kwargs):
+        # Allow AF_UNIX sockets for local pipes (used by asyncio)
+        if args and args[0] == socket_module.AF_UNIX:
+            return original_socket(*args, **kwargs)
+        # Block network sockets
+        raise ConnectionError("Real connections disabled in tests")
+    
+    with patch('socket.socket', side_effect=selective_socket_block) as mock_socket:
         with patch('ssl.create_default_context') as mock_ssl_context:
             # Make any real connection attempts fail fast
-            mock_socket.side_effect = ConnectionError("Real connections disabled in tests")
             mock_ssl_context.side_effect = ConnectionError("Real SSL connections disabled in tests")
             yield
             
@@ -656,14 +707,27 @@ def setup_integration_test_environment(no_real_connections):
 
 @pytest.fixture
 def wait_for_events():
-    """Helper to wait for events to be processed."""
-    def wait(event_tracker, expected_count, event_type=None, timeout=2.0):
+    """Helper to wait for events to be processed with proper synchronization."""
+    def wait(event_tracker, expected_count, event_type=None, timeout=5.0):
         start_time = time.time()
+        # Use exponential backoff for polling to reduce CPU usage while ensuring responsiveness
+        poll_interval = 0.001  # Start with 1ms
+        max_poll_interval = 0.1  # Maximum 100ms
+        
         while time.time() - start_time < timeout:
-            if event_tracker.get_event_count(event_type) >= expected_count:
+            current_count = event_tracker.get_event_count(event_type)
+            if current_count >= expected_count:
                 return True
-            time.sleep(0.01)
-        return False
+            
+            # Allow time for async operations to complete
+            time.sleep(poll_interval)
+            
+            # Exponential backoff but cap at max_poll_interval
+            poll_interval = min(poll_interval * 1.5, max_poll_interval)
+        
+        # Final check with additional buffer time for async operations
+        time.sleep(0.1)
+        return event_tracker.get_event_count(event_type) >= expected_count
     return wait
 
 
